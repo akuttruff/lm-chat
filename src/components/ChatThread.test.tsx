@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ChatThread from './ChatThread.tsx'
+import { loadScrollAnchor, saveScrollAnchor } from '../lib/scrollMemory.ts'
 import type { Message } from '../types.ts'
 
 /**
@@ -37,6 +38,10 @@ const HISTORY: Message[] = [
 ]
 
 beforeEach(() => {
+  // Tests that don't pass conversationId all share the 'default' key, and
+  // scroll-memory tests reuse ids across cases -- neither should see what an
+  // earlier test left behind.
+  localStorage.clear()
   Element.prototype.scrollTo = vi.fn(function (this: HTMLElement, opts) {
     if (opts && typeof opts === 'object' && 'top' in opts) {
       this.scrollTop = Number(opts.top)
@@ -185,5 +190,137 @@ describe('long threads', () => {
   it('shows no button for a short thread', () => {
     render(<ChatThread messages={many(10)} />)
     expect(screen.queryByRole('button', { name: /earlier/ })).toBeNull()
+  })
+})
+
+describe('remembering where you left off', () => {
+  const many = (n: number): Message[] => Array.from({ length: n }, (_, i) => msg(`m${i}`, 'assistant', `message ${i}`))
+  const ROW = 50
+  const VIEWPORT = 200
+
+  // jsdom computes no layout at all (offsetTop, scrollHeight... are always
+  // 0), including during the component's own scroll-restoring effects,
+  // which run synchronously within render() -- too early for a per-test
+  // snapshot taken afterwards to matter. These are live getters instead, so
+  // whatever reads them mid-render sees numbers that track the rendered
+  // rows, the same as a real layout would.
+  let restoreOffsetTop: PropertyDescriptor
+  let restoreOffsetHeight: PropertyDescriptor
+  let restoreScrollHeight: PropertyDescriptor
+  let restoreClientHeight: PropertyDescriptor
+
+  beforeEach(() => {
+    restoreOffsetTop = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop')!
+    restoreOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')!
+    restoreScrollHeight = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollHeight')!
+    restoreClientHeight = Object.getOwnPropertyDescriptor(Element.prototype, 'clientHeight')!
+
+    const rowsOf = (el: Element): HTMLElement[] => [...el.querySelectorAll<HTMLElement>('[data-msg-id]')]
+
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get(this: HTMLElement) {
+        const container = this.dataset.msgId && this.closest('.thread')
+        return container ? rowsOf(container).indexOf(this) * ROW : 0
+      },
+    })
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get(this: HTMLElement) { return this.dataset.msgId ? ROW : 0 },
+    })
+    Object.defineProperty(Element.prototype, 'scrollHeight', {
+      configurable: true,
+      get(this: Element) { return this.classList.contains('thread') ? rowsOf(this).length * ROW : 0 },
+    })
+    Object.defineProperty(Element.prototype, 'clientHeight', {
+      configurable: true,
+      get(this: Element) { return this.classList.contains('thread') ? VIEWPORT : 0 },
+    })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', restoreOffsetTop)
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', restoreOffsetHeight)
+    Object.defineProperty(Element.prototype, 'scrollHeight', restoreScrollHeight)
+    Object.defineProperty(Element.prototype, 'clientHeight', restoreClientHeight)
+  })
+
+  it('restores the reading position after switching away and back', () => {
+    const messages = many(10)
+    const { unmount } = render(<ChatThread messages={messages} conversationId="c1" />)
+    const el = thread()
+    scrollTo(el, 120) // reading around message 2 (rows 100-150)
+    unmount() // switching conversations flushes at once, no need to wait
+
+    render(<ChatThread messages={messages} conversationId="c1" />)
+    expect(thread().scrollTop).toBe(120)
+  })
+
+  it('keeps different conversations apart', () => {
+    const messages = many(10)
+    const { unmount } = render(<ChatThread messages={messages} conversationId="c1" />)
+    scrollTo(thread(), 120)
+    unmount()
+
+    render(<ChatThread messages={messages} conversationId="c2" />)
+    // Nothing saved for c2: the usual default, the bottom.
+    const el = thread()
+    expect(el.scrollTop).toBe(el.scrollHeight)
+  })
+
+  it('goes back to the bottom next time once you scroll there before leaving', () => {
+    const messages = many(10)
+    const { unmount } = render(<ChatThread messages={messages} conversationId="c1" />)
+    const el = thread()
+    scrollTo(el, 120) // scroll up to read
+    scrollTo(el, el.scrollHeight) // then back down: caught up
+    unmount()
+
+    render(<ChatThread messages={messages} conversationId="c1" />)
+    const el2 = thread()
+    expect(el2.scrollTop).toBe(el2.scrollHeight)
+  })
+
+  it('widens the initial window so a saved position further back than the default is already there to see', () => {
+    const messages = many(100)
+    saveScrollAnchor('c1', { anchorId: 'm0', offset: 0 })
+    render(<ChatThread messages={messages} conversationId="c1" />)
+    expect(screen.getByText('message 0')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /earlier/ })).toBeNull() // no need to ask for more
+    expect(thread().scrollTop).toBe(0)
+  })
+
+  it('falls back to the bottom when the saved message is no longer in the thread', () => {
+    saveScrollAnchor('c1', { anchorId: 'gone', offset: 40 })
+    const messages = many(10)
+    render(<ChatThread messages={messages} conversationId="c1" />)
+    const el = thread()
+    expect(el.scrollTop).toBe(el.scrollHeight)
+  })
+
+  it('saves on its own after a pause in scrolling, not only when you switch away', () => {
+    vi.useFakeTimers()
+    try {
+      const messages = many(10)
+      render(<ChatThread messages={messages} conversationId="c1" />)
+      scrollTo(thread(), 120)
+      expect(loadScrollAnchor('c1')).toBeNull() // not yet -- still mid-scroll
+      vi.advanceTimersByTime(500)
+      expect(loadScrollAnchor('c1')).toEqual({ anchorId: 'm2', offset: 20 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('flushes when the app is hidden, not only when the thread unmounts', () => {
+    const messages = many(10)
+    render(<ChatThread messages={messages} conversationId="c1" />)
+    scrollTo(thread(), 120)
+    expect(loadScrollAnchor('c1')).toBeNull()
+
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true })
+    fireEvent(document, new Event('visibilitychange'))
+    expect(loadScrollAnchor('c1')).toEqual({ anchorId: 'm2', offset: 20 })
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true })
   })
 })

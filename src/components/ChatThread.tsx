@@ -1,16 +1,24 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowDown, MessagesSquare } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 import ToolCard from './ToolCard'
 import ReasoningBlock from './ReasoningBlock'
 import SummaryNote from './SummaryNote'
+import { computeInitialScrollState, findAnchor, saveScrollAnchor } from '../lib/scrollMemory.ts'
 import type { ContextSummary, Message } from '../types.ts'
 
 interface ChatThreadProps {
   messages: Message[]
   /** Shown after the last message it covers, if that message is still here. */
   summary?: ContextSummary | null
+  /**
+   * Whose reading position to remember. Threads are remounted per
+   * conversation (see App.tsx's `key`), so nothing else survives a switch --
+   * this is what lets returning to a long thread put you back where you were.
+   * Omit in tests that don't care; every real conversation has a distinct one.
+   */
+  conversationId?: string
 }
 
 /**
@@ -53,6 +61,7 @@ const ThreadRow = memo(function ThreadRow({ message }: { message: Message }) {
   return (
     <motion.div
       className={`msg-row ${message.role}`}
+      data-msg-id={message.id}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
@@ -87,13 +96,22 @@ const ThreadRow = memo(function ThreadRow({ message }: { message: Message }) {
 // conversation on every token, so every message object is new even when
 // nothing about it changed.
 
-export default function ChatThread({ messages, summary }: ChatThreadProps) {
+/** How long a scroll must sit still before the reading position is saved. */
+const SAVE_SCROLL_DELAY_MS = 400
+
+export default function ChatThread({ messages, summary, conversationId = 'default' }: ChatThreadProps) {
   const threadRef = useRef<HTMLDivElement>(null)
+  // Read once on mount: where a previous visit to this conversation left
+  // off, if it left off somewhere other than the bottom. `restore` is
+  // consumed by the layout effect below and then never used again --
+  // ongoing scroll behaviour is entirely the following/handleScroll pair.
+  const [initial] = useState(() => computeInitialScrollState(conversationId, messages, INITIAL_WINDOW))
+  const restoreTo = useRef(initial.restore)
   // Whether new content should pull the view down. Reading back through a
   // conversation while the model is still writing used to be impossible:
   // every token yanked the scroll to the bottom again.
-  const [following, setFollowing] = useState(true)
-  const [shown, setShown] = useState(INITIAL_WINDOW)
+  const [following, setFollowing] = useState(initial.following)
+  const [shown, setShown] = useState(initial.shown)
   const hidden = Math.max(0, messages.length - shown)
   const visible = hidden ? messages.slice(hidden) : messages
   // Showing earlier messages adds height above what you're reading; keep
@@ -110,13 +128,33 @@ export default function ChatThread({ messages, summary }: ChatThreadProps) {
     setShown((n) => n + INITIAL_WINDOW * 2)
   }
 
+  // Once, after the first commit -- which already shows enough of the
+  // thread's history to contain the target, per computeInitialScrollState.
+  useLayoutEffect(() => {
+    const el = threadRef.current
+    const target = restoreTo.current
+    if (!el || !target) return
+    restoreTo.current = null
+    for (const row of el.querySelectorAll<HTMLElement>('[data-msg-id]')) {
+      if (row.dataset.msgId === String(target.anchorId)) {
+        el.scrollTop = row.offsetTop + target.offset
+        break
+      }
+    }
+  }, [])
+
   const lastMessage = messages.at(-1)
   const lastId = lastMessage?.id
   const lastRole = lastMessage?.role
 
+  // Guards the effect below against firing on mount: a thread whose last
+  // message happens to be from the user (a question still awaiting a
+  // reply) must not override a just-restored reading position.
+  const mountedForOwnMessage = useRef(false)
   useEffect(() => {
     const el = threadRef.current
     if (!el) return
+    if (!mountedForOwnMessage.current) { mountedForOwnMessage.current = true; return }
     // Sending a message is a request to see it, wherever you were reading.
     if (lastRole === 'user') {
       setFollowing(true)
@@ -129,11 +167,49 @@ export default function ChatThread({ messages, summary }: ChatThreadProps) {
     if (el && following) el.scrollTop = el.scrollHeight
   }, [messages, following])
 
+  // Only ever reads live DOM/ref state, never React state -- so it stays
+  // correct however stale the closure that happens to hold it, which lets it
+  // double as both the scroll handler's own debounce and an unmount/hide
+  // flush registered once and never recreated.
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const flushScrollSave = useCallback((): void => {
+    clearTimeout(saveTimer.current)
+    const el = threadRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    saveScrollAnchor(conversationId, distanceFromBottom <= NEAR_BOTTOM_PX ? null : findAnchor(el))
+  }, [conversationId])
+
+  // Covers leaving the thread by switching conversations (unmount) and by
+  // backgrounding or closing the app (visibilitychange fires for both, and
+  // reliably on a phone where beforeunload does not).
+  //
+  // A layout effect, not a plain one: on unmount, React detaches threadRef
+  // before a passive effect's cleanup would run, so flushScrollSave would
+  // find nothing to read from. A layout effect's cleanup runs first, while
+  // the ref is still attached.
+  useLayoutEffect(() => {
+    const onHide = (): void => { if (document.hidden) flushScrollSave() }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      flushScrollSave()
+    }
+  }, [flushScrollSave])
+
   const handleScroll = (): void => {
     const el = threadRef.current
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    setFollowing(distanceFromBottom <= NEAR_BOTTOM_PX)
+    const followingNow = distanceFromBottom <= NEAR_BOTTOM_PX
+    setFollowing(followingNow)
+    clearTimeout(saveTimer.current)
+    if (followingNow) {
+      // Caught up: next time, just show the bottom rather than an old spot.
+      saveScrollAnchor(conversationId, null)
+    } else {
+      saveTimer.current = setTimeout(flushScrollSave, SAVE_SCROLL_DELAY_MS)
+    }
   }
 
   const jumpToLatest = (): void => {

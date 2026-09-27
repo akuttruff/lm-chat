@@ -47,7 +47,7 @@ export default function App() {
       />
       {/* Keyed by thread: switching mounts a fresh one, rather than animating
           one thread's messages out while the other's animate in. */}
-      <ChatThread key={activeId ?? 'none'} messages={messages} summary={active?.summary} />
+      <ChatThread key={activeId ?? 'none'} messages={messages} summary={active?.summary} conversationId={activeId ?? 'none'} />
       <Composer
         onSend={(text) => void send(text)}
         disabled={busy}
