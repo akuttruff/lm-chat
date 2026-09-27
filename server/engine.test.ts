@@ -835,6 +835,38 @@ describe('streaming load', () => {
   })
 })
 
+describe('chat order', () => {
+  it('moves a chat up when you send, but not as its reply streams or finishes', async () => {
+    const enc = new TextEncoder()
+    let push!: (e: Record<string, unknown>) => void
+    let end!: () => void
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
+      ok: true, status: 200, text: () => Promise.resolve(''),
+      body: new ReadableStream<Uint8Array>({
+        start(c) {
+          push = (e) => c.enqueue(enc.encode(evt(e)))
+          end = () => c.close()
+        },
+      }),
+    })))
+
+    const turn = engine.runTurn(convId, 'hi')
+    await vi.waitFor(() => expect(push).toBeDefined())
+    const sent = store.get(convId)!.updatedAt
+
+    for (let i = 0; i < 5; i++) {
+      push({ type: 'message.delta', content: `token ${i} ` })
+      await new Promise((r) => setTimeout(r, 200)) // past the publish throttle
+    }
+    push({ type: 'chat.end', result: { response_id: 'r1' } })
+    end()
+    await turn
+
+    expect(messages().at(-1)!.text).toMatch(/token 4/)
+    expect(store.get(convId)!.updatedAt).toBe(sent)
+  })
+})
+
 describe('surviving a dev-server restart', () => {
   it('adopts state saved by an older version that lacks newer fields', () => {
     const legacy = { running: new Map(), compacting: new Set() } as unknown as ReturnType<typeof newEngineState>

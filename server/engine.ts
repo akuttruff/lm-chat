@@ -358,10 +358,12 @@ export class Engine {
     let publishTimer: ReturnType<typeof setTimeout> | undefined
     let lastPersist = Date.now()
 
-    const commit = (messages: Message[]): void => {
+    // Only sending a message moves a chat up the list; everything after
+    // that (the reply, its errors) leaves its place alone.
+    const commit = (messages: Message[], { touch = false }: { touch?: boolean } = {}): void => {
       clearTimeout(publishTimer)
       publishTimer = undefined
-      this.store.setMessages(conversationId, messages)
+      this.store.setMessages(conversationId, messages, { touch })
       lastPersist = Date.now()
       this.publishConversations()
     }
@@ -373,7 +375,7 @@ export class Engine {
 
     const userMsg: Message = { id: newId(), role: 'user', text }
     history.push(userMsg)
-    commit(history)
+    commit(history, { touch: true })
 
     if (!config.model) {
       this.running.delete(conversationId)
@@ -439,7 +441,7 @@ export class Engine {
       const now = Date.now()
       const persist = now - lastPersist >= PERSIST_INTERVAL_MS
       if (persist) lastPersist = now
-      this.store.setMessages(conversationId, visible(), { persist })
+      this.store.setMessages(conversationId, visible(), { persist, touch: false })
       const conv = this.store.get(conversationId)
       if (conv) this.bus.send({ type: 'conversation', payload: conv })
     }
@@ -690,7 +692,7 @@ export class Engine {
               completed = true
               if (evt.result?.response_id) {
                 turnResponseId = evt.result.response_id
-                this.store.patch(conversationId, { responseId: turnResponseId })
+                this.store.patch(conversationId, { responseId: turnResponseId }, { touch: false })
               }
               break
             default:
@@ -794,7 +796,7 @@ export class Engine {
       // only anchor to a message that is still there.
       const current = this.store.get(conversationId)
       if (!current?.messages.some((m) => m.id === plan.through)) return false
-      const updated = this.store.patch(conversationId, { summary: { text, through: plan.through } })
+      const updated = this.store.patch(conversationId, { summary: { text, through: plan.through } }, { touch: false })
       // So open clients can show where the summary now begins.
       if (updated) this.bus.send({ type: 'conversation', payload: updated })
       console.log(

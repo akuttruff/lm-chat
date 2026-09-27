@@ -175,10 +175,14 @@ export class Store {
     this.flush()
   }
 
-  patch(id: string, patch: Partial<Conversation>): Conversation | undefined {
+  /**
+   * `touch: false` leaves updatedAt -- and so the chat's place in the list --
+   * alone: for bookkeeping the server does in the background.
+   */
+  patch(id: string, patch: Partial<Conversation>, { touch = true }: { touch?: boolean } = {}): Conversation | undefined {
     const conv = this.get(id)
     if (!conv) return undefined
-    Object.assign(conv, patch, { updatedAt: stamp() })
+    Object.assign(conv, patch, touch ? { updatedAt: stamp() } : {})
     this.flush()
     return conv
   }
@@ -187,13 +191,21 @@ export class Store {
    * Replace a conversation's messages wholesale (the engine owns assembly).
    * `persist: false` updates memory only, for the many small steps of a
    * streaming reply; the engine saves periodically and when the turn ends.
+   *
+   * `touch: false` keeps updatedAt, which orders the chat list. A reply
+   * streaming in must not move its chat: with two replying at once, each
+   * snapshot re-sorted them and the list flickered between the two orders.
    */
-  setMessages(id: string, messages: Message[], { persist = true }: { persist?: boolean } = {}): void {
+  setMessages(
+    id: string,
+    messages: Message[],
+    { persist = true, touch = true }: { persist?: boolean; touch?: boolean } = {},
+  ): void {
     const conv = this.get(id)
     if (!conv) return
     conv.messages = messages
     if (!conv.name) conv.name = deriveName(messages)
-    conv.updatedAt = stamp()
+    if (touch) conv.updatedAt = stamp()
     if (persist) this.flush()
   }
 
