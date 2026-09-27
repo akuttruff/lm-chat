@@ -14,6 +14,7 @@ const base: PublicConfig = {
   reasoning: '',
   stallSeconds: '180',
   historyChars: '24000',
+  parallel: '4',
   hasToken: false,
 }
 

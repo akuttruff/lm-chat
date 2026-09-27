@@ -107,6 +107,47 @@ describe('useServerState', () => {
     expect(result.current.status.text).toBe('writing...')
   })
 
+  it('keeps each chat\'s status separate, so switching never locks the next one', async () => {
+    stubApi()
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv(), conv({ id: 'c2' })], 'c1') })
+      FakeEventSource.latest().emit({
+        type: 'status',
+        payload: { conversationId: 'c1', state: 'pending', text: 'writing...', startedAt: 123 },
+      })
+    })
+    expect(result.current.busy).toBe(true)
+    expect(Object.keys(result.current.working)).toEqual(['c1'])
+
+    act(() => { FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv(), conv({ id: 'c2' })], 'c2') }) })
+    expect(result.current.busy).toBe(false)
+    expect(result.current.status.text).toBe('connected')
+
+    act(() => { FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv(), conv({ id: 'c2' })], 'c1') }) })
+    expect(result.current.status.text).toBe('writing...')
+  })
+
+  it('takes a snapshot of in-flight chats on connect, dropping ones that finished meanwhile', async () => {
+    stubApi()
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv()], 'c1') })
+      FakeEventSource.latest().emit({
+        type: 'status',
+        payload: { conversationId: 'c1', state: 'pending', text: 'writing...', startedAt: 1 },
+      })
+      FakeEventSource.latest().emit({
+        type: 'statuses',
+        payload: [{ conversationId: 'c9', state: 'pending', text: 'waiting for a free slot...', startedAt: 2 }],
+      })
+    })
+    expect(Object.keys(result.current.working)).toEqual(['c9'])
+    expect(result.current.busy).toBe(false)
+  })
+
   it('reports a dropped connection and recovers', async () => {
     stubApi()
     const { result } = renderHook(() => useServerState())

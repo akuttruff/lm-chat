@@ -4,6 +4,7 @@ import { newId } from './store.ts'
 import { readModelConfig } from './model-config.ts'
 import { cheapestReasoning, fitReasoning, reasoningCapability } from './capabilities.ts'
 import type { ReasoningCapability } from './capabilities.ts'
+import { Slots, parallelLimit } from './slots.ts'
 import type { ChatEvent, ContextSummary, Integration, Message, ServerConfig } from '../src/types.ts'
 
 /**
@@ -267,15 +268,28 @@ interface TurnState {
 export interface EngineState {
   running: Map<string, TurnState>
   compacting: Set<string>
+  /** The latest in-progress status per chat, for clients that connect mid-reply. */
+  statuses: Map<string, StatusPayload>
+  /** Created by the first Engine, which knows where the limit is configured. */
+  slots?: Slots
+}
+
+export interface StatusPayload {
+  conversationId: string
+  state: string
+  text: string
+  startedAt: number | null
 }
 
 export function newEngineState(): EngineState {
-  return { running: new Map(), compacting: new Set() }
+  return { running: new Map(), compacting: new Set(), statuses: new Map() }
 }
 
 export class Engine {
   private running: Map<string, TurnState>
   private compacting: Set<string>
+  private statuses: Map<string, StatusPayload>
+  readonly slots: Slots
 
   constructor(
     private store: Store,
@@ -286,6 +300,14 @@ export class Engine {
   ) {
     this.running = state.running
     this.compacting = state.compacting
+    // ??= : state kept from before a code change may predate a field.
+    this.statuses = state.statuses ??= new Map()
+    this.slots = state.slots ??= new Slots(() => parallelLimit(this.store.getConfig().parallel))
+  }
+
+  /** Every chat currently waiting on or receiving a reply. */
+  activeStatuses(): StatusPayload[] {
+    return [...this.statuses.values()]
   }
 
   isRunning(conversationId: string): boolean {
@@ -300,7 +322,10 @@ export class Engine {
   }
 
   private publish(conversationId: string, state: string, text: string, startedAt: number | null): void {
-    this.bus.send({ type: 'status', payload: { conversationId, state, text, startedAt } })
+    const payload = { conversationId, state, text, startedAt }
+    if (state === 'pending') this.statuses.set(conversationId, payload)
+    else this.statuses.delete(conversationId)
+    this.bus.send({ type: 'status', payload })
   }
 
   private publishConversations(): void {
@@ -316,6 +341,10 @@ export class Engine {
     const conv = this.store.get(conversationId)
     if (!conv) throw new Error('no such conversation')
     if (this.running.has(conversationId)) throw new Error('a reply is already in flight')
+    // Claimed before the first await, so a second send can't slip in meanwhile.
+    const controller = new AbortController()
+    const turn: TurnState = { controller, stalled: false }
+    this.running.set(conversationId, turn)
 
     const config = this.store.getConfig()
     const history = [...conv.messages]
@@ -344,6 +373,7 @@ export class Engine {
     commit(history)
 
     if (!config.model) {
+      this.running.delete(conversationId)
       fail('No model selected. Choose one in Settings.', 'no model')
       return
     }
@@ -371,10 +401,6 @@ export class Engine {
     const prompt = buildHistoryPrompt(config.systemPrompt, history, limit, conv.summary)
     if (prompt) body.system_prompt = prompt
 
-    const controller = new AbortController()
-    const turn: TurnState = { controller, stalled: false }
-    this.running.set(conversationId, turn)
-
     const stallSeconds = Number(config.stallSeconds) || 0
     let watchdog: ReturnType<typeof setTimeout> | undefined
     const armWatchdog = (): void => {
@@ -385,7 +411,6 @@ export class Engine {
         controller.abort(new DOMException('stalled', 'AbortError'))
       }, stallSeconds * 1000)
     }
-    armWatchdog()
 
     const produced: Message[] = []
     let assistantId: string | null = null
@@ -471,8 +496,20 @@ export class Engine {
 
     let instance: string | null = null
     let succeeded = false
+    let releaseSlot: (() => void) | undefined
 
     try {
+      // Wait here rather than inside LM Studio, where a queued request is
+      // silent: the watchdog starts only once the model is really on it.
+      if (!this.slots.free('turn')) {
+        this.publish(conversationId, 'pending', 'waiting for a free slot...', startedAt)
+        releaseSlot = await this.slots.acquire('turn', controller.signal)
+        this.publish(conversationId, 'pending', 'thinking...', startedAt)
+      } else {
+        releaseSlot = await this.slots.acquire('turn', controller.signal)
+      }
+      armWatchdog()
+
       const res = await fetch(`${base}/api/v1/chat`, {
         method: 'POST',
         headers: {
@@ -697,6 +734,7 @@ export class Engine {
     } finally {
       clearTimeout(watchdog)
       clearTimeout(publishTimer)
+      releaseSlot?.()
       this.running.delete(conversationId)
       this.publishConversations()
     }
@@ -721,7 +759,10 @@ export class Engine {
     if (!plan || !config.model) return false
 
     this.compacting.add(conversationId)
+    // Summaries only take a slot no one is waiting for.
+    let releaseSlot: (() => void) | undefined
     try {
+      releaseSlot = await this.slots.acquire('background')
       const body: Record<string, unknown> = {
         model: config.model,
         system_prompt: summarizerPrompt(limit),
@@ -761,6 +802,7 @@ export class Engine {
       console.log(`[engine] compaction skipped: ${(err as Error).message}`)
       return false
     } finally {
+      releaseSlot?.()
       this.compacting.delete(conversationId)
     }
   }

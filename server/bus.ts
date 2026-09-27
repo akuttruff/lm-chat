@@ -10,6 +10,7 @@ export type BusEvent =
   | { type: 'conversations'; payload: unknown }
   | { type: 'conversation'; payload: Conversation }
   | { type: 'status'; payload: { conversationId: string; state: string; text: string; startedAt: number | null } }
+  | { type: 'statuses'; payload: { conversationId: string; state: string; text: string; startedAt: number | null }[] }
 
 /**
  * How much unsent data a client may accumulate before it is cut loose.

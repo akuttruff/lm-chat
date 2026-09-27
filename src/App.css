@@ -483,6 +483,18 @@ html, body, #root {
   white-space: nowrap;
 }
 
+.conv-working {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--moss);
+}
+.conv-working .dot { background: var(--moss); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .conv-working .dot { animation: none; } }
+
 .conv-time {
   flex: 0 0 auto;
   font-size: 12px;

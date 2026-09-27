@@ -4,10 +4,13 @@ import { motion } from 'motion/react'
 import { Trash2, Pencil, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Conversation } from '../types.ts'
+import type { ChatStatus } from '../hooks/useServerState.ts'
 
 interface RowProps {
   conv: Conversation
   isActive: boolean
+  /** Set while this chat has a reply in flight. */
+  status?: ChatStatus
   onOpen: (id: string) => void
   onDelete: (id: string) => void
   onRename: (id: string, name: string) => void
@@ -17,6 +20,8 @@ interface ConversationListProps {
   open: boolean
   conversations: Conversation[]
   activeId: string | null
+  /** Chats with a reply in flight, by id. */
+  working?: Record<string, ChatStatus>
   onOpen: (id: string) => void
   onDelete: (id: string) => void
   onRename: (id: string, name: string) => void
@@ -34,7 +39,7 @@ function relTime(ts: number): string {
 
 const ACTIONS_WIDTH = 132
 
-function Row({ conv, isActive, onOpen, onDelete, onRename }: RowProps) {
+function Row({ conv, isActive, status, onOpen, onDelete, onRename }: RowProps) {
   const [dragged, setDragged] = useState(false)
 
   return (
@@ -97,14 +102,21 @@ function Row({ conv, isActive, onOpen, onDelete, onRename }: RowProps) {
       >
         <MessageSquare size={15} className="conv-glyph" aria-hidden="true" />
         <span className="conv-name">{conv.name || 'New chat'}</span>
-        <span className="conv-time">{relTime(conv.updatedAt)}</span>
+        {status ? (
+          <span className="conv-working" title={status.text}>
+            <span className="dot pending" aria-hidden="true" />
+            {status.text.startsWith('waiting') ? 'queued' : 'replying'}
+          </span>
+        ) : (
+          <span className="conv-time">{relTime(conv.updatedAt)}</span>
+        )}
       </motion.button>
     </div>
   )
 }
 
 export default function ConversationList({
-  open, conversations, activeId, onOpen, onDelete, onRename, onClose,
+  open, conversations, activeId, working = {}, onOpen, onDelete, onRename, onClose,
 }: ConversationListProps) {
   return (
     <Drawer.Root open={open} onOpenChange={(v) => !v && onClose()}>
@@ -119,6 +131,7 @@ export default function ConversationList({
                 key={c.id}
                 conv={c}
                 isActive={c.id === activeId}
+                status={working[c.id]}
                 onOpen={(id) => { onOpen(id); onClose() }}
                 onDelete={onDelete}
                 onRename={onRename}

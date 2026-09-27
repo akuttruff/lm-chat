@@ -76,6 +76,8 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       })
       // Send current state immediately so a reconnecting client catches up.
       res.write(`data: ${JSON.stringify({ type: 'conversations', payload: store.getConversations() })}\n\n`)
+      // And which chats are mid-reply, so every one shows its own progress.
+      res.write(`data: ${JSON.stringify({ type: 'statuses', payload: engine.activeStatuses() })}\n\n`)
       const remove = bus.add(res)
       // Comment frames keep intermediaries from closing an idle stream.
       const ping = setInterval(() => { try { res.write(': ping\n\n') } catch { /* gone */ } }, 25_000)

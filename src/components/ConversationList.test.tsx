@@ -39,6 +39,18 @@ describe('ConversationList', () => {
     expect(screen.getByText('2h')).toBeInTheDocument()
   })
 
+  it('marks chats that are replying or queued in place of their time', async () => {
+    setup({
+      working: {
+        a: { state: 'pending', text: 'writing...', startedAt: now },
+        b: { state: 'pending', text: 'waiting for a free slot...', startedAt: now },
+      },
+    })
+    expect(await screen.findByText('replying')).toBeInTheDocument()
+    expect(screen.getByText('queued')).toBeInTheDocument()
+    expect(screen.queryByText('1m')).not.toBeInTheDocument()
+  })
+
   it('opens a conversation and closes the drawer', async () => {
     const user = userEvent.setup()
     const props = setup()

@@ -20,6 +20,7 @@ const DEFAULT_CONFIG: ServerConfig = {
   reasoning: '',
   stallSeconds: '180',
   historyChars: '24000',
+  parallel: '4',
 }
 
 const MAX_CONVERSATIONS = 60

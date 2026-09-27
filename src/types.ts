@@ -71,6 +71,11 @@ export interface Settings {
    * Generous by default: this is a local model, so tokens are cheap.
    */
   historyChars: string
+  /**
+   * Replies the app lets LM Studio work on at once; more wait their turn in
+   * the app. Match the model's "parallel" load setting. 0 means no cap.
+   */
+  parallel: string
 }
 
 /** Settings that live on the server, since the server now drives the chat. */
@@ -89,6 +94,11 @@ export interface ServerConfig {
    * Generous by default: this is a local model, so tokens are cheap.
    */
   historyChars: string
+  /**
+   * Replies the app lets LM Studio work on at once; more wait their turn in
+   * the app. Match the model's "parallel" load setting. 0 means no cap.
+   */
+  parallel: string
 }
 
 /** What the browser is allowed to see of the config. */

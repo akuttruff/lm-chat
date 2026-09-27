@@ -365,7 +365,7 @@ describe('failures', () => {
       }),
     })))
     const turn = engine.runTurn(convId, 'hi')
-    await vi.waitFor(() => expect(engine.isRunning(convId)).toBe(true))
+    await vi.waitFor(() => expect(messages().some((m) => m.text === 'partial')).toBe(true))
     engine.stop(convId)
     await turn
     expect(messages().some((m) => m.text === 'partial')).toBe(true)
@@ -836,6 +836,14 @@ describe('streaming load', () => {
 })
 
 describe('surviving a dev-server restart', () => {
+  it('adopts state saved by an older version that lacks newer fields', () => {
+    const legacy = { running: new Map(), compacting: new Set() } as unknown as ReturnType<typeof newEngineState>
+    const e = new Engine(store, bus, () => Promise.resolve(null), legacy)
+    expect(e.activeStatuses()).toEqual([])
+    expect(legacy.statuses).toBeInstanceOf(Map)
+    expect(legacy.slots).toBe(e.slots)
+  })
+
   it('a rebuilt engine still sees the reply the old one is streaming', async () => {
     const state = newEngineState()
     const before = new Engine(store, bus, () => Promise.resolve(null), state)
@@ -863,5 +871,92 @@ describe('surviving a dev-server restart', () => {
     release()
     await turn
     expect(after.isRunning(convId)).toBe(false)
+  })
+})
+
+describe('parallel replies', () => {
+  /** A second thread. (create() reuses the current one while it's empty.) */
+  const secondChat = (): string => {
+    store.setMessages(convId, [{ id: 'seed', role: 'user', text: 'earlier' }])
+    return store.create().id
+  }
+
+  /** A fetch whose streams stay open until released, one per call. */
+  function held() {
+    const enc = new TextEncoder()
+    const releases: (() => void)[] = []
+    const f = vi.fn((_u: string, init: RequestInit) => Promise.resolve({
+      ok: true, status: 200, text: () => Promise.resolve(''),
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          releases.push(() => {
+            controller.enqueue(enc.encode(evt({ type: 'chat.end', result: {} })))
+            controller.close()
+          })
+          init.signal?.addEventListener('abort', () => controller.error(init.signal!.reason as Error))
+        },
+      }),
+    }))
+    return { f, releases }
+  }
+
+  it('holds a turn past the limit in the app, saying so, until a slot frees', async () => {
+    configure({ parallel: '1' })
+    const other = secondChat()
+    const { f, releases } = held()
+    vi.stubGlobal('fetch', f)
+    const sent: { type: string; payload: unknown }[] = []
+    vi.spyOn(bus, 'send').mockImplementation((e) => { sent.push(e as never) })
+
+    const first = engine.runTurn(convId, 'one')
+    const second = engine.runTurn(other, 'two')
+    await vi.waitFor(() => expect(f).toHaveBeenCalledTimes(1))
+    expect(engine.isRunning(other)).toBe(true)
+    expect(engine.activeStatuses().find((s) => s.conversationId === other)?.text)
+      .toBe('waiting for a free slot...')
+
+    releases[0]!()
+    await first
+    await vi.waitFor(() => expect(f).toHaveBeenCalledTimes(2))
+    releases[1]!()
+    await second
+    expect(engine.activeStatuses()).toEqual([])
+  })
+
+  it('does not count time spent queued as silence', async () => {
+    vi.useFakeTimers()
+    try {
+      configure({ parallel: '1', stallSeconds: '5' })
+      const other = secondChat()
+      const { f, releases } = held()
+      vi.stubGlobal('fetch', f)
+      const first = engine.runTurn(convId, 'one')
+      const second = engine.runTurn(other, 'two')
+      await vi.advanceTimersByTimeAsync(4000)
+      releases[0]!() // the first reply ends just inside its own watchdog
+      await first
+      await vi.advanceTimersByTimeAsync(4000) // the second has now waited 8s in all
+      releases[1]!()
+      await second
+      expect(store.get(other)!.messages.some((m) => /No output/.test(m.text || ''))).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops a turn that is still queued', async () => {
+    configure({ parallel: '1' })
+    const other = secondChat()
+    const { f, releases } = held()
+    vi.stubGlobal('fetch', f)
+    const first = engine.runTurn(convId, 'one')
+    const second = engine.runTurn(other, 'two')
+    await vi.waitFor(() => expect(engine.isRunning(other)).toBe(true))
+    engine.stop(other)
+    await second
+    expect(f).toHaveBeenCalledTimes(1)
+    expect(store.get(other)!.messages.at(-1)!.text).toBe('Stopped.')
+    releases[0]!()
+    await first
   })
 })

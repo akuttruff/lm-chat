@@ -14,14 +14,14 @@ import './App.css';
 export default function App() {
   const server = useServerState();
   const {
-    conversations, activeId, active, config, status, startedAt, busy,
+    conversations, activeId, active, config, status, startedAt, busy, working,
     send, stop, newChat, openChat, deleteChat, renameChat, setReasoning, saveConfig,
   } = server;
 
   const modelConfig = useModelConfig(config?.model);
   // A courtesy now rather than load-bearing: the turn survives a locked
-  // screen regardless, since the server owns it.
-  useWakeLock(busy);
+  // screen regardless, since the server owns it. Any chat replying counts.
+  useWakeLock(Object.keys(working).length > 0);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatsOpen, setChatsOpen] = useState(false);
@@ -66,6 +66,7 @@ export default function App() {
         open={chatsOpen}
         conversations={conversations}
         activeId={activeId}
+        working={working}
         onOpen={(id) => void openChat(id)}
         onDelete={(id) => void deleteChat(id)}
         onRename={(id, name) => void renameChat(id, name)}

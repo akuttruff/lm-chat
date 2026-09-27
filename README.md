@@ -15,6 +15,8 @@ API.
 - **MCP tool calls** rendered as cards with their output.
 - **Conversations saved on your computer**, so they survive a closed tab or a
   locked phone and are shared across your devices.
+- **Several chats at once**: switch between chats while they reply; extra
+  messages wait their turn instead of overloading the model.
 - **Per-chat reasoning effort**, offering only the levels the loaded model
   actually accepts.
 - **Automatic context compaction**: long threads have their older turns
@@ -77,6 +79,7 @@ older turns are replaced by a summary the model writes.
 | System prompt | Sent with every message. |
 | Default reasoning effort | For new chats; each chat can override it. |
 | Give up after | Seconds of *silence* before a reply is abandoned. `0` waits forever. |
+| Parallel replies | How many chats can be answered at once (default 4). Match the model's **Parallel** setting in LM Studio; extra messages wait in the app and show as queued. `0` means no limit. |
 | Conversation replayed | Characters of history sent with each message (default 24000). Older turns are summarized. `0` sends everything, uncompressed. |
 | Context length | Leave blank. It applies when a model is loaded, and setting it here makes LM Studio load a new model instance for every message. |
 | Plugin IDs | MCP plugins to enable, comma-separated, e.g. `mcp/filesystem, mcp/web-search`. |

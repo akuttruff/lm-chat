@@ -33,6 +33,7 @@ export default function SettingsSheet({ open, config, modelConfig, onSave, onClo
   const [reasoning, setReasoning] = useState('');
   const [stallSeconds, setStallSeconds] = useState('180');
   const [historyChars, setHistoryChars] = useState('24000');
+  const [parallel, setParallel] = useState('4');
   const [models, setModels] = useState<string[]>([]);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<ProbeResult | null>(null);
@@ -50,6 +51,7 @@ export default function SettingsSheet({ open, config, modelConfig, onSave, onClo
     setReasoning(config.reasoning);
     setStallSeconds(config.stallSeconds);
     setHistoryChars(config.historyChars);
+    setParallel(config.parallel ?? '4');
     setApiToken('');
   }, [open, config]);
 
@@ -95,6 +97,7 @@ export default function SettingsSheet({ open, config, modelConfig, onSave, onClo
       reasoning,
       stallSeconds: stallSeconds.trim(),
       historyChars: historyChars.trim(),
+      parallel: parallel.trim(),
       ...(apiToken ? { apiToken: apiToken.trim() } : {}),
     });
     setApiToken('');
@@ -258,6 +261,24 @@ export default function SettingsSheet({ open, config, modelConfig, onSave, onClo
               How long the server waits with no output before abandoning a reply.
               The timer resets whenever LM Studio sends something, so a long
               answer never trips it. Blank or 0 waits forever.
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="cfg-parallel">Parallel replies</label>
+            <input
+              id="cfg-parallel"
+              type="text"
+              inputMode="numeric"
+              placeholder="4"
+              value={parallel}
+              onChange={(e) => setParallel(e.target.value)}
+            />
+            <div className="hint">
+              How many chats can be answered at once. Set it to the model&apos;s
+              <b> Parallel</b> value in LM Studio; further messages wait in the
+              app and show as queued, and summaries of long threads only run
+              when no chat is waiting. 0 sends everything straight to LM Studio.
             </div>
           </div>
 
