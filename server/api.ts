@@ -6,7 +6,7 @@ import { Engine, newEngineState } from './engine.ts'
 import type { EngineState } from './engine.ts'
 import { Store } from './store.ts'
 import { readModelConfig } from './model-config.ts'
-import { reasoningCapability, toModelConfig } from './capabilities.ts'
+import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
 import type { ConversationStore, ServerConfig } from '../src/types.ts'
 
 type Next = () => void
@@ -101,17 +101,20 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     }
 
     // --- reasoning options ------------------------------------------------
-    // The model's manifest when it has one, else what LM Studio reports: a
-    // Splash build has no model.yaml but still has a fixed set (off|on).
+    // The model's manifest when it has one (plus Off, if LM Studio accepts
+    // it), else what LM Studio reports: a Splash build has no model.yaml but
+    // still has a fixed set (off|on).
     if (url === '/api/model-config' && method === 'GET') {
       const model = new URLSearchParams(query).get('model')
       if (!model) return json(res, 400, { error: 'model is required' })
       const manifest = readModelConfig(model)
       if ('error' in manifest) return json(res, 400, manifest)
-      if (manifest.found) return json(res, 200, manifest)
       const config = { ...store.getConfig(), model: manifest.model! }
       void reasoningCapability(config)
-        .then((cap) => json(res, 200, cap ? toModelConfig(config.model, cap) : manifest))
+        .then((cap) => {
+          if (manifest.found) return json(res, 200, withOffOption(manifest, cap))
+          return json(res, 200, cap ? toModelConfig(config.model, cap) : manifest)
+        })
         .catch(() => json(res, 200, manifest))
       return undefined
     }

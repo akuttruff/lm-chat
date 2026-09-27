@@ -84,6 +84,26 @@ const LABELS: Record<string, string> = {
   medium: 'Medium', high: 'High', xhigh: 'Extra high',
 }
 
+/**
+ * Whether reasoning can be turned off. A manifest lists only the model's
+ * thinking *levels* (xhigh|medium|low for Qwen3.8), yet LM Studio accepts
+ * 'off' for the same model. Ask LM Studio when possible; without it, a
+ * manifest that declares a thinking toggle is taken to mean yes.
+ */
+export function canTurnOff(manifest: ModelConfig, cap: ReasoningCapability | null): boolean {
+  if (cap) return cap.allowed.includes('off')
+  return manifest.thinking != null
+}
+
+/** A manifest's levels, plus Off after them when the model accepts it. */
+export function withOffOption(manifest: ModelConfig, cap: ReasoningCapability | null): ModelConfig {
+  const reasoning = manifest.reasoning
+  if (!reasoning || reasoning.options.some((o) => o.value === 'off') || !canTurnOff(manifest, cap)) {
+    return manifest
+  }
+  return { ...manifest, reasoning: { ...reasoning, options: [...reasoning.options, { value: 'off', label: 'Off' }] } }
+}
+
 /** The same capability, in the shape the Settings UI already reads from manifests. */
 export function toModelConfig(model: string, cap: ReasoningCapability): ModelConfig {
   return {

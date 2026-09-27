@@ -89,7 +89,9 @@ export default function ReasoningPicker({
                   <span className="level-text">
                     <span className="level-label">{l.label}</span>
                     <span className="level-hint">
-                      {l.value === modelDefault ? "This model's default" : l.value}
+                      {l.value === modelDefault
+                        ? "This model's default"
+                        : l.value === 'off' ? 'No thinking: fastest replies' : l.value}
                     </span>
                   </span>
                 </button>

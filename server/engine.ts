@@ -2,7 +2,7 @@ import type { Bus } from './bus.ts'
 import type { Store } from './store.ts'
 import { newId } from './store.ts'
 import { readModelConfig } from './model-config.ts'
-import { cheapestReasoning, fitReasoning, reasoningCapability } from './capabilities.ts'
+import { canTurnOff, cheapestReasoning, fitReasoning, reasoningCapability } from './capabilities.ts'
 import type { ReasoningCapability } from './capabilities.ts'
 import { Slots, parallelLimit } from './slots.ts'
 import type { ChatEvent, ContextSummary, Integration, Message, ServerConfig } from '../src/types.ts'
@@ -214,7 +214,10 @@ export function summarizerInput(plan: CompactionPlan): string {
 function manifestCapability(model: string): ReasoningCapability | null {
   const cfg = readModelConfig(model)
   if ('error' in cfg || !cfg.reasoning) return null
-  return { allowed: cfg.reasoning.options.map((o) => o.value), default: cfg.reasoning.default }
+  const allowed = cfg.reasoning.options.map((o) => o.value)
+  // Otherwise a chosen 'off' would be dropped and the model would think at its default.
+  if (canTurnOff(cfg, null) && !allowed.includes('off')) allowed.push('off')
+  return { allowed, default: cfg.reasoning.default }
 }
 
 export function parseIntegrations(mcpTools: string): Integration[] {
