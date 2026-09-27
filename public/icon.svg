@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Full-bleed opaque ground: iOS masks to its own squircle and composites
+       away transparency, so no self-rounded corners and no alpha. -->
+  <rect width="512" height="512" fill="#1B1D1A"/>
+
+  <!-- Speech bubble + tail as one path, in the app's paper tone. -->
+  <path fill="#EDE8DC" d="
+    M152 116
+    H392
+    a56 56 0 0 1 56 56
+    V276
+    a56 56 0 0 1 -56 56
+    H246
+    l-74 62
+    a8 8 0 0 1 -13 -7
+    l10 -55
+    h-17
+    a56 56 0 0 1 -56 -56
+    V172
+    a56 56 0 0 1 56 -56
+    Z"/>
+
+  <!-- Three dots: the last one moss, echoing the live-status indicator. -->
+  <circle cx="212" cy="224" r="25" fill="#1B1D1A"/>
+  <circle cx="284" cy="224" r="25" fill="#1B1D1A"/>
+  <circle cx="356" cy="224" r="25" fill="#8FA382"/>
+</svg>

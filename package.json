@@ -1,0 +1,44 @@
+{
+  "name": "lm-chat",
+  "private": true,
+  "version": "0.0.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "check": "tsc --noEmit && oxlint && vitest run"
+  },
+  "dependencies": {
+    "lucide-react": "^1.48.0",
+    "motion": "^13.4.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "sonner": "^2.0.8",
+    "vaul": "^1.1.2",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^24",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6",
+    "@vitest/coverage-v8": "^5",
+    "jsdom": "^30",
+    "oxlint": "^1.85.0",
+    "typescript": "^7",
+    "vite": "^8",
+    "vitest": "^5"
+  }
+}
