@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { Conversation, ConversationStore, Message, ServerConfig } from '../src/types.ts'
+import { DatabaseSync } from 'node:sqlite'
+import type { SQLInputValue, StatementSync } from 'node:sqlite'
+import type { Conversation, ConversationStore, Message, MessageRole, ServerConfig } from '../src/types.ts'
 
 /**
  * Everything durable lives next to the app on disk, so conversations survive
@@ -24,6 +26,7 @@ const DEFAULT_CONFIG: ServerConfig = {
 }
 
 const MAX_CONVERSATIONS = 60
+const BACKUP_KEEP = 20
 
 let seq = 0
 export const newId = (): string => `${Date.now().toString(36)}-${(seq++).toString(36)}`
@@ -53,8 +56,10 @@ function locate(dir?: string) {
   const dataDir = dir || path.resolve(process.cwd(), '.data')
   return {
     dataDir,
-    conversations: path.join(dataDir, 'conversations.json'),
-    config: path.join(dataDir, 'config.json'),
+    sqlite: path.join(dataDir, 'lm-chat.sqlite'),
+    // Pre-SQLite storage, read only to migrate once.
+    legacyConversations: path.join(dataDir, 'conversations.json'),
+    legacyConfig: path.join(dataDir, 'config.json'),
   }
 }
 
@@ -66,64 +71,329 @@ function readJson<T>(file: string, fallback: T): T {
   }
 }
 
-function writeJson(dataDir: string, file: string, value: unknown): void {
-  fs.mkdirSync(dataDir, { recursive: true })
-  // Write-then-rename: a crash mid-write leaves the previous file intact
-  // rather than a truncated one.
-  const tmp = `${file}.${process.pid}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2))
-  fs.renameSync(tmp, file)
-}
-
-const countMessages = (store: ConversationStore | null): number =>
-  (store?.items || []).reduce((n, c) => n + (c?.messages?.length || 0), 0)
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  response_id TEXT,
+  reasoning TEXT,
+  summary_text TEXT,
+  summary_through TEXT
+);
+CREATE TABLE IF NOT EXISTS messages (
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('user','assistant','reasoning','tool','error')),
+  text TEXT,
+  streaming INTEGER,
+  model TEXT,
+  instance TEXT,
+  elapsed TEXT,
+  name TEXT,
+  plugin TEXT,
+  output TEXT,
+  failed INTEGER,
+  response_id TEXT,
+  PRIMARY KEY (conversation_id, position)
+);
+CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY CHECK (id = 1), active_id TEXT);
+CREATE TABLE IF NOT EXISTS config (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  lm_studio_url TEXT NOT NULL DEFAULT 'http://127.0.0.1:1234',
+  api_token TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  system_prompt TEXT NOT NULL DEFAULT '',
+  mcp_tools TEXT NOT NULL DEFAULT '',
+  context_length TEXT NOT NULL DEFAULT '',
+  reasoning TEXT NOT NULL DEFAULT '',
+  stall_seconds TEXT NOT NULL DEFAULT '180',
+  history_chars TEXT NOT NULL DEFAULT '24000',
+  parallel TEXT NOT NULL DEFAULT '4'
+);
+`
 
 /**
- * Copy the file aside when a write would drop messages. Conversations are
- * append-mostly, so a shrink is either a deliberate delete or a bug -- and a
- * bug that silently eats history is unrecoverable without this.
- *
- * `savedCount` is what the file on disk holds, tracked in memory: re-reading
- * and parsing a megabyte of JSON on every save to learn it was the single
- * most expensive thing the server did while a reply streamed.
+ * Single-process, single-user: WAL buys nothing here and would leave
+ * permanent -wal/-shm sidecar files needing the same 0600 treatment as the
+ * main file forever. Plain rollback-journal leaves only a transient
+ * -journal file, gone once a transaction commits.
  */
-function backupIfShrinking(dataDir: string, file: string, savedCount: number, incoming: ConversationStore): void {
-  const incomingCount = countMessages(incoming)
-  if (incomingCount >= savedCount || !fs.existsSync(file)) return
+function ensureSchema(db: DatabaseSync): void {
+  db.exec('PRAGMA foreign_keys = ON')
+  db.exec('PRAGMA busy_timeout = 2000')
+  db.exec(SCHEMA)
+}
 
-  const backupDir = path.join(dataDir, 'backups')
-  fs.mkdirSync(backupDir, { recursive: true })
-  const name = `conversations.${new Date().toISOString().replace(/[:.]/g, '-')}.json`
-  fs.copyFileSync(file, path.join(backupDir, name))
-  console.log(
-    `[chats] message count dropped ${savedCount} -> ${incomingCount}; ` +
-    `backed up to .data/backups/${name}`,
-  )
+interface ConversationRow {
+  id: string
+  name: string
+  created_at: number
+  updated_at: number
+  response_id: string | null
+  reasoning: string | null
+  summary_text: string | null
+  summary_through: string | null
+}
+
+interface MessageRow {
+  conversation_id: string
+  position: number
+  id: string
+  role: string
+  text: string | null
+  streaming: number | null
+  model: string | null
+  instance: string | null
+  elapsed: string | null
+  name: string | null
+  plugin: string | null
+  output: string | null
+  failed: number | null
+  response_id: string | null
+}
+
+interface ConfigRow {
+  lm_studio_url: string
+  api_token: string
+  model: string
+  system_prompt: string
+  mcp_tools: string
+  context_length: string
+  reasoning: string
+  stall_seconds: string
+  history_chars: string
+  parallel: string
+}
+
+function metaFromRow(row: ConversationRow): Omit<Conversation, 'messages'> {
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    responseId: row.response_id,
+    reasoning: row.reasoning,
+    summary: row.summary_text != null ? { text: row.summary_text, through: row.summary_through! } : null,
+  }
+}
+
+/** Undefined stays absent (vs. an explicit false/null), same as the JSON it replaces. */
+function messageFromRow(row: MessageRow): Message {
+  const m: Message = { id: row.id, role: row.role as MessageRole }
+  if (row.text != null) m.text = row.text
+  if (row.streaming != null) m.streaming = row.streaming === 1
+  if (row.model != null) m.model = row.model
+  if (row.instance != null) m.instance = row.instance
+  if (row.elapsed != null) m.elapsed = row.elapsed
+  if (row.name != null) m.name = row.name
+  if (row.plugin != null) m.plugin = row.plugin
+  if (row.output != null) m.output = row.output
+  if (row.failed != null) m.failed = row.failed === 1
+  if (row.response_id != null) m.responseId = row.response_id
+  return m
+}
+
+function messageParams(conversationId: string, position: number, m: Message): SQLInputValue[] {
+  return [
+    conversationId,
+    position,
+    String(m.id),
+    m.role,
+    m.text ?? null,
+    m.streaming == null ? null : (m.streaming ? 1 : 0),
+    m.model ?? null,
+    m.instance ?? null,
+    m.elapsed ?? null,
+    m.name ?? null,
+    m.plugin ?? null,
+    m.output ?? null,
+    m.failed == null ? null : (m.failed ? 1 : 0),
+    m.responseId ?? null,
+  ]
+}
+
+function configFromRow(row: ConfigRow): ServerConfig {
+  return {
+    lmStudioUrl: row.lm_studio_url,
+    apiToken: row.api_token,
+    model: row.model,
+    systemPrompt: row.system_prompt,
+    mcpTools: row.mcp_tools,
+    contextLength: row.context_length,
+    reasoning: row.reasoning,
+    stallSeconds: row.stall_seconds,
+    historyChars: row.history_chars,
+    parallel: row.parallel,
+  }
+}
+
+function pruneBackups(backupDir: string): void {
   const kept = fs.readdirSync(backupDir).filter((f) => f.endsWith('.json')).sort()
-  for (const old of kept.slice(0, Math.max(0, kept.length - 20))) {
+  for (const old of kept.slice(0, Math.max(0, kept.length - BACKUP_KEEP))) {
     try { fs.unlinkSync(path.join(backupDir, old)) } catch { /* already gone */ }
   }
 }
 
-/** In-memory state with write-through persistence. */
+/**
+ * One-time import from the old conversations.json/config.json, the first
+ * time this data dir is opened after the SQLite switch. Builds the database
+ * at a temp path and only renames it into place on success, so a crash
+ * mid-import never leaves a half-built file at the real path -- which would
+ * otherwise stop the migration from ever being retried.
+ */
+function migrateFromJson(paths: ReturnType<typeof locate>): void {
+  const conversations = readJson<ConversationStore>(paths.legacyConversations, { items: [], activeId: null })
+  const config = { ...DEFAULT_CONFIG, ...readJson<Partial<ServerConfig>>(paths.legacyConfig, {}) }
+
+  const tmp = `${paths.sqlite}.${process.pid}.tmp`
+  try { fs.rmSync(tmp, { force: true }) } catch { /* nothing there yet */ }
+
+  const db = new DatabaseSync(tmp)
+  try {
+    ensureSchema(db)
+    const insertConv = db.prepare(
+      'INSERT INTO conversations (id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through) VALUES (?,?,?,?,?,?,?,?)',
+    )
+    const insertMsg = db.prepare(
+      'INSERT INTO messages (conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    )
+    db.exec('BEGIN')
+    for (const conv of conversations.items) {
+      insertConv.run(
+        conv.id, conv.name, conv.createdAt, conv.updatedAt, conv.responseId, conv.reasoning ?? null,
+        conv.summary?.text ?? null, conv.summary ? String(conv.summary.through) : null,
+      )
+      conv.messages.forEach((m, i) => insertMsg.run(...messageParams(conv.id, i, m)))
+    }
+    db.prepare('INSERT INTO app_state (id, active_id) VALUES (1, ?)').run(conversations.activeId)
+    db.prepare(
+      `INSERT INTO config (id, lm_studio_url, api_token, model, system_prompt, mcp_tools, context_length, reasoning, stall_seconds, history_chars, parallel)
+       VALUES (1,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      config.lmStudioUrl, config.apiToken, config.model, config.systemPrompt, config.mcpTools,
+      config.contextLength, config.reasoning, config.stallSeconds, config.historyChars, config.parallel,
+    )
+    db.exec('COMMIT')
+  } catch (err) {
+    try { db.exec('ROLLBACK') } catch { /* nothing to roll back */ }
+    db.close()
+    try { fs.rmSync(tmp, { force: true }) } catch { /* best effort */ }
+    throw err
+  }
+  db.close()
+  fs.renameSync(tmp, paths.sqlite)
+
+  const messageCount = conversations.items.reduce((n, c) => n + c.messages.length, 0)
+  console.log(
+    `[chats] migrated ${conversations.items.length} conversations (${messageCount} messages) ` +
+    'from conversations.json to lm-chat.sqlite',
+  )
+  // Renamed, never deleted: a safety net in case anything above was wrong.
+  for (const legacy of [paths.legacyConversations, paths.legacyConfig]) {
+    if (fs.existsSync(legacy)) {
+      try { fs.renameSync(legacy, `${legacy}.migrated`) } catch { /* best effort */ }
+    }
+  }
+}
+
+interface Stmts {
+  selectConversations: StatementSync
+  selectMessagesFor: StatementSync
+  selectConversationById: StatementSync
+  selectActiveId: StatementSync
+  selectConfig: StatementSync
+  insertConversation: StatementSync
+  updateConversationMeta: StatementSync
+  deleteConversation: StatementSync
+  deleteMessagesFor: StatementSync
+  insertMessage: StatementSync
+  setActiveId: StatementSync
+  insertConfig: StatementSync
+  updateConfig: StatementSync
+}
+
+/** In-memory state with write-through persistence to SQLite. */
 export class Store {
   private paths: ReturnType<typeof locate>
+  private db: DatabaseSync
+  private stmts: Stmts
   private conversations: ConversationStore
   private config: ServerConfig
-  /** Messages in the file on disk, for the shrink check. */
-  private savedCount: number
+  /** Messages saved to disk per conversation id, for the shrink check. */
+  private savedCounts: Map<string, number>
 
   constructor(options: StoreOptions = {}) {
     this.paths = locate(options.dir)
-    this.conversations = readJson<ConversationStore>(
-      this.paths.conversations,
-      { items: [], activeId: null },
-    )
-    this.config = { ...DEFAULT_CONFIG, ...readJson<Partial<ServerConfig>>(this.paths.config, {}) }
-    this.savedCount = countMessages(this.conversations)
+    fs.mkdirSync(this.paths.dataDir, { recursive: true })
+
+    const hasLegacyJson = fs.existsSync(this.paths.legacyConversations) || fs.existsSync(this.paths.legacyConfig)
+    if (!fs.existsSync(this.paths.sqlite) && hasLegacyJson) {
+      migrateFromJson(this.paths)
+    }
+
+    this.db = new DatabaseSync(this.paths.sqlite)
+    ensureSchema(this.db)
+    try { fs.chmodSync(this.paths.sqlite, 0o600) } catch { /* not ours to change */ }
+
+    this.stmts = {
+      selectConversations: this.db.prepare('SELECT * FROM conversations'),
+      selectMessagesFor: this.db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY position'),
+      selectConversationById: this.db.prepare('SELECT * FROM conversations WHERE id = ?'),
+      selectActiveId: this.db.prepare('SELECT active_id FROM app_state WHERE id = 1'),
+      selectConfig: this.db.prepare('SELECT * FROM config WHERE id = 1'),
+      insertConversation: this.db.prepare(
+        'INSERT INTO conversations (id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through) VALUES (?,?,?,?,?,?,?,?)',
+      ),
+      updateConversationMeta: this.db.prepare(
+        'UPDATE conversations SET name=?, updated_at=?, response_id=?, reasoning=?, summary_text=?, summary_through=? WHERE id=?',
+      ),
+      deleteConversation: this.db.prepare('DELETE FROM conversations WHERE id = ?'),
+      deleteMessagesFor: this.db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
+      insertMessage: this.db.prepare(
+        'INSERT INTO messages (conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      ),
+      setActiveId: this.db.prepare(
+        'INSERT INTO app_state (id, active_id) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET active_id = excluded.active_id',
+      ),
+      insertConfig: this.db.prepare(
+        `INSERT INTO config (id, lm_studio_url, api_token, model, system_prompt, mcp_tools, context_length, reasoning, stall_seconds, history_chars, parallel)
+         VALUES (1,?,?,?,?,?,?,?,?,?,?)`,
+      ),
+      updateConfig: this.db.prepare(
+        `UPDATE config SET lm_studio_url=?, api_token=?, model=?, system_prompt=?, mcp_tools=?, context_length=?, reasoning=?, stall_seconds=?, history_chars=?, parallel=?
+         WHERE id=1`,
+      ),
+    }
+
+    const configRow = this.stmts.selectConfig.get() as ConfigRow | undefined
+    if (configRow) {
+      this.config = configFromRow(configRow)
+    } else {
+      this.config = { ...DEFAULT_CONFIG }
+      this.stmts.insertConfig.run(
+        this.config.lmStudioUrl, this.config.apiToken, this.config.model, this.config.systemPrompt,
+        this.config.mcpTools, this.config.contextLength, this.config.reasoning, this.config.stallSeconds,
+        this.config.historyChars, this.config.parallel,
+      )
+    }
+
+    const convRows = this.stmts.selectConversations.all() as unknown as ConversationRow[]
+    const items: Conversation[] = convRows.map((row) => ({
+      ...metaFromRow(row),
+      messages: (this.stmts.selectMessagesFor.all(row.id) as unknown as MessageRow[]).map(messageFromRow),
+    }))
+    const activeRow = this.stmts.selectActiveId.get() as { active_id: string | null } | undefined
+    this.conversations = { items, activeId: activeRow?.active_id ?? null }
+    this.savedCounts = new Map(items.map((c) => [c.id, c.messages.length]))
+
     if (!this.conversations.items.length) {
       const first = blankConversation()
       this.conversations = { items: [first], activeId: first.id }
+      this.insertConversation(first)
+      this.stmts.setActiveId.run(first.id)
     }
   }
 
@@ -135,20 +405,113 @@ export class Store {
     return this.conversations.items.find((c) => c.id === id)
   }
 
-  private flush(): void {
-    backupIfShrinking(this.paths.dataDir, this.paths.conversations, this.savedCount, this.conversations)
-    writeJson(this.paths.dataDir, this.paths.conversations, this.conversations)
-    this.savedCount = countMessages(this.conversations)
+  private insertConversation(conv: Conversation): void {
+    this.db.exec('BEGIN')
+    try {
+      this.stmts.insertConversation.run(
+        conv.id, conv.name, conv.createdAt, conv.updatedAt, conv.responseId, conv.reasoning ?? null,
+        conv.summary?.text ?? null, conv.summary ? String(conv.summary.through) : null,
+      )
+      conv.messages.forEach((m, i) => this.stmts.insertMessage.run(...messageParams(conv.id, i, m)))
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+    this.savedCounts.set(conv.id, conv.messages.length)
   }
 
-  /** Write the in-memory state to disk now. */
+  private writeMeta(conv: Conversation): void {
+    this.stmts.updateConversationMeta.run(
+      conv.name, conv.updatedAt, conv.responseId, conv.reasoning ?? null,
+      conv.summary?.text ?? null, conv.summary ? String(conv.summary.through) : null,
+      conv.id,
+    )
+  }
+
+  /**
+   * Copy a conversation's on-disk rows aside when a write would drop
+   * messages. Threads are append-mostly, so a shrink is either a deliberate
+   * delete or a bug -- and a bug that silently eats history is
+   * unrecoverable without this.
+   */
+  private backupIfShrinking(id: string, incomingCount: number): void {
+    const saved = this.savedCounts.get(id) ?? 0
+    if (incomingCount >= saved) return
+    const metaRow = this.stmts.selectConversationById.get(id) as ConversationRow | undefined
+    if (!metaRow) return
+    const messages = (this.stmts.selectMessagesFor.all(id) as unknown as MessageRow[]).map(messageFromRow)
+
+    const backupDir = path.join(this.paths.dataDir, 'backups')
+    fs.mkdirSync(backupDir, { recursive: true })
+    const name = `conversations.${id}.${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+    fs.writeFileSync(path.join(backupDir, name), JSON.stringify({ items: [{ ...metaFromRow(metaRow), messages }] }, null, 2))
+    console.log(`[chats] message count dropped ${saved} -> ${incomingCount}; backed up to .data/backups/${name}`)
+    pruneBackups(backupDir)
+  }
+
+  private writeMessages(conv: Conversation): void {
+    this.backupIfShrinking(conv.id, conv.messages.length)
+    this.db.exec('BEGIN')
+    try {
+      this.stmts.updateConversationMeta.run(
+        conv.name, conv.updatedAt, conv.responseId, conv.reasoning ?? null,
+        conv.summary?.text ?? null, conv.summary ? String(conv.summary.through) : null,
+        conv.id,
+      )
+      this.stmts.deleteMessagesFor.run(conv.id)
+      conv.messages.forEach((m, i) => this.stmts.insertMessage.run(...messageParams(conv.id, i, m)))
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+    this.savedCounts.set(conv.id, conv.messages.length)
+  }
+
+  /** Write every in-memory conversation through to disk now. */
   persist(): void {
-    this.flush()
+    for (const conv of this.conversations.items) this.writeMessages(conv)
+    this.stmts.setActiveId.run(this.conversations.activeId)
   }
 
+  /**
+   * Retained for an older client pushing a whole store. This is the one
+   * remaining "replace the whole document" path, so it keeps the guard at
+   * that same whole-store granularity rather than per-conversation.
+   */
   replaceAll(store: ConversationStore): void {
+    const before = this.conversations.items.reduce((n, c) => n + c.messages.length, 0)
+    const after = store.items.reduce((n, c) => n + c.messages.length, 0)
+    if (after < before) {
+      const backupDir = path.join(this.paths.dataDir, 'backups')
+      fs.mkdirSync(backupDir, { recursive: true })
+      const name = `conversations.${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+      fs.writeFileSync(path.join(backupDir, name), JSON.stringify(this.conversations, null, 2))
+      console.log(`[chats] message count dropped ${before} -> ${after}; backed up to .data/backups/${name}`)
+      pruneBackups(backupDir)
+    }
+
+    this.db.exec('BEGIN')
+    try {
+      for (const row of this.stmts.selectConversations.all() as unknown as ConversationRow[]) {
+        this.stmts.deleteConversation.run(row.id) // cascades to messages
+      }
+      for (const conv of store.items) {
+        this.stmts.insertConversation.run(
+          conv.id, conv.name, conv.createdAt, conv.updatedAt, conv.responseId, conv.reasoning ?? null,
+          conv.summary?.text ?? null, conv.summary ? String(conv.summary.through) : null,
+        )
+        conv.messages.forEach((m, i) => this.stmts.insertMessage.run(...messageParams(conv.id, i, m)))
+      }
+      this.stmts.setActiveId.run(store.activeId)
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
     this.conversations = store
-    this.flush()
+    this.savedCounts = new Map(store.items.map((c) => [c.id, c.messages.length]))
   }
 
   create(): Conversation {
@@ -157,22 +520,27 @@ export class Store {
     if (current && current.messages.length === 0) {
       current.responseId = null
       current.updatedAt = stamp()
-      this.flush()
+      this.writeMeta(current)
       return current
     }
     const fresh = blankConversation()
-    this.conversations = {
-      activeId: fresh.id,
-      items: [fresh, ...this.conversations.items].slice(0, MAX_CONVERSATIONS),
+    const combined = [fresh, ...this.conversations.items]
+    const kept = combined.slice(0, MAX_CONVERSATIONS)
+    const dropped = combined.slice(MAX_CONVERSATIONS)
+    this.conversations = { activeId: fresh.id, items: kept }
+    this.insertConversation(fresh)
+    this.stmts.setActiveId.run(fresh.id)
+    for (const d of dropped) {
+      this.stmts.deleteConversation.run(d.id)
+      this.savedCounts.delete(d.id)
     }
-    this.flush()
     return fresh
   }
 
   setActive(id: string): void {
     if (!this.get(id)) return
     this.conversations.activeId = id
-    this.flush()
+    this.stmts.setActiveId.run(id)
   }
 
   /**
@@ -183,7 +551,7 @@ export class Store {
     const conv = this.get(id)
     if (!conv) return undefined
     Object.assign(conv, patch, touch ? { updatedAt: stamp() } : {})
-    this.flush()
+    this.writeMeta(conv)
     return conv
   }
 
@@ -206,21 +574,24 @@ export class Store {
     conv.messages = messages
     if (!conv.name) conv.name = deriveName(messages)
     if (touch) conv.updatedAt = stamp()
-    if (persist) this.flush()
+    if (persist) this.writeMessages(conv)
   }
 
   remove(id: string): void {
     const items = this.conversations.items.filter((c) => c.id !== id)
+    this.stmts.deleteConversation.run(id) // cascades to messages
+    this.savedCounts.delete(id)
     if (!items.length) {
       const fresh = blankConversation()
       this.conversations = { items: [fresh], activeId: fresh.id }
+      this.insertConversation(fresh)
     } else {
       this.conversations = {
         items,
         activeId: this.conversations.activeId === id ? items[0]!.id : this.conversations.activeId,
       }
     }
-    this.flush()
+    this.stmts.setActiveId.run(this.conversations.activeId)
   }
 
   /**
@@ -245,9 +616,19 @@ export class Store {
     if (placeholder) {
       items = []
       activeId = conv.id
+      this.stmts.deleteConversation.run(placeholder.id)
+      this.savedCounts.delete(placeholder.id)
     }
-    this.conversations = { items: [...items, conv].slice(-MAX_CONVERSATIONS), activeId }
-    this.flush()
+    const combined = [...items, conv]
+    const kept = combined.slice(-MAX_CONVERSATIONS)
+    const dropped = combined.slice(0, combined.length - kept.length)
+    this.conversations = { items: kept, activeId }
+    this.insertConversation(conv)
+    for (const d of dropped) {
+      this.stmts.deleteConversation.run(d.id)
+      this.savedCounts.delete(d.id)
+    }
+    this.stmts.setActiveId.run(activeId)
     return conv
   }
 
@@ -263,7 +644,11 @@ export class Store {
 
   setConfig(patch: Partial<ServerConfig>): ServerConfig {
     this.config = { ...this.config, ...patch }
-    writeJson(this.paths.dataDir, this.paths.config, this.config)
+    this.stmts.updateConfig.run(
+      this.config.lmStudioUrl, this.config.apiToken, this.config.model, this.config.systemPrompt,
+      this.config.mcpTools, this.config.contextLength, this.config.reasoning, this.config.stallSeconds,
+      this.config.historyChars, this.config.parallel,
+    )
     return this.config
   }
 }

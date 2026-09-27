@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { Store, deriveName } from './store.ts'
 import type { Message } from '../src/types.ts'
 
@@ -9,7 +10,18 @@ let dir: string
 let store: Store
 
 const msg = (text: string): Message => ({ id: text, role: 'user', text })
-const file = (): string => path.join(dir, 'conversations.json')
+
+/** A second, read-only-in-spirit connection, for asserting on rows directly. */
+const openRaw = (): DatabaseSync => new DatabaseSync(path.join(dir, 'lm-chat.sqlite'))
+const messageTexts = (conversationId: string): string[] => {
+  const db = openRaw()
+  try {
+    return (db.prepare('SELECT text FROM messages WHERE conversation_id = ? ORDER BY position').all(conversationId) as { text: string | null }[])
+      .map((r) => r.text ?? '')
+  } finally {
+    db.close()
+  }
+}
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-store-'))
@@ -138,7 +150,7 @@ describe('shrink protection', () => {
     const id = store.getConversations().activeId!
     store.setMessages(id, [msg('a'), msg('b')])
     store.setMessages(id, [msg('a')])
-    expect(JSON.parse(fs.readFileSync(file(), 'utf8')).items[0].messages).toHaveLength(1)
+    expect(messageTexts(id)).toEqual(['a'])
   })
 })
 
@@ -173,11 +185,17 @@ describe('config', () => {
     expect(store.getConfig().systemPrompt).toBe('be terse')
   })
 
-  it('keeps config out of the conversations file', () => {
+  it('keeps the token out of every non-config row', () => {
     store.setConfig({ apiToken: 'sk-lm-SECRET' })
     const id = store.getConversations().activeId!
     store.setMessages(id, [msg('hi')])
-    expect(fs.readFileSync(file(), 'utf8')).not.toMatch(/SECRET/)
+    const db = openRaw()
+    try {
+      const nonConfig = [...db.prepare('SELECT * FROM conversations').all(), ...db.prepare('SELECT * FROM messages').all()]
+      expect(JSON.stringify(nonConfig)).not.toMatch(/SECRET/)
+    } finally {
+      db.close()
+    }
   })
 })
 
@@ -210,5 +228,54 @@ describe('restoring a deleted chat', () => {
     store.restore({ ...store.get(id)!, name: 'changed' })
     expect(store.get(id)!.name).not.toBe('changed')
     expect(() => store.restore({} as never)).toThrow(/id and messages/)
+  })
+})
+
+describe('the sqlite file', () => {
+  it('is private to this user', () => {
+    const mode = fs.statSync(path.join(dir, 'lm-chat.sqlite')).mode
+    expect(mode & 0o077).toBe(0)
+  })
+})
+
+describe('migrating from conversations.json', () => {
+  // A fresh dir per test here too, but no Store constructed by beforeEach --
+  // migration only runs on the *first* open of a dir, so these tests need
+  // to write the legacy files before that first `new Store()`.
+  let freshDir: string
+  beforeEach(() => {
+    freshDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-migrate-'))
+  })
+  afterEach(() => fs.rmSync(freshDir, { recursive: true, force: true }))
+
+  const legacyConversations = {
+    items: [{
+      id: 'old-1', name: 'Old chat', createdAt: 1, updatedAt: 2,
+      messages: [{ id: 'm1', role: 'user', text: 'hello from before' }],
+      responseId: null, reasoning: null, summary: null,
+    }],
+    activeId: 'old-1',
+  }
+
+  it('imports existing conversations and config, then renames the JSON aside', () => {
+    fs.writeFileSync(path.join(freshDir, 'conversations.json'), JSON.stringify(legacyConversations))
+    fs.writeFileSync(path.join(freshDir, 'config.json'), JSON.stringify({ model: 'qwen', apiToken: 'sk-lm-SECRET' }))
+
+    const migrated = new Store({ dir: freshDir })
+
+    expect(migrated.get('old-1')!.messages[0]!.text).toBe('hello from before')
+    expect(migrated.getConversations().activeId).toBe('old-1')
+    expect(migrated.getConfig().model).toBe('qwen')
+    expect(fs.existsSync(path.join(freshDir, 'conversations.json'))).toBe(false)
+    expect(fs.existsSync(path.join(freshDir, 'conversations.json.migrated'))).toBe(true)
+    expect(fs.existsSync(path.join(freshDir, 'config.json.migrated'))).toBe(true)
+  })
+
+  it('is retried on next open if nothing was migrated yet', () => {
+    // No legacy files at all: bootstraps a blank store, same as today.
+    const first = new Store({ dir: freshDir })
+    expect(first.getConversations().items).toHaveLength(1)
+    const reopened = new Store({ dir: freshDir })
+    expect(reopened.getConversations().activeId).toBe(first.getConversations().activeId)
   })
 })
