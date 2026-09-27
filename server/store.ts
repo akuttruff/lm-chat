@@ -223,6 +223,34 @@ export class Store {
     this.flush()
   }
 
+  /**
+   * Put back a conversation that was just deleted -- the Undo on the
+   * "deleted" toast. If deleting it left only a fresh blank thread, that
+   * placeholder goes and the restored one is opened in its place.
+   */
+  restore(input: Conversation): Conversation {
+    if (!input || typeof input.id !== 'string' || !input.id || !Array.isArray(input.messages)) {
+      throw new Error('expected a conversation with an id and messages')
+    }
+    const existing = this.get(input.id)
+    if (existing) return existing
+    const conv: Conversation = {
+      ...blankConversation(),
+      ...input,
+      name: typeof input.name === 'string' ? input.name : '',
+    }
+    let items = this.conversations.items
+    let activeId = this.conversations.activeId
+    const placeholder = items.length === 1 && items[0]!.messages.length === 0 ? items[0]! : null
+    if (placeholder) {
+      items = []
+      activeId = conv.id
+    }
+    this.conversations = { items: [...items, conv].slice(-MAX_CONVERSATIONS), activeId }
+    this.flush()
+    return conv
+  }
+
   getConfig(): ServerConfig {
     return this.config
   }

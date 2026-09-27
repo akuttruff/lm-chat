@@ -1,6 +1,7 @@
-import {useState, memo} from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { useMemo, useState, memo } from 'react'
+import { motion } from 'motion/react'
 import { Wrench, ChevronRight, TriangleAlert } from 'lucide-react'
+import { prettyOutput, sizeLabel, toolLabel } from '../lib/toolFormat.ts'
 
 interface ToolCardProps {
   name?: string
@@ -10,47 +11,52 @@ interface ToolCardProps {
   failed?: boolean
 }
 
+/** Output this short is shown whole; anything longer collapses to one line. */
+const SHORT = 120
+
+/**
+ * One tool call. Collapsed, it's a single row -- what ran, from where, how
+ * much it returned -- with one line of the result; expanded, the whole
+ * result in its own scrolling panel, JSON indented.
+ */
 function ToolCard({ name, plugin, output, failed }: ToolCardProps) {
   const [open, setOpen] = useState(false)
-  const long = (output || '').length > 120
-  const preview = long ? `${(output ?? '').slice(0, 120).trimEnd()}...` : output
+  const text = output ?? ''
+  const short = text.length > 0 && text.length <= SHORT
+  const expandable = text.length > SHORT
+  // Only format what's being shown: results run to tens of kilobytes.
+  const full = useMemo(() => (open ? prettyOutput(text) : ''), [open, text])
+  const source = plugin?.replace(/^mcp\//, '')
+  const meta = [source, text.length > SHORT ? sizeLabel(text.length) : null, failed ? 'failed' : null]
+    .filter(Boolean).join(' · ')
 
   return (
     <div className="msg tool">
-      <div className={`tool-card${failed ? ' failed' : ''}`}>
+      <div className={`tool-card${failed ? ' failed' : ''}${open ? ' open' : ''}`}>
         <button
           type="button"
           className="tool-head"
-          onClick={() => long && setOpen((v) => !v)}
-          aria-expanded={long ? open : undefined}
-          disabled={!long}
+          onClick={() => expandable && setOpen((v) => !v)}
+          aria-expanded={expandable ? open : undefined}
+          disabled={!expandable}
+          title={name}
         >
-          {failed
-            ? <TriangleAlert size={14} aria-hidden="true" />
-            : <Wrench size={14} aria-hidden="true" />}
-          <span className="tc-name">
-            {name ?? 'tool'}
-            {plugin && <span className="tc-plugin">{plugin}</span>}
+          <span className="tc-icon" aria-hidden="true">
+            {failed ? <TriangleAlert size={14} /> : <Wrench size={14} />}
           </span>
-          {long && (
-            <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.15 }}>
-              <ChevronRight size={14} aria-hidden="true" />
+          <span className="tc-title">
+            <span className="tc-name">{toolLabel(name)}</span>
+            {meta && <span className="tc-meta">{meta}</span>}
+          </span>
+          {expandable && (
+            <motion.span className="tc-chevron" animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.15 }}>
+              <ChevronRight size={16} aria-hidden="true" />
             </motion.span>
           )}
         </button>
-        {output && (
-          <AnimatePresence initial={false} mode="wait">
-            <motion.div
-              key={open ? 'full' : 'preview'}
-              className="out"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.12 }}
-            >
-              {open ? output : preview}
-            </motion.div>
-          </AnimatePresence>
-        )}
+        {short && <div className="tc-short">{text}</div>}
+        {expandable && !open && <div className="tc-preview">{text.replace(/\s+/g, ' ').slice(0, 300)}</div>}
+        {expandable && open && <pre className="tc-output">{full}</pre>}
       </div>
     </div>
   )

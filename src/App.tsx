@@ -15,7 +15,7 @@ export default function App() {
   const server = useServerState();
   const {
     conversations, activeId, active, config, status, startedAt, busy, working,
-    send, stop, newChat, openChat, deleteChat, renameChat, setReasoning, saveConfig,
+    send, stop, newChat, openChat, deleteChat, restoreChat, renameChat, setReasoning, saveConfig,
   } = server;
 
   const modelConfig = useModelConfig(config?.model);
@@ -71,6 +71,7 @@ export default function App() {
         working={working}
         onOpen={(id) => void openChat(id)}
         onDelete={(id) => void deleteChat(id)}
+        onRestore={(conv) => void restoreChat(conv)}
         onRename={(id, name) => void renameChat(id, name)}
         onClose={() => setChatsOpen(false)}
       />

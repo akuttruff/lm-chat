@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { Toaster } from 'sonner'
 import ConversationList from './ConversationList.tsx'
 import type { Conversation } from '../types.ts'
 
@@ -85,6 +86,40 @@ describe('ConversationList', () => {
     vi.spyOn(window, 'prompt').mockReturnValue(null)
     const props = setup()
     await user.click(await screen.findByRole('button', { name: /rename Astrology forecast/i }))
+    expect(props.onRename).not.toHaveBeenCalled()
+  })
+
+  it('offers delete and rename on hover for a mouse, as the same actions', async () => {
+    const user = userEvent.setup()
+    const props = setup()
+    await screen.findByText('Astrology forecast')
+    const [first] = document.querySelectorAll('.conv-hover-actions')
+    await user.click(first!.querySelector('button.danger')!)
+    expect(props.onDelete).toHaveBeenCalledWith('a')
+  })
+
+  it('deletes the focused chat with the Delete key', async () => {
+    const user = userEvent.setup()
+    const props = setup()
+    const row = (await screen.findByText('Astrology forecast')).closest('button')!
+    row.focus()
+    await user.keyboard('{Delete}')
+    expect(props.onDelete).toHaveBeenCalledWith('a')
+  })
+
+  it('undoes a deletion by restoring the chat, not renaming it', async () => {
+    const user = userEvent.setup()
+    const onRestore = vi.fn()
+    const props = setup({ onRestore })
+    render(<Toaster />)
+    await user.click(await screen.findByRole('button', { name: /delete Astrology forecast/i }))
+    // The newest toast (sonner's index 0): earlier tests' toasts linger in its shared state.
+    // fireEvent, since jsdom has no stylesheet to lift the open drawer's
+    // pointer-events: none -- App.css does that for real taps.
+    const undos = await screen.findAllByRole('button', { name: 'Undo' })
+    const newest = undos.find((b) => b.closest('[data-sonner-toast]')?.getAttribute('data-index') === '0')!
+    fireEvent.click(newest)
+    expect(onRestore).toHaveBeenCalledWith(expect.objectContaining({ id: 'a', name: 'Astrology forecast' }))
     expect(props.onRename).not.toHaveBeenCalled()
   })
 

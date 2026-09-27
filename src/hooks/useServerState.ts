@@ -27,6 +27,8 @@ export interface ServerState {
   newChat: () => Promise<void>
   openChat: (id: string) => Promise<void>
   deleteChat: (id: string) => Promise<void>
+  /** Put back a conversation just deleted, from the copy the client still holds. */
+  restoreChat: (conversation: Conversation) => Promise<void>
   renameChat: (id: string, name: string) => Promise<void>
   setReasoning: (value: string | null) => Promise<void>
   saveConfig: (patch: Partial<PublicConfig> & { apiToken?: string }) => Promise<void>
@@ -219,6 +221,10 @@ export default function useServerState(): ServerState {
     await fetch(`/api/chats/${encodeURIComponent(id)}`, { method: 'DELETE' })
   }, [])
 
+  const restoreChat = useCallback(async (conversation: Conversation) => {
+    await post('/api/chats/restore', conversation)
+  }, [])
+
   const patchChat = async (id: string, patch: Record<string, unknown>): Promise<void> => {
     await fetch(`/api/chats/${encodeURIComponent(id)}`, {
       method: 'PATCH',
@@ -260,6 +266,7 @@ export default function useServerState(): ServerState {
     newChat,
     openChat,
     deleteChat,
+    restoreChat,
     renameChat,
     setReasoning,
     saveConfig,

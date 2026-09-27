@@ -169,6 +169,23 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       return undefined
     }
 
+    if (url === '/api/chats/restore' && method === 'POST') {
+      void readBody(req).then((body) => {
+        const before = store.getConversations().items.map((c) => c.id)
+        const conv = store.restore(body as never)
+        const after = store.getConversations()
+        // A blank placeholder the deletion had left is gone again.
+        for (const id of before) {
+          if (!after.items.some((c) => c.id === id)) {
+            bus.send({ type: 'removed', payload: { conversationId: id, activeId: after.activeId } })
+          }
+        }
+        bus.send({ type: 'created', payload: { conversation: conv, activeId: after.activeId } })
+        return json(res, 200, { ok: true, id: conv.id })
+      }).catch((err: Error) => json(res, 400, { error: err.message }))
+      return undefined
+    }
+
     const chat = /^\/api\/chats\/([^/]+)(\/[a-z]+)?$/.exec(url)
     if (chat) {
       const id = decodeURIComponent(chat[1]!)

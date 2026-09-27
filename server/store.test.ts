@@ -180,3 +180,35 @@ describe('config', () => {
     expect(fs.readFileSync(file(), 'utf8')).not.toMatch(/SECRET/)
   })
 })
+
+describe('restoring a deleted chat', () => {
+  it('puts it back as it was', () => {
+    const id = store.getConversations().activeId!
+    store.setMessages(id, [{ id: 'm', role: 'user', text: 'keep me' }])
+    const other = store.create()
+    store.setMessages(other.id, [{ id: 'o', role: 'user', text: 'another chat' }])
+    const snapshot = structuredClone(store.get(id)!)
+    store.remove(id)
+    expect(store.get(id)).toBeUndefined()
+    store.restore(snapshot)
+    expect(store.get(id)!.messages[0]!.text).toBe('keep me')
+    expect(store.getConversations().items.map((c) => c.id)).toContain(other.id)
+  })
+
+  it('replaces the blank placeholder left by deleting the last chat', () => {
+    const id = store.getConversations().activeId!
+    store.setMessages(id, [{ id: 'm', role: 'user', text: 'only chat' }])
+    const snapshot = structuredClone(store.get(id)!)
+    store.remove(id)
+    expect(store.getConversations().items).toHaveLength(1) // the blank one
+    store.restore(snapshot)
+    expect(store.getConversations()).toMatchObject({ activeId: id, items: [{ id }] })
+  })
+
+  it('ignores a restore of a chat that still exists, and junk', () => {
+    const id = store.getConversations().activeId!
+    store.restore({ ...store.get(id)!, name: 'changed' })
+    expect(store.get(id)!.name).not.toBe('changed')
+    expect(() => store.restore({} as never)).toThrow(/id and messages/)
+  })
+})

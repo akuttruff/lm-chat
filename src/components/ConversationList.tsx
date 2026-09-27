@@ -13,6 +13,7 @@ interface RowProps {
   status?: ChatStatus
   onOpen: (id: string) => void
   onDelete: (id: string) => void
+  onRestore: (conv: Conversation) => void
   onRename: (id: string, name: string) => void
 }
 
@@ -24,6 +25,8 @@ interface ConversationListProps {
   working?: Record<string, ChatStatus>
   onOpen: (id: string) => void
   onDelete: (id: string) => void
+  /** Undo a deletion, from the copy the list still holds. */
+  onRestore?: (conv: Conversation) => void
   onRename: (id: string, name: string) => void
   onClose: () => void
 }
@@ -39,8 +42,23 @@ function relTime(ts: number): string {
 
 const ACTIONS_WIDTH = 132
 
-function Row({ conv, isActive, status, onOpen, onDelete, onRename }: RowProps) {
+function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: RowProps) {
   const [dragged, setDragged] = useState(false)
+
+  // Shared by the swipe actions, the hover buttons and the keyboard.
+  const rename = (): void => {
+    const next = window.prompt('Rename chat', conv.name || '')
+    if (next !== null && next.trim()) {
+      onRename(conv.id, next)
+      toast.success('Renamed')
+    }
+    setDragged(false)
+  }
+  const remove = (): void => {
+    const snapshot = conv
+    onDelete(conv.id)
+    toast('Chat deleted', { action: { label: 'Undo', onClick: () => onRestore(snapshot) } })
+  }
 
   return (
     <div className="conv-row-wrap">
@@ -53,32 +71,10 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRename }: RowProps) {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragged(false)
         }}
       >
-        <button
-          type="button"
-          aria-label={`Rename ${conv.name || 'New chat'}`}
-          onClick={() => {
-            const next = window.prompt('Rename chat', conv.name || '')
-            if (next !== null && next.trim()) {
-              onRename(conv.id, next)
-              toast.success('Renamed')
-            }
-            setDragged(false)
-          }}
-        >
+        <button type="button" aria-label={`Rename ${conv.name || 'New chat'}`} onClick={rename}>
           <Pencil size={15} aria-hidden="true" />
         </button>
-        <button
-          type="button"
-          className="danger"
-          aria-label={`Delete ${conv.name || 'New chat'}`}
-          onClick={() => {
-            const snapshot = conv
-            onDelete(conv.id)
-            toast('Chat deleted', {
-              action: { label: 'Undo', onClick: () => onRename(snapshot.id, snapshot.name) },
-            })
-          }}
-        >
+        <button type="button" className="danger" aria-label={`Delete ${conv.name || 'New chat'}`} onClick={remove}>
           <Trash2 size={15} aria-hidden="true" />
         </button>
       </div>
@@ -99,6 +95,13 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRename }: RowProps) {
         transition={{ type: 'spring', stiffness: 500, damping: 40 }}
         onDragEnd={(_event, info) => setDragged(info.offset.x < -ACTIONS_WIDTH / 2)}
         onClick={() => (dragged ? setDragged(false) : onOpen(conv.id))}
+        onKeyDown={(e) => {
+          // Desktop: Delete (or Backspace, on a Mac keyboard) removes the focused chat.
+          if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault()
+            remove()
+          }
+        }}
       >
         <MessageSquare size={15} className="conv-glyph" aria-hidden="true" />
         <span className="conv-name">{conv.name || 'New chat'}</span>
@@ -111,12 +114,25 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRename }: RowProps) {
           <span className="conv-time">{relTime(conv.updatedAt)}</span>
         )}
       </motion.button>
+
+      {/* With a mouse there's nothing to swipe: the same actions appear on
+          hover (CSS shows them only on devices that can hover). */}
+      {/* aria-hidden: a mouse-only duplicate of the actions above, which
+          keyboards and screen readers already reach. */}
+      <div className="conv-hover-actions" aria-hidden="true">
+        <button type="button" tabIndex={-1} aria-label={`Rename ${conv.name || 'New chat'}`} title="Rename" onClick={rename}>
+          <Pencil size={14} aria-hidden="true" />
+        </button>
+        <button type="button" tabIndex={-1} className="danger" aria-label={`Delete ${conv.name || 'New chat'}`} title="Delete" onClick={remove}>
+          <Trash2 size={14} aria-hidden="true" />
+        </button>
+      </div>
     </div>
   )
 }
 
 export default function ConversationList({
-  open, conversations, activeId, working = {}, onOpen, onDelete, onRename, onClose,
+  open, conversations, activeId, working = {}, onOpen, onDelete, onRestore = () => {}, onRename, onClose,
 }: ConversationListProps) {
   return (
     <Drawer.Root open={open} onOpenChange={(v) => !v && onClose()}>
@@ -134,12 +150,16 @@ export default function ConversationList({
                 status={working[c.id]}
                 onOpen={(id) => { onOpen(id); onClose() }}
                 onDelete={onDelete}
+                onRestore={onRestore}
                 onRename={onRename}
               />
             ))}
           </div>
           <div className="drawer-actions">
-            <div className="hint drawer-foot">Swipe a row left to rename or delete.</div>
+            <div className="hint drawer-foot">
+              <span className="touch-only">Swipe a row left to rename or delete.</span>
+              <span className="pointer-only">Hover a row to rename or delete; Delete removes the focused chat.</span>
+            </div>
           </div>
         </Drawer.Content>
       </Drawer.Portal>

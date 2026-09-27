@@ -196,36 +196,21 @@ html, body, #root {
 }
 @keyframes blink { 50% { opacity: 0; } }
 
-/* ====== Tool card ====== */
-.msg.tool { align-self: flex-start; }
+/* ====== Tool card ======
+   A block, not a flex row: the header spans the card and the result sits
+   under it. (As a row, the result was squeezed into a one-character column.) */
+.msg.tool { flex: 1 1 auto; min-width: 0; }
 
 .tool-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 12px;
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
   border-radius: var(--radius);
-  background: transparent;
-  border: 1px dashed var(--line);
-  font-family: "SF Mono", ui-monospace, Menlo, monospace;
-  font-size: 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
   color: var(--paper-dim);
-  max-width: 100%;
 }
-.tool-card .glyph { color: var(--moss); flex: 0 0 auto; }
-.tool-card .body { min-width: 0; }
-.tool-card .tc-name { color: var(--paper); font-weight: 600; }
-.tool-card .out {
-  margin-top: 4px;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-wrap: anywhere;
-  opacity: 0.85;
-}
-.tool-card.failed {
-  border-color: var(--danger);
-  color: var(--danger);
-}
+.tool-card.failed { border-color: var(--danger); }
 
 /* ====== Composer ====== */
 .composer {
@@ -642,19 +627,70 @@ html, body, #root {
 .tool-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   width: 100%;
   padding: 0;
   background: none;
   border: none;
-  color: var(--paper-dim);
-  font-size: 12px;
+  color: inherit;
+  font: inherit;
   text-align: left;
   cursor: pointer;
 }
+.tool-head:disabled { cursor: default; opacity: 1; }
 
-.tool-head:disabled { cursor: default; }
-.tool-head .tc-name { flex: 1 1 auto; }
+.tc-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--moss);
+}
+.tool-card.failed .tc-icon { color: var(--danger); }
+
+.tc-title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tc-name {
+  color: var(--paper);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tc-meta { font-size: 12px; color: var(--paper-dim); opacity: 0.8; }
+.tool-card.failed .tc-meta { color: var(--danger); opacity: 1; }
+.tc-chevron { flex: 0 0 auto; display: grid; color: var(--paper-dim); }
+
+.tc-preview,
+.tc-short,
+.tc-output {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.tc-preview {
+  margin-top: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+.tc-short { margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tc-output {
+  margin: 10px 0 0;
+  padding: 10px;
+  max-height: 50vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg);
+  border-radius: 8px;
+  color: var(--paper-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* --- markdown in assistant bubbles --- */
 .md > :first-child { margin-top: 0; }
@@ -826,12 +862,6 @@ html, body, #root {
   max-width: 100%;
 }
 
-.tc-plugin {
-  margin-left: 6px;
-  font-weight: 400;
-  color: var(--paper-dim);
-  opacity: 0.75;
-}
 
 /* The thread scrolls inside this; the jump button floats over it. */
 .thread-wrap {
@@ -869,3 +899,45 @@ html, body, #root {
   background: none; border: 1px solid var(--line); border-radius: 999px;
   color: var(--paper-dim); font-size: 12px; cursor: pointer;
 }
+
+/* --- chat list actions with a mouse --- */
+.conv-hover-actions {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  z-index: 2;
+  display: none;
+  gap: 4px;
+  transform: translateY(-50%);
+}
+.conv-hover-actions button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--paper-dim);
+  cursor: pointer;
+}
+.conv-hover-actions button:hover { color: var(--paper); border-color: var(--paper-dim); }
+.conv-hover-actions .danger:hover { color: var(--danger); border-color: var(--danger); }
+.pointer-only { display: none; }
+
+@media (hover: hover) and (pointer: fine) {
+  .conv-hover-actions { display: flex; opacity: 0; pointer-events: none; transition: opacity 0.12s; }
+  .conv-row-wrap:hover .conv-hover-actions,
+  .conv-row-wrap:focus-within .conv-hover-actions { opacity: 1; pointer-events: auto; }
+  /* Make room: the time or status sits where the buttons appear. */
+  .conv-row-wrap:hover .conv-time,
+  .conv-row-wrap:hover .conv-working { visibility: hidden; }
+  .touch-only { display: none; }
+  .pointer-only { display: inline; }
+}
+
+/* An open drawer makes everything outside it untappable (pointer-events:
+   none on body), and toasts don't opt back in -- so a "Chat deleted" toast's
+   Undo couldn't be tapped while the chat list was still open. */
+[data-sonner-toast][data-visible='true'] { pointer-events: auto; }
