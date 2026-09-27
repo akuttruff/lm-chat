@@ -862,3 +862,10 @@ html, body, #root {
 }
 
 .jump-latest:active { background: var(--bg); }
+
+/* --- long threads --- */
+.show-earlier {
+  display: block; margin: 4px auto 14px; padding: 7px 14px;
+  background: none; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--paper-dim); font-size: 12px; cursor: pointer;
+}

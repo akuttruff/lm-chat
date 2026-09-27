@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { Conversation, ConversationStore, PublicConfig, Status } from '../types.ts'
+import type { Conversation, ConversationMeta, ConversationStore, Message, PublicConfig, Status } from '../types.ts'
 
 /**
  * The whole client state, streamed from the app server.
@@ -42,6 +42,56 @@ export interface ChatStatus {
 
 type StatusEvent = { conversationId: string; state: string; text: string; startedAt: number | null }
 
+type ServerEvent =
+  | { type: 'conversations'; payload: ConversationStore }
+  | { type: 'active'; payload: { activeId: string | null } }
+  | { type: 'tail'; payload: { conversationId: string; base: number; messages: Message[]; meta: ConversationMeta } }
+  | { type: 'patch'; payload: { conversationId: string; meta: ConversationMeta } }
+  | { type: 'created'; payload: { conversation: Conversation; activeId: string | null } }
+  | { type: 'removed'; payload: { conversationId: string; activeId: string | null; replacement?: Conversation } }
+  | { type: 'status'; payload: StatusEvent }
+  | { type: 'statuses'; payload: StatusEvent[] }
+
+/**
+ * Apply one small server event to the store. Returns null when it can't be
+ * applied faithfully -- a reply's tail for a thread we hold too little of --
+ * so the caller re-fetches the whole store instead of guessing.
+ */
+export function applyEvent(s: ConversationStore, event: ServerEvent): ConversationStore | null {
+  switch (event.type) {
+    case 'conversations':
+      return event.payload
+    case 'active':
+      return s.items.some((c) => c.id === event.payload.activeId) ? { ...s, activeId: event.payload.activeId } : s
+    case 'tail': {
+      const { conversationId, base, messages, meta } = event.payload
+      const conv = s.items.find((c) => c.id === conversationId)
+      if (!conv) return s // a thread we don't list; the next snapshot will say
+      if (conv.messages.length < base) return null
+      const next: Conversation = { ...conv, ...meta, messages: [...conv.messages.slice(0, base), ...messages] }
+      return { ...s, items: s.items.map((c) => (c.id === conversationId ? next : c)) }
+    }
+    case 'patch': {
+      const { conversationId, meta } = event.payload
+      return { ...s, items: s.items.map((c) => (c.id === conversationId ? { ...c, ...meta, messages: c.messages } : c)) }
+    }
+    case 'created': {
+      const { conversation, activeId } = event.payload
+      const items = s.items.some((c) => c.id === conversation.id)
+        ? s.items.map((c) => (c.id === conversation.id ? conversation : c))
+        : [conversation, ...s.items]
+      return { items, activeId }
+    }
+    case 'removed': {
+      const { conversationId, activeId, replacement } = event.payload
+      const items = s.items.filter((c) => c.id !== conversationId)
+      return { items: replacement ? [replacement, ...items] : items, activeId }
+    }
+    default:
+      return s
+  }
+}
+
 const toChatStatus = (e: StatusEvent): ChatStatus =>
   ({ state: e.state as Status['state'], text: e.text, startedAt: e.startedAt })
 
@@ -72,6 +122,22 @@ export default function useServerState(): ServerState {
 
   useEffect(() => { void refreshConfig() }, [refreshConfig])
 
+  // The latest store, for applying events in order as they arrive -- each
+  // one builds on the last, and some decide whether to re-fetch.
+  const storeRef = useRef(store)
+  const commitStore = useCallback((next: ConversationStore) => {
+    storeRef.current = next
+    setStore(next)
+  }, [])
+
+  /** Fetch the whole store, when a small update couldn't be applied. */
+  const resync = useCallback(async () => {
+    try {
+      const r = await fetch('/api/chats')
+      if (r.ok) commitStore(await r.json() as ConversationStore)
+    } catch { /* the next event or reconnect will try again */ }
+  }, [commitStore])
+
   // Subscribe to server state. EventSource reconnects on its own, so a phone
   // that slept simply picks the stream back up.
   useEffect(() => {
@@ -85,21 +151,12 @@ export default function useServerState(): ServerState {
     source.onmessage = (e: MessageEvent<string>) => {
       // Anything arriving proves the stream is up, whatever onopen said.
       setLink('live')
-      const event = JSON.parse(e.data) as
-        | { type: 'conversations'; payload: ConversationStore }
-        | { type: 'conversation'; payload: Conversation }
-        | { type: 'status'; payload: StatusEvent }
-        | { type: 'statuses'; payload: StatusEvent[] }
-      if (event.type === 'conversations') {
-        setStore(event.payload)
-        return
-      }
-      if (event.type === 'conversation') {
-        // One thread changed (a reply streaming): swap just that one in.
-        const next = event.payload
-        setStore((s) => (s.items.some((c) => c.id === next.id)
-          ? { ...s, items: s.items.map((c) => (c.id === next.id ? next : c)) }
-          : s))
+      const event = JSON.parse(e.data) as ServerEvent
+      if (event.type !== 'status' && event.type !== 'statuses') {
+        // Decided here, not in a state updater, which React may run later.
+        const next = applyEvent(storeRef.current, event)
+        if (next) commitStore(next)
+        else void resync()
         return
       }
       if (event.type === 'statuses') {
@@ -124,7 +181,7 @@ export default function useServerState(): ServerState {
     }
 
     return () => source.close()
-  }, [])
+  }, [resync, commitStore])
 
   const active = store.items.find((c) => c.id === store.activeId) ?? null
   const mine = store.activeId ? statuses[store.activeId] : undefined
@@ -152,8 +209,11 @@ export default function useServerState(): ServerState {
   const newChat = useCallback(async () => { await post('/api/chats') }, [])
 
   const openChat = useCallback(async (id: string) => {
+    // Switch now; the server's confirmation is only for other devices.
+    const s = storeRef.current
+    if (s.items.some((c) => c.id === id)) commitStore({ ...s, activeId: id })
     await post(`/api/chats/${encodeURIComponent(id)}/active`)
-  }, [])
+  }, [commitStore])
 
   const deleteChat = useCallback(async (id: string) => {
     await fetch(`/api/chats/${encodeURIComponent(id)}`, { method: 'DELETE' })

@@ -93,13 +93,30 @@ describe('conversations', () => {
     expect(api.store.getConversations().items).toHaveLength(1)
   })
 
-  it('switches the active thread', async () => {
+  it('switches the active thread, answering and announcing in a few bytes', async () => {
+    const id = api.store.getConversations().activeId!
+    api.store.setMessages(id, [{ id: 'm', role: 'user', text: 'x'.repeat(100_000) }])
+    const created = await (await send('/api/chats', 'POST')).json() as { id: string }
+    const sent: { type: string; payload: unknown }[] = []
+    const spy = vi.spyOn(api.bus, 'send').mockImplementation((e) => { sent.push(e as never) })
+    const res = await send(`/api/chats/${id}/active`, 'POST')
+    spy.mockRestore()
+    expect(api.store.getConversations().activeId).toBe(id)
+    expect(created.id).not.toBe(id)
+    expect((await res.text()).length).toBeLessThan(200)
+    expect(sent).toEqual([{ type: 'active', payload: { activeId: id } }])
+  })
+
+  it('announces a deletion by id, not by resending every thread', async () => {
     const id = api.store.getConversations().activeId!
     api.store.setMessages(id, [{ id: 'm', role: 'user', text: 'seed' }])
     const created = await (await send('/api/chats', 'POST')).json() as { id: string }
-    await send(`/api/chats/${id}/active`, 'POST')
-    expect(api.store.getConversations().activeId).toBe(id)
-    expect(created.id).not.toBe(id)
+    const sent: { type: string; payload: unknown }[] = []
+    const spy = vi.spyOn(api.bus, 'send').mockImplementation((e) => { sent.push(e as never) })
+    await send(`/api/chats/${created.id}`, 'DELETE')
+    spy.mockRestore()
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({ type: 'removed', payload: { conversationId: created.id } })
   })
 
   it('404s for an unknown conversation', async () => {

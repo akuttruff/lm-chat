@@ -696,8 +696,10 @@ describe('conversation context', () => {
       expect(conv.summary?.text).toBe('- user asked twelve things')
       // Nothing is removed from the visible thread.
       expect(conv.messages).toHaveLength(26)
-      expect(sent.some((e) => e.type === 'conversation' &&
-        (e.payload as { summary?: { text: string } }).summary?.text === '- user asked twelve things')).toBe(true)
+      expect(sent.some((e) => e.type === 'patch' &&
+        (e.payload as { meta: { summary?: { text: string } } }).meta.summary?.text === '- user asked twelve things')).toBe(true)
+      // Metadata only: the thread's messages aren't resent.
+      expect(sent.find((e) => e.type === 'patch')!.payload).not.toHaveProperty('meta.messages')
 
       const g = streams([evt({ type: 'chat.end', result: {} })])
       vi.stubGlobal('fetch', g)
@@ -784,18 +786,28 @@ describe('streaming load', () => {
   const tokens = (n: number): string[] =>
     Array.from({ length: n }, (_, i) => evt({ type: 'message.delta', content: `t${i} ` }))
 
-  it('sends clients the one changed conversation, a few times a second, not the store per token', async () => {
-    const sent: string[] = []
-    vi.spyOn(bus, 'send').mockImplementation((e) => { sent.push(e.type) })
+  it('streams only the reply, a few times a second -- never the history or the store', async () => {
+    const sent: { type: string; payload: unknown }[] = []
+    vi.spyOn(bus, 'send').mockImplementation((e) => { sent.push(e as never) })
+    // A long thread already: its history must not ride along with each update.
+    const bulk = 'x'.repeat(50_000)
+    store.setMessages(convId, [
+      { id: 'u0', role: 'user', text: 'earlier' },
+      { id: 't0', role: 'tool', name: 'chart', output: bulk },
+    ])
     // 60 tokens at 10 ms: 600 ms of streaming.
     vi.stubGlobal('fetch', paced([...tokens(60), evt({ type: 'chat.end', result: {} })], 10))
     await engine.runTurn(convId, 'hi')
 
-    const partials = sent.filter((t) => t === 'conversation').length
-    expect(partials).toBeGreaterThan(0) // clients do see it streaming...
-    expect(partials).toBeLessThan(10) // ...but coalesced, not 60 frames
-    // The full store goes out only at the start and end of the turn.
-    expect(sent.filter((t) => t === 'conversations').length).toBeLessThanOrEqual(3)
+    const tails = sent.filter((e) => e.type === 'tail')
+    expect(tails.length).toBeGreaterThan(1) // clients do see it streaming...
+    expect(tails.length).toBeLessThan(12) // ...but coalesced, not 60 frames
+    expect(sent.some((e) => e.type === 'conversations')).toBe(false)
+    for (const t of tails) {
+      const payload = t.payload as { base: number }
+      expect(payload.base).toBe(2)
+      expect(JSON.stringify(t.payload).length).toBeLessThan(5_000)
+    }
     expect(messages().at(-1)!.text).toBe(Array.from({ length: 60 }, (_, i) => `t${i}`).join(' '))
   })
 

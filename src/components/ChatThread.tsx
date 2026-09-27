@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowDown, MessagesSquare } from 'lucide-react'
 import MessageBubble from './MessageBubble'
@@ -18,6 +18,13 @@ interface ChatThreadProps {
  * absorbs sub-pixel rounding and the last line growing as tokens arrive.
  */
 const NEAR_BOTTOM_PX = 80
+
+/**
+ * Messages drawn when a thread opens. A long thread -- a hundred messages of
+ * markdown and tool output -- took long enough to render that opening it
+ * stalled the phone; the rest are a tap away.
+ */
+export const INITIAL_WINDOW = 40
 
 /**
  * One message, memoised.
@@ -86,6 +93,22 @@ export default function ChatThread({ messages, summary }: ChatThreadProps) {
   // conversation while the model is still writing used to be impossible:
   // every token yanked the scroll to the bottom again.
   const [following, setFollowing] = useState(true)
+  const [shown, setShown] = useState(INITIAL_WINDOW)
+  const hidden = Math.max(0, messages.length - shown)
+  const visible = hidden ? messages.slice(hidden) : messages
+  // Showing earlier messages adds height above what you're reading; keep
+  // the view where it was instead of letting it jump.
+  const heightBefore = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const el = threadRef.current
+    if (!el || heightBefore.current == null) return
+    el.scrollTop += el.scrollHeight - heightBefore.current
+    heightBefore.current = null
+  }, [shown])
+  const showEarlier = (): void => {
+    heightBefore.current = threadRef.current?.scrollHeight ?? null
+    setShown((n) => n + INITIAL_WINDOW * 2)
+  }
 
   const lastMessage = messages.at(-1)
   const lastId = lastMessage?.id
@@ -134,8 +157,13 @@ export default function ChatThread({ messages, summary }: ChatThreadProps) {
   return (
     <div className="thread-wrap">
       <div className="thread" ref={threadRef} onScroll={handleScroll}>
+        {hidden > 0 && (
+          <button type="button" className="show-earlier" onClick={showEarlier}>
+            Show {Math.min(hidden, INITIAL_WINDOW * 2)} earlier message{hidden === 1 ? '' : 's'}
+          </button>
+        )}
         <AnimatePresence initial={false}>
-          {messages.flatMap((msg) => {
+          {visible.flatMap((msg) => {
             const row = <ThreadRow key={msg.id} message={msg} />
             if (!summary?.text || msg.id !== summary.through) return [row]
             return [row, (

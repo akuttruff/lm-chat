@@ -52,6 +52,14 @@ export interface ContextSummary {
   through: string | number
 }
 
+/** A conversation without its messages: what changes when it's renamed, etc. */
+export type ConversationMeta = Omit<Conversation, 'messages'>
+
+export const metaOf = (c: Conversation): ConversationMeta => {
+  const { messages: _messages, ...meta } = c
+  return meta
+}
+
 export interface ConversationStore {
   items: Conversation[]
   activeId: string | null

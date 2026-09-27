@@ -7,6 +7,7 @@ import type { EngineState } from './engine.ts'
 import { Store } from './store.ts'
 import { readModelConfig } from './model-config.ts'
 import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
+import { metaOf } from '../src/types.ts'
 import type { ConversationStore, ServerConfig } from '../src/types.ts'
 
 type Next = () => void
@@ -151,7 +152,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     }
     if (url === '/api/chats' && method === 'POST') {
       const conv = store.create()
-      broadcast()
+      bus.send({ type: 'created', payload: { conversation: conv, activeId: store.getConversations().activeId } })
       return json(res, 200, conv)
     }
     if (url === '/api/chats' && method === 'PUT') {
@@ -178,20 +179,24 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       if (!action && method === 'PATCH') {
         void readBody(req).then((body) => {
           const conv = store.patch(id, body as Record<string, never>)
-          broadcast()
-          return json(res, 200, conv)
+          if (conv) bus.send({ type: 'patch', payload: { conversationId: id, meta: metaOf(conv) } })
+          return json(res, 200, conv && metaOf(conv))
         }).catch((err: Error) => json(res, 400, { error: err.message }))
         return undefined
       }
       if (!action && method === 'DELETE') {
+        const before = new Set(store.getConversations().items.map((c) => c.id))
         store.remove(id)
-        broadcast()
-        return json(res, 200, store.getConversations())
+        const after = store.getConversations()
+        // Deleting the last thread leaves a fresh blank one in its place.
+        const replacement = after.items.find((c) => !before.has(c.id))
+        bus.send({ type: 'removed', payload: { conversationId: id, activeId: after.activeId, replacement } })
+        return json(res, 200, { ok: true, activeId: after.activeId })
       }
       if (action === '/active' && method === 'POST') {
         store.setActive(id)
-        broadcast()
-        return json(res, 200, store.getConversations())
+        bus.send({ type: 'active', payload: { activeId: id } })
+        return json(res, 200, { ok: true, activeId: id })
       }
       if (action === '/turns' && method === 'POST') {
         void readBody(req).then((body) => {

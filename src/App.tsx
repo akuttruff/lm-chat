@@ -45,7 +45,9 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenChats={() => setChatsOpen(true)}
       />
-      <ChatThread messages={messages} summary={active?.summary} />
+      {/* Keyed by thread: switching mounts a fresh one, rather than animating
+          one thread's messages out while the other's animate in. */}
+      <ChatThread key={activeId ?? 'none'} messages={messages} summary={active?.summary} />
       <Composer
         onSend={(text) => void send(text)}
         disabled={busy}

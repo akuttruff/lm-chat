@@ -168,3 +168,22 @@ describe('auto-compaction summary', () => {
     expect(screen.queryByText(/earlier turns summarized/i)).toBeNull()
   })
 })
+
+describe('long threads', () => {
+  const many = (n: number): Message[] => Array.from({ length: n }, (_, i) => msg(`m${i}`, i % 2 ? 'assistant' : 'user', `message ${i}`))
+
+  it('draws only the latest messages at first, and the rest on request', () => {
+    render(<ChatThread messages={many(100)} />)
+    expect(screen.queryByText('message 0')).toBeNull()
+    expect(screen.getByText('message 99')).toBeTruthy()
+    expect(document.querySelectorAll('.msg-row')).toHaveLength(40)
+    fireEvent.click(screen.getByRole('button', { name: /Show 60 earlier messages/ }))
+    expect(screen.getByText('message 0')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /earlier/ })).toBeNull()
+  })
+
+  it('shows no button for a short thread', () => {
+    render(<ChatThread messages={many(10)} />)
+    expect(screen.queryByRole('button', { name: /earlier/ })).toBeNull()
+  })
+})

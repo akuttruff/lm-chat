@@ -52,22 +52,76 @@ describe('useServerState', () => {
     expect(result.current.activeId).toBe('c1')
   })
 
-  it('applies a single-conversation update without touching the others', async () => {
+  it('applies a streaming tail without resending, or touching, the rest', async () => {
     stubApi()
     const { result } = renderHook(() => useServerState())
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
     const other = conv({ id: 'c2', name: 'Other' })
+    const earlier = [{ id: 'u0', role: 'user' as const, text: 'earlier' }, { id: 'a0', role: 'assistant' as const, text: 'old' }]
     act(() => {
-      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv(), other], 'c1') })
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv({ messages: earlier }), other], 'c1') })
     })
+    const { messages: _m, ...meta } = conv({ name: 'Renamed' })
     act(() => {
       FakeEventSource.latest().emit({
-        type: 'conversation',
-        payload: conv({ messages: [{ id: 'a', role: 'assistant', text: 'streaming…', streaming: true }] }),
+        type: 'tail',
+        payload: {
+          conversationId: 'c1', base: 2, meta,
+          messages: [{ id: 'u1', role: 'user', text: 'next' }, { id: 'a1', role: 'assistant', text: 'streaming…', streaming: true }],
+        },
       })
     })
-    expect(result.current.active?.messages[0]!.text).toBe('streaming…')
+    expect(result.current.active!.messages.map((m) => m.text)).toEqual(['earlier', 'old', 'next', 'streaming…'])
+    expect(result.current.active!.name).toBe('Renamed')
     expect(result.current.conversations.find((c) => c.id === 'c2')).toEqual(other)
+  })
+
+  it('re-fetches everything when a tail starts past what it holds', async () => {
+    const calls = stubApi()
+    renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv()], 'c1') })
+    })
+    const { messages: _m, ...meta } = conv()
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'tail', payload: { conversationId: 'c1', base: 5, meta, messages: [] } })
+    })
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/chats')).toBe(true))
+  })
+
+  it('switches threads at once, before the server answers', async () => {
+    const calls = stubApi()
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv(), conv({ id: 'c2' })], 'c1') })
+    })
+    act(() => { void result.current.openChat('c2') })
+    expect(result.current.activeId).toBe('c2')
+    expect(calls.some((c) => c.url === '/api/chats/c2/active')).toBe(true)
+  })
+
+  it('applies metadata, creations and removals without message payloads', async () => {
+    stubApi()
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    const msgs = [{ id: 'u0', role: 'user' as const, text: 'kept' }]
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv({ messages: msgs })], 'c1') })
+    })
+    const { messages: _m, ...meta } = conv({ name: 'New name', reasoning: 'low' })
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'patch', payload: { conversationId: 'c1', meta } })
+      FakeEventSource.latest().emit({ type: 'created', payload: { conversation: conv({ id: 'c3' }), activeId: 'c3' } })
+    })
+    expect(result.current.conversations.find((c) => c.id === 'c1')).toMatchObject({ name: 'New name', reasoning: 'low', messages: msgs })
+    expect(result.current.activeId).toBe('c3')
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'removed', payload: { conversationId: 'c3', activeId: 'c1' } })
+    })
+    expect(result.current.conversations.map((c) => c.id)).toEqual(['c1'])
+    expect(result.current.activeId).toBe('c1')
   })
 
   it('ignores an update for a conversation it has never been told about', async () => {
@@ -76,7 +130,8 @@ describe('useServerState', () => {
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
     act(() => {
       FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv()], 'c1') })
-      FakeEventSource.latest().emit({ type: 'conversation', payload: conv({ id: 'ghost' }) })
+      const { messages: _m, ...meta } = conv({ id: 'ghost' })
+      FakeEventSource.latest().emit({ type: 'tail', payload: { conversationId: 'ghost', base: 0, meta, messages: [] } })
     })
     expect(result.current.conversations.map((c) => c.id)).toEqual(['c1'])
   })

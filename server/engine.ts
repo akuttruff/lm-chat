@@ -5,6 +5,7 @@ import { readModelConfig } from './model-config.ts'
 import { canTurnOff, cheapestReasoning, fitReasoning, reasoningCapability } from './capabilities.ts'
 import type { ReasoningCapability } from './capabilities.ts'
 import { Slots, parallelLimit } from './slots.ts'
+import { metaOf } from '../src/types.ts'
 import type { ChatEvent, ContextSummary, Integration, Message, ServerConfig } from '../src/types.ts'
 
 /**
@@ -331,8 +332,14 @@ export class Engine {
     this.bus.send({ type: 'status', payload })
   }
 
-  private publishConversations(): void {
-    this.bus.send({ type: 'conversations', payload: this.store.getConversations() })
+  /** Send the part of a thread a turn has changed: its messages from `base` on. */
+  private publishTail(conversationId: string, base: number): void {
+    const conv = this.store.get(conversationId)
+    if (!conv) return
+    this.bus.send({
+      type: 'tail',
+      payload: { conversationId, base, messages: conv.messages.slice(base), meta: metaOf(conv) },
+    })
   }
 
   /**
@@ -351,6 +358,9 @@ export class Engine {
 
     const config = this.store.getConfig()
     const history = [...conv.messages]
+    // Everything before here stays as it is for the whole turn, so clients
+    // are only ever sent what comes after.
+    const tailFrom = history.length
     const base = config.lmStudioUrl.replace(/\/+$/, '')
 
     // A pending throttled update, which a commit must cancel so a stale
@@ -365,7 +375,7 @@ export class Engine {
       publishTimer = undefined
       this.store.setMessages(conversationId, messages, { touch })
       lastPersist = Date.now()
-      this.publishConversations()
+      this.publishTail(conversationId, tailFrom)
     }
 
     const fail = (message: string, statusText: string): void => {
@@ -442,8 +452,7 @@ export class Engine {
       const persist = now - lastPersist >= PERSIST_INTERVAL_MS
       if (persist) lastPersist = now
       this.store.setMessages(conversationId, visible(), { persist, touch: false })
-      const conv = this.store.get(conversationId)
-      if (conv) this.bus.send({ type: 'conversation', payload: conv })
+      this.publishTail(conversationId, tailFrom)
     }
 
     /** Streaming progress: coalesced, so a fast model can't flood clients or the disk. */
@@ -741,7 +750,7 @@ export class Engine {
       clearTimeout(publishTimer)
       releaseSlot?.()
       this.running.delete(conversationId)
-      this.publishConversations()
+      this.publishTail(conversationId, tailFrom)
     }
 
     // After the turn is released, so the user can already send the next one;
@@ -798,7 +807,7 @@ export class Engine {
       if (!current?.messages.some((m) => m.id === plan.through)) return false
       const updated = this.store.patch(conversationId, { summary: { text, through: plan.through } }, { touch: false })
       // So open clients can show where the summary now begins.
-      if (updated) this.bus.send({ type: 'conversation', payload: updated })
+      if (updated) this.bus.send({ type: 'patch', payload: { conversationId, meta: metaOf(updated) } })
       console.log(
         `[engine] compacted ${plan.fold.length} messages into a ${text.length}-char summary`,
       )
