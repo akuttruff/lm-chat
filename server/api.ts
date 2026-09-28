@@ -18,6 +18,23 @@ export interface ApiOptions {
   dir?: string
 }
 
+/**
+ * A state-changing request must come from this app's own page. The server is
+ * reachable from any device on your tailnet (or LAN), so without this a web
+ * page you happened to visit could write to your chats.
+ */
+function sameOrigin(req: IncomingMessage): boolean {
+  const method = (req.method || 'GET').toUpperCase()
+  if (method === 'GET' || method === 'HEAD') return true
+  const origin = req.headers.origin
+  if (!origin) return true // curl and scripts send none
+  try {
+    return new URL(origin).host === req.headers.host
+  } catch {
+    return false
+  }
+}
+
 function json(res: ServerResponse, code: number, body: unknown): void {
   res.statusCode = code
   res.setHeader('Content-Type', 'application/json')
@@ -65,6 +82,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
   const middleware: Middleware = (req, res, next) => {
     const [rawUrl = '', query = ''] = (req.url || '').split('?')
     if (!rawUrl.startsWith('/api/')) return next()
+    if (!sameOrigin(req)) return json(res, 403, { error: 'cross-origin write refused' })
     const url = rawUrl.replace(/\/+$/, '') || rawUrl
     const method = req.method || 'GET'
 

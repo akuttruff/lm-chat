@@ -195,6 +195,31 @@ describe('events', () => {
   })
 })
 
+describe('cross-origin protection', () => {
+  const sendFrom = (p: string, method: string, origin: string, body?: unknown) =>
+    realFetch(`${base}${p}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', Origin: origin },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+
+  it('refuses a write from another site', async () => {
+    const res = await sendFrom('/api/config', 'PUT', 'https://evil.example', { model: 'x' })
+    expect(res.status).toBe(403)
+  })
+
+  it('allows a write from its own page', async () => {
+    const host = new URL(base).host
+    const res = await sendFrom('/api/config', 'PUT', `http://${host}`, { model: 'qwen' })
+    expect(res.status).toBe(200)
+  })
+
+  it('allows reads from anywhere', async () => {
+    const res = await sendFrom('/api/config', 'GET', 'https://evil.example')
+    expect(res.status).toBe(200)
+  })
+})
+
 describe('routing', () => {
   it('leaves non-api paths to the app', async () => {
     const res = await get('/index.html')
