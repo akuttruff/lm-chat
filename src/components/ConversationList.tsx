@@ -111,7 +111,9 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: 
             {status.text.startsWith('waiting') ? 'queued' : 'replying'}
           </span>
         ) : (
-          <span className="conv-time">{relTime(conv.updatedAt)}</span>
+          <span className="conv-time">
+            {conv.messages.length > 0 ? `${conv.messages.length} · ` : ''}{relTime(conv.updatedAt)}
+          </span>
         )}
       </motion.button>
 

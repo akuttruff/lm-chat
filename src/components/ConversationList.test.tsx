@@ -40,6 +40,14 @@ describe('ConversationList', () => {
     expect(screen.getByText('2h')).toBeInTheDocument()
   })
 
+  it('shows the message count before the time, for a thread that has messages', async () => {
+    const withMessages = convs.map((c) => (
+      c.id === 'a' ? { ...c, messages: Array.from({ length: 5 }, (_, i) => ({ id: i, role: 'user' as const, text: 'hi' })) } : c
+    ))
+    setup({ conversations: withMessages })
+    expect(await screen.findByText('5 · 1m')).toBeInTheDocument()
+  })
+
   it('marks chats that are replying or queued in place of their time', async () => {
     setup({
       working: {
