@@ -40,6 +40,8 @@ export interface Conversation {
   reasoning?: string | null
   /** Older turns folded into a summary, so they aren't replayed verbatim. */
   summary?: ContextSummary | null
+  /** Per-chat memory switch; null inherits the Settings default (memoryDefault). */
+  memory?: boolean | null
   /** How many messages the server holds. Set on chats it sends in the list. */
   messageCount?: number
   /**
@@ -115,6 +117,16 @@ export interface ServerConfig {
    * the app. Match the model's "parallel" load setting. 0 means no cap.
    */
   parallel: string
+  /** Whether a chat with no memory setting of its own uses memory. */
+  memoryDefault: 'on' | 'off'
+}
+
+/** One saved memory, as the memory MCP server stores it (see server/memory.ts). */
+export interface Memory {
+  id: string
+  text: string
+  createdAt: number
+  updatedAt: number
 }
 
 /** What the browser is allowed to see of the config. */

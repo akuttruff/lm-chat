@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import '@testing-library/jest-dom/vitest'
 
 // jsdom implements neither of these, and Motion calls them while measuring
@@ -64,3 +66,7 @@ afterEach(() => {
 
 // jsdom does no layout, so it has no scrollIntoView; components call it on focus.
 if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {}
+
+// No test may read or write the real memory pool (~/.lm-memory). One that
+// wants memories passes its own file; everything else sees none.
+process.env.MEMORY_DB = path.join(os.tmpdir(), `lm-chat-test-no-memory-${process.pid}.sqlite`)

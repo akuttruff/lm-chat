@@ -28,7 +28,7 @@ function stubApi(config: Record<string, unknown> = {}) {
         ok: true,
         json: () => Promise.resolve({
           lmStudioUrl: 'http://127.0.0.1:1234', model: 'qwen', systemPrompt: '',
-          mcpTools: '', contextLength: '', reasoning: '', stallSeconds: '180', historyChars: '24000', parallel: '4',
+          mcpTools: '', contextLength: '', reasoning: '', stallSeconds: '180', historyChars: '24000', parallel: '4', memoryDefault: 'off',
           hasToken: true, ...config,
         }),
       })

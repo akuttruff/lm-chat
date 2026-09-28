@@ -35,6 +35,8 @@ export interface ServerState {
   restoreChat: (conversation: Conversation) => Promise<void>
   renameChat: (id: string, name: string) => Promise<void>
   setReasoning: (value: string | null) => Promise<void>
+  /** This chat's memory switch; null goes back to the Settings default. */
+  setMemory: (value: boolean | null) => Promise<void>
   saveConfig: (patch: Partial<PublicConfig> & { apiToken?: string }) => Promise<void>
   refreshConfig: () => Promise<void>
 }
@@ -282,6 +284,11 @@ export default function useServerState(): ServerState {
     if (id) await patchChat(id, { reasoning: value })
   }, [])
 
+  const setMemory = useCallback(async (value: boolean | null) => {
+    const id = activeIdRef.current
+    if (id) await patchChat(id, { memory: value })
+  }, [])
+
   const saveConfig = useCallback(async (patch: Partial<PublicConfig> & { apiToken?: string }) => {
     const r = await fetch('/api/config', {
       method: 'PUT',
@@ -311,6 +318,7 @@ export default function useServerState(): ServerState {
     restoreChat,
     renameChat,
     setReasoning,
+    setMemory,
     saveConfig,
     refreshConfig,
   }

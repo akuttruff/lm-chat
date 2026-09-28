@@ -787,6 +787,22 @@ html, body, #root {
 }
 
 .reasoning-chip:active { background: var(--bg); }
+.memory-chip { padding: 0 11px; margin-left: -4px; }
+.memory-chip.on { color: var(--moss); border-color: var(--moss-dim); }
+
+.toggle-row { display: flex; align-items: center; gap: 10px; font-size: 14px; margin: 4px 0 8px; cursor: pointer; }
+.toggle-row input { width: 18px; height: 18px; accent-color: var(--moss); }
+
+.memory-list { display: flex; flex-direction: column; }
+.memory-row { padding: 12px 2px; border-bottom: 1px solid var(--line); }
+.memory-text { font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.memory-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--paper-dim); }
+.memory-meta .spacer { flex: 1; }
+.memory-meta button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; background: none; border: none; border-radius: 8px; color: var(--paper-dim); cursor: pointer; }
+.memory-meta button:active { background: var(--bg); }
+.memory-meta button.danger { color: var(--rust); }
+.memory-edit textarea { width: 100%; min-height: 72px; padding: 9px 10px; background: var(--bg); color: var(--paper); border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 15px; resize: vertical; }
+.memory-edit .row { margin-top: 8px; }
 
 .level-list { display: flex; flex-direction: column; }
 

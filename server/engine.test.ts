@@ -8,6 +8,8 @@ import {
   newEngineState,
 } from './engine.ts'
 import { Store } from './store.ts'
+import { Memories } from './memory.ts'
+import { DatabaseSync } from 'node:sqlite'
 import type { Message, ServerConfig } from '../src/types.ts'
 
 let dir: string
@@ -376,6 +378,57 @@ describe('failures', () => {
     void engine.runTurn(convId, 'first')
     await vi.waitFor(() => expect(engine.isRunning(convId)).toBe(true))
     await expect(engine.runTurn(convId, 'second')).rejects.toThrow(/already in flight/)
+  })
+})
+
+describe('memory', () => {
+  let memDir: string
+  let memoryEngine: Engine
+  beforeEach(() => {
+    memDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-engine-memory-'))
+    const file = path.join(memDir, 'memory.sqlite')
+    const db = new DatabaseSync(file)
+    db.exec('CREATE TABLE memories (id TEXT PRIMARY KEY, text TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)')
+    db.prepare('INSERT INTO memories VALUES (?, ?, ?, ?)').run('a1', 'Favorite color is green', 1, 1)
+    db.close()
+    memoryEngine = new Engine(store, bus, () => Promise.resolve(null), newEngineState(), new Memories(file))
+  })
+  afterEach(() => fs.rmSync(memDir, { recursive: true, force: true }))
+
+  const turn = async (): Promise<Record<string, unknown>> => {
+    const f = streams([evt({ type: 'message.delta', content: 'ok' }), evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', f)
+    await memoryEngine.runTurn(convId, 'hi')
+    return bodyOf(f)
+  }
+  const plugins = (body: Record<string, unknown>): string[] =>
+    ((body.integrations ?? []) as { id: string }[]).map((i) => i.id)
+
+  it('is off by default: no memory tools, nothing remembered in the prompt', async () => {
+    const body = await turn()
+    expect(plugins(body)).not.toContain('mcp/memory')
+    expect(String(body.system_prompt ?? '')).not.toMatch(/green/)
+  })
+
+  it('when on, gives the model the memory tools and what it has saved', async () => {
+    configure({ memoryDefault: 'on', systemPrompt: 'Be kind.' })
+    const body = await turn()
+    expect(plugins(body)).toContain('mcp/memory')
+    expect(String(body.system_prompt)).toMatch(/^Be kind\.[\s\S]*\[a1\] Favorite color is green/)
+  })
+
+  it('lets a chat turn it off even when the default is on, and on when it is off', async () => {
+    configure({ memoryDefault: 'on' })
+    store.patch(convId, { memory: false })
+    expect(plugins(await turn())).not.toContain('mcp/memory')
+    configure({ memoryDefault: 'off' })
+    store.patch(convId, { memory: true })
+    expect(plugins(await turn())).toContain('mcp/memory')
+  })
+
+  it('does not list the memory server twice when Settings already names it', async () => {
+    configure({ memoryDefault: 'on', mcpTools: 'mcp/memory, deep-research' })
+    expect(plugins(await turn())).toEqual(['mcp/memory', 'mcp/deep-research'])
   })
 })
 

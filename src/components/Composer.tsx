@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { ArrowUp, Gauge, Square } from 'lucide-react'
+import { ArrowUp, Brain, Gauge, Square } from 'lucide-react'
 
 interface ComposerProps {
   onSend: (text: string) => void
@@ -8,10 +8,13 @@ interface ComposerProps {
   onStop?: () => void
   reasoningLabel?: string
   onOpenReasoning?: () => void
+  /** Whether this chat uses memory; the chip toggles it. */
+  memoryOn?: boolean
+  onToggleMemory?: () => void
 }
 
 export default function Composer({
-  onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning,
+  onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning, memoryOn = false, onToggleMemory,
 }: ComposerProps) {
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -51,6 +54,18 @@ export default function Composer({
         >
           <Gauge size={14} aria-hidden="true" />
           <span>{reasoningLabel}</span>
+        </button>
+      )}
+      {onToggleMemory && (
+        <button
+          type="button"
+          className={`reasoning-chip memory-chip${memoryOn ? ' on' : ''}`}
+          onClick={onToggleMemory}
+          aria-pressed={memoryOn}
+          aria-label={memoryOn ? 'Memory on for this chat' : 'Memory off for this chat'}
+          title={memoryOn ? 'Memory on -- tap to turn off for this chat' : 'Memory off -- tap to turn on for this chat'}
+        >
+          <Brain size={14} aria-hidden="true" />
         </button>
       )}
       <textarea

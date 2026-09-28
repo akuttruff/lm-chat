@@ -11,6 +11,8 @@ interface SettingsSheetProps {
   modelConfig: ModelConfig | null;
   onSave: (patch: Partial<PublicConfig> & { apiToken?: string }) => Promise<void>;
   onClose: () => void;
+  /** Open the Memories screen. */
+  onOpenMemories?: () => void;
 }
 
 interface ProbeResult {
@@ -23,7 +25,7 @@ interface ProbeResult {
  * this device's. The API token is write-only: the server reports whether one
  * is set, never what it is.
  */
-export default function SettingsSheet({ open, config, modelConfig, onSave, onClose }: SettingsSheetProps) {
+export default function SettingsSheet({ open, config, modelConfig, onSave, onClose, onOpenMemories }: SettingsSheetProps) {
   const [lmStudioUrl, setLmStudioUrl] = useState('');
   const [model, setModel] = useState('');
   const [apiToken, setApiToken] = useState('');
@@ -34,6 +36,7 @@ export default function SettingsSheet({ open, config, modelConfig, onSave, onClo
   const [stallSeconds, setStallSeconds] = useState('180');
   const [historyChars, setHistoryChars] = useState('24000');
   const [parallel, setParallel] = useState('4');
+  const [memoryDefault, setMemoryDefault] = useState<'on' | 'off'>('off');
   const [models, setModels] = useState<string[]>([]);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<ProbeResult | null>(null);
@@ -52,6 +55,7 @@ export default function SettingsSheet({ open, config, modelConfig, onSave, onClo
     setStallSeconds(config.stallSeconds);
     setHistoryChars(config.historyChars);
     setParallel(config.parallel ?? '4');
+    setMemoryDefault(config.memoryDefault === 'on' ? 'on' : 'off');
     setApiToken('');
   }, [open, config]);
 
@@ -98,6 +102,7 @@ export default function SettingsSheet({ open, config, modelConfig, onSave, onClo
       stallSeconds: stallSeconds.trim(),
       historyChars: historyChars.trim(),
       parallel: parallel.trim(),
+      memoryDefault,
       ...(apiToken ? { apiToken: apiToken.trim() } : {}),
     });
     setApiToken('');
@@ -338,6 +343,26 @@ export default function SettingsSheet({ open, config, modelConfig, onSave, onClo
               Requires <b>&quot;Allow calling servers from mcp.json&quot;</b> in Server Settings.
             </div>
           </div>
+
+          <h3 className="sheet-h">Memory</h3>
+          <label className="toggle-row">
+            <input
+              type="checkbox"
+              checked={memoryDefault === 'on'}
+              onChange={(e) => setMemoryDefault(e.target.checked ? 'on' : 'off')}
+            />
+            Use memory in chats by default
+          </label>
+          <div className="hint">
+            With memory on, the model can save what it learns about you and sees what it saved before, in every
+            chat that has it on. Each chat can switch it with the brain button by the message box. Needs the{' '}
+            <code>memory</code> server in LM Studio&apos;s <code>mcp.json</code>.
+          </div>
+          {onOpenMemories && (
+            <div className="row">
+              <button type="button" onClick={onOpenMemories}>Memories…</button>
+            </div>
+          )}
 
           </div>
 

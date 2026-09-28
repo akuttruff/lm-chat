@@ -279,3 +279,44 @@ describe('migrating from conversations.json', () => {
     expect(reopened.getConversations().activeId).toBe(first.getConversations().activeId)
   })
 })
+
+describe('per-chat memory setting', () => {
+  it('defaults to inheriting, saves on/off, and survives a restart', () => {
+    const id = store.getConversations().activeId!
+    expect(store.get(id)!.memory).toBeNull()
+    store.patch(id, { memory: true })
+    expect(new Store({ dir }).get(id)!.memory).toBe(true)
+    store.patch(id, { memory: 'yes' as never })
+    expect(store.get(id)!.memory).toBeNull()
+  })
+
+  it('keeps the default in config', () => {
+    expect(store.getConfig().memoryDefault).toBe('off')
+    store.setConfig({ memoryDefault: 'on' })
+    expect(new Store({ dir }).getConfig().memoryDefault).toBe('on')
+  })
+
+  it('adds the memory columns to a database made before they existed, keeping its chats', () => {
+    const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-old-'))
+    try {
+      const db = new DatabaseSync(path.join(oldDir, 'lm-chat.sqlite'))
+      db.exec(`CREATE TABLE conversations (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL, response_id TEXT, reasoning TEXT, summary_text TEXT, summary_through TEXT);
+        CREATE TABLE config (id INTEGER PRIMARY KEY CHECK (id = 1), lm_studio_url TEXT NOT NULL DEFAULT 'http://127.0.0.1:1234',
+        api_token TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', system_prompt TEXT NOT NULL DEFAULT '',
+        mcp_tools TEXT NOT NULL DEFAULT '', context_length TEXT NOT NULL DEFAULT '', reasoning TEXT NOT NULL DEFAULT '',
+        stall_seconds TEXT NOT NULL DEFAULT '180', history_chars TEXT NOT NULL DEFAULT '24000', parallel TEXT NOT NULL DEFAULT '4');
+        INSERT INTO conversations (id, name, created_at, updated_at) VALUES ('old', 'An old chat', 1, 2);
+        INSERT INTO config (id, model) VALUES (1, 'qwen');`)
+      db.close()
+      const upgraded = new Store({ dir: oldDir })
+      expect(upgraded.get('old')!.name).toBe('An old chat')
+      expect(upgraded.get('old')!.memory).toBeNull()
+      expect(upgraded.getConfig()).toMatchObject({ model: 'qwen', memoryDefault: 'off' })
+      upgraded.patch('old', { memory: false })
+      expect(new Store({ dir: oldDir }).get('old')!.memory).toBe(false)
+    } finally {
+      fs.rmSync(oldDir, { recursive: true, force: true })
+    }
+  })
+})

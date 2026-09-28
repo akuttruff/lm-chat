@@ -23,6 +23,7 @@ const DEFAULT_CONFIG: ServerConfig = {
   stallSeconds: '180',
   historyChars: '24000',
   parallel: '4',
+  memoryDefault: 'off',
 }
 
 const MAX_CONVERSATIONS = 60
@@ -49,6 +50,7 @@ export function blankConversation(): Conversation {
     responseId: null,
     reasoning: null,
     summary: null,
+    memory: null,
   }
 }
 
@@ -80,7 +82,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   response_id TEXT,
   reasoning TEXT,
   summary_text TEXT,
-  summary_through TEXT
+  summary_through TEXT,
+  memory INTEGER
 );
 CREATE TABLE IF NOT EXISTS messages (
   conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -111,7 +114,8 @@ CREATE TABLE IF NOT EXISTS config (
   reasoning TEXT NOT NULL DEFAULT '',
   stall_seconds TEXT NOT NULL DEFAULT '180',
   history_chars TEXT NOT NULL DEFAULT '24000',
-  parallel TEXT NOT NULL DEFAULT '4'
+  parallel TEXT NOT NULL DEFAULT '4',
+  memory_default TEXT NOT NULL DEFAULT 'off'
 );
 `
 
@@ -125,6 +129,25 @@ function ensureSchema(db: DatabaseSync): void {
   db.exec('PRAGMA foreign_keys = ON')
   db.exec('PRAGMA busy_timeout = 2000')
   db.exec(SCHEMA)
+  migrateSchema(db)
+}
+
+/**
+ * In-place upgrades for a database made before a column existed, gated by
+ * SQLite's PRAGMA user_version. CREATE TABLE IF NOT EXISTS above covers a new
+ * database; this covers an old one, since SQLite has no ADD COLUMN IF NOT
+ * EXISTS. Must run before any statement naming a new column is prepared.
+ */
+function migrateSchema(db: DatabaseSync): void {
+  const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
+  if (version < 1) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    // Memory: per chat (null inherits the default), and the default itself.
+    if (!has('conversations', 'memory')) db.exec('ALTER TABLE conversations ADD COLUMN memory INTEGER')
+    if (!has('config', 'memory_default')) db.exec("ALTER TABLE config ADD COLUMN memory_default TEXT NOT NULL DEFAULT 'off'")
+    db.exec('PRAGMA user_version = 1')
+  }
 }
 
 interface ConversationRow {
@@ -136,6 +159,7 @@ interface ConversationRow {
   reasoning: string | null
   summary_text: string | null
   summary_through: string | null
+  memory: number | null
 }
 
 interface MessageRow {
@@ -166,6 +190,7 @@ interface ConfigRow {
   stall_seconds: string
   history_chars: string
   parallel: string
+  memory_default: string
 }
 
 function metaFromRow(row: ConversationRow): Omit<Conversation, 'messages'> {
@@ -177,7 +202,40 @@ function metaFromRow(row: ConversationRow): Omit<Conversation, 'messages'> {
     responseId: row.response_id,
     reasoning: row.reasoning,
     summary: row.summary_text != null ? { text: row.summary_text, through: row.summary_through! } : null,
+    memory: row.memory == null ? null : row.memory === 1,
   }
+}
+
+const CONV_COLUMNS = 'id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through,memory'
+const UPDATE_CONV_META =
+  'UPDATE conversations SET name=?, updated_at=?, response_id=?, reasoning=?, summary_text=?, summary_through=?, memory=? WHERE id=?'
+const memoryValue = (m: Conversation['memory']): number | null => (m == null ? null : m ? 1 : 0)
+
+/** In CONV_COLUMNS order. */
+function convParams(c: Conversation): SQLInputValue[] {
+  return [
+    c.id, c.name, c.createdAt, c.updatedAt, c.responseId, c.reasoning ?? null,
+    c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory),
+  ]
+}
+
+/** In UPDATE_CONV_META order. */
+function convMetaParams(c: Conversation): SQLInputValue[] {
+  return [
+    c.name, c.updatedAt, c.responseId, c.reasoning ?? null,
+    c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory), c.id,
+  ]
+}
+
+const CONFIG_COLUMNS =
+  'lm_studio_url, api_token, model, system_prompt, mcp_tools, context_length, reasoning, stall_seconds, history_chars, parallel, memory_default'
+
+/** In CONFIG_COLUMNS order. */
+function configParams(c: ServerConfig): SQLInputValue[] {
+  return [
+    c.lmStudioUrl, c.apiToken, c.model, c.systemPrompt, c.mcpTools, c.contextLength,
+    c.reasoning, c.stallSeconds, c.historyChars, c.parallel, c.memoryDefault,
+  ]
 }
 
 /** Undefined stays absent (vs. an explicit false/null), same as the JSON it replaces. */
@@ -227,6 +285,7 @@ function configFromRow(row: ConfigRow): ServerConfig {
     stallSeconds: row.stall_seconds,
     historyChars: row.history_chars,
     parallel: row.parallel,
+    memoryDefault: row.memory_default === 'on' ? 'on' : 'off',
   }
 }
 
@@ -255,7 +314,7 @@ function migrateFromJson(paths: ReturnType<typeof locate>): void {
   try {
     ensureSchema(db)
     const insertConv = db.prepare(
-      'INSERT INTO conversations (id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through) VALUES (?,?,?,?,?,?,?,?)',
+      `INSERT INTO conversations (${CONV_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?)`,
     )
     const insertMsg = db.prepare(
       'INSERT INTO messages (conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -263,19 +322,13 @@ function migrateFromJson(paths: ReturnType<typeof locate>): void {
     db.exec('BEGIN')
     for (const conv of conversations.items) {
       insertConv.run(
-        conv.id, conv.name, conv.createdAt, conv.updatedAt, conv.responseId, conv.reasoning ?? null,
-        conv.summary?.text ?? null, conv.summary ? String(conv.summary.through) : null,
-      )
+        ...convParams(conv))
       conv.messages.forEach((m, i) => insertMsg.run(...messageParams(conv.id, i, m)))
     }
     db.prepare('INSERT INTO app_state (id, active_id) VALUES (1, ?)').run(conversations.activeId)
     db.prepare(
-      `INSERT INTO config (id, lm_studio_url, api_token, model, system_prompt, mcp_tools, context_length, reasoning, stall_seconds, history_chars, parallel)
-       VALUES (1,?,?,?,?,?,?,?,?,?,?)`,
-    ).run(
-      config.lmStudioUrl, config.apiToken, config.model, config.systemPrompt, config.mcpTools,
-      config.contextLength, config.reasoning, config.stallSeconds, config.historyChars, config.parallel,
-    )
+      `INSERT INTO config (id, ${CONFIG_COLUMNS}) VALUES (1,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(...configParams(config))
     db.exec('COMMIT')
   } catch (err) {
     try { db.exec('ROLLBACK') } catch { /* nothing to roll back */ }
@@ -345,10 +398,10 @@ export class Store {
       selectActiveId: this.db.prepare('SELECT active_id FROM app_state WHERE id = 1'),
       selectConfig: this.db.prepare('SELECT * FROM config WHERE id = 1'),
       insertConversation: this.db.prepare(
-        'INSERT INTO conversations (id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through) VALUES (?,?,?,?,?,?,?,?)',
+        `INSERT INTO conversations (${CONV_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?)`,
       ),
       updateConversationMeta: this.db.prepare(
-        'UPDATE conversations SET name=?, updated_at=?, response_id=?, reasoning=?, summary_text=?, summary_through=? WHERE id=?',
+        UPDATE_CONV_META,
       ),
       deleteConversation: this.db.prepare('DELETE FROM conversations WHERE id = ?'),
       deleteMessagesFor: this.db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
@@ -359,12 +412,10 @@ export class Store {
         'INSERT INTO app_state (id, active_id) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET active_id = excluded.active_id',
       ),
       insertConfig: this.db.prepare(
-        `INSERT INTO config (id, lm_studio_url, api_token, model, system_prompt, mcp_tools, context_length, reasoning, stall_seconds, history_chars, parallel)
-         VALUES (1,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO config (id, ${CONFIG_COLUMNS}) VALUES (1,?,?,?,?,?,?,?,?,?,?,?)`,
       ),
       updateConfig: this.db.prepare(
-        `UPDATE config SET lm_studio_url=?, api_token=?, model=?, system_prompt=?, mcp_tools=?, context_length=?, reasoning=?, stall_seconds=?, history_chars=?, parallel=?
-         WHERE id=1`,
+        `UPDATE config SET lm_studio_url=?, api_token=?, model=?, system_prompt=?, mcp_tools=?, context_length=?, reasoning=?, stall_seconds=?, history_chars=?, parallel=?, memory_default=? WHERE id=1`,
       ),
     }
 
@@ -374,10 +425,7 @@ export class Store {
     } else {
       this.config = { ...DEFAULT_CONFIG }
       this.stmts.insertConfig.run(
-        this.config.lmStudioUrl, this.config.apiToken, this.config.model, this.config.systemPrompt,
-        this.config.mcpTools, this.config.contextLength, this.config.reasoning, this.config.stallSeconds,
-        this.config.historyChars, this.config.parallel,
-      )
+        ...configParams(this.config))
     }
 
     const convRows = this.stmts.selectConversations.all() as unknown as ConversationRow[]
@@ -409,9 +457,7 @@ export class Store {
     this.db.exec('BEGIN')
     try {
       this.stmts.insertConversation.run(
-        conv.id, conv.name, conv.createdAt, conv.updatedAt, conv.responseId, conv.reasoning ?? null,
-        conv.summary?.text ?? null, conv.summary ? String(conv.summary.through) : null,
-      )
+        ...convParams(conv))
       conv.messages.forEach((m, i) => this.stmts.insertMessage.run(...messageParams(conv.id, i, m)))
       this.db.exec('COMMIT')
     } catch (err) {
@@ -423,10 +469,7 @@ export class Store {
 
   private writeMeta(conv: Conversation): void {
     this.stmts.updateConversationMeta.run(
-      conv.name, conv.updatedAt, conv.responseId, conv.reasoning ?? null,
-      conv.summary?.text ?? null, conv.summary ? String(conv.summary.through) : null,
-      conv.id,
-    )
+      ...convMetaParams(conv))
   }
 
   /**
@@ -455,10 +498,7 @@ export class Store {
     this.db.exec('BEGIN')
     try {
       this.stmts.updateConversationMeta.run(
-        conv.name, conv.updatedAt, conv.responseId, conv.reasoning ?? null,
-        conv.summary?.text ?? null, conv.summary ? String(conv.summary.through) : null,
-        conv.id,
-      )
+        ...convMetaParams(conv))
       this.stmts.deleteMessagesFor.run(conv.id)
       conv.messages.forEach((m, i) => this.stmts.insertMessage.run(...messageParams(conv.id, i, m)))
       this.db.exec('COMMIT')
@@ -505,6 +545,8 @@ export class Store {
   patch(id: string, patch: Partial<Conversation>, { touch = true }: { touch?: boolean } = {}): Conversation | undefined {
     const conv = this.get(id)
     if (!conv) return undefined
+    // Anything but a real on/off means "use the default".
+    if ('memory' in patch) patch = { ...patch, memory: typeof patch.memory === 'boolean' ? patch.memory : null }
     Object.assign(conv, patch, touch ? { updatedAt: stamp() } : {})
     this.writeMeta(conv)
     return conv
@@ -600,10 +642,7 @@ export class Store {
   setConfig(patch: Partial<ServerConfig>): ServerConfig {
     this.config = { ...this.config, ...patch }
     this.stmts.updateConfig.run(
-      this.config.lmStudioUrl, this.config.apiToken, this.config.model, this.config.systemPrompt,
-      this.config.mcpTools, this.config.contextLength, this.config.reasoning, this.config.stallSeconds,
-      this.config.historyChars, this.config.parallel,
-    )
+      ...configParams(this.config))
     return this.config
   }
 }

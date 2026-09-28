@@ -15,6 +15,7 @@ const base: PublicConfig = {
   stallSeconds: '180',
   historyChars: '24000',
   parallel: '4',
+  memoryDefault: 'off',
   hasToken: false,
 }
 
@@ -237,5 +238,26 @@ describe('connection test', () => {
     setup()
     await user.click(screen.getByRole('button', { name: /test connection/i }))
     expect(await screen.findByText(/Invalid LM Studio API token/)).toBeInTheDocument()
+  })
+})
+
+describe('memory', () => {
+  it('saves the default for chats', async () => {
+    const user = userEvent.setup()
+    const props = setup()
+    await user.click(await screen.findByLabelText(/use memory in chats by default/i))
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+    await waitFor(() => expect(props.onSave).toHaveBeenCalled())
+    expect(props.onSave.mock.calls.at(-1)![0]).toMatchObject({ memoryDefault: 'on' })
+  })
+
+  it('shows the saved default, and opens the Memories screen', async () => {
+    const user = userEvent.setup()
+    const onOpenMemories = vi.fn()
+    render(<SettingsSheet open config={{ ...base, memoryDefault: 'on' }} modelConfig={null}
+      onSave={vi.fn(() => Promise.resolve())} onClose={vi.fn()} onOpenMemories={onOpenMemories} />)
+    expect(await screen.findByLabelText(/use memory in chats by default/i)).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Memories…' }))
+    expect(onOpenMemories).toHaveBeenCalled()
   })
 })

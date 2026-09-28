@@ -6,6 +6,7 @@ import { Bus } from './bus.ts'
 import { Engine, newEngineState } from './engine.ts'
 import type { EngineState } from './engine.ts'
 import { Store } from './store.ts'
+import { MemoryInputError, Memories } from './memory.ts'
 import { readModelConfig } from './model-config.ts'
 import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
 import { metaOf } from '../src/types.ts'
@@ -17,6 +18,8 @@ type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => voi
 export interface ApiOptions {
   /** Data directory; defaults to <cwd>/.data */
   dir?: string
+  /** The shared memory file; defaults to MEMORY_DB or ~/.lm-memory/memory.sqlite. */
+  memoryDb?: string
 }
 
 /**
@@ -111,7 +114,8 @@ export function createApiState(options: ApiOptions = {}): ApiState {
 
 export function createApi(options: ApiOptions = {}, state: ApiState = createApiState(options)) {
   const { store, bus } = state
-  const engine = new Engine(store, bus, undefined, state.engine)
+  const memories = new Memories(options.memoryDb)
+  const engine = new Engine(store, bus, undefined, state.engine, memories)
 
   /** Recently deleted chats, whole, so Undo can restore one the client only held in outline. */
   const deleted = new Map<string, { conv: Conversation; at: number }>()
@@ -205,6 +209,30 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
           error: `Couldn't reach LM Studio at ${base}. (${err.message})`,
         }))
       return undefined
+    }
+
+    // --- memories -----------------------------------------------------
+    if (url === '/api/memories' && method === 'GET') {
+      return json(res, 200, memories.list())
+    }
+    const mem = /^\/api\/memories\/([^/]+)$/.exec(url)
+    if (mem) {
+      const id = decodeURIComponent(mem[1]!)
+      if (method === 'DELETE') {
+        return memories.forget(id) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'no such memory' })
+      }
+      if (method === 'PATCH') {
+        void readBody(req).then((body) => {
+          try {
+            const updated = memories.update(id, (body as { text?: unknown }).text)
+            return updated ? json(res, 200, updated) : json(res, 404, { error: 'no such memory' })
+          } catch (err) {
+            if (err instanceof MemoryInputError) return json(res, 400, { error: err.message })
+            throw err
+          }
+        }).catch((err: Error) => json(res, 400, { error: err.message }))
+        return undefined
+      }
     }
 
     // --- conversations --------------------------------------------------

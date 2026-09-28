@@ -4,6 +4,7 @@ import type { Server } from 'node:http'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { createApi } from './api.ts'
 import type { Conversation, ConversationStore, PublicConfig } from '../src/types.ts'
 
@@ -21,7 +22,7 @@ beforeEach(async () => {
   vi.unstubAllGlobals()
   realFetch = globalThis.fetch.bind(globalThis)
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-api-'))
-  api = createApi({ dir })
+  api = createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite') })
   server = http.createServer((req, res) => {
     api.middleware(req, res, () => { res.statusCode = 404; res.end('not api') })
   })
@@ -121,6 +122,29 @@ describe('conversations', () => {
 
   it('404s for an unknown conversation', async () => {
     expect((await send('/api/chats/nope', 'PATCH', { name: 'x' })).status).toBe(404)
+  })
+})
+
+describe('memories', () => {
+  const seed = (): void => {
+    const db = new DatabaseSync(path.join(dir, 'memory.sqlite'))
+    db.exec('CREATE TABLE memories (id TEXT PRIMARY KEY, text TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)')
+    db.prepare('INSERT INTO memories VALUES (?, ?, ?, ?)').run('a1', 'Favorite color is green', 1, 1)
+    db.close()
+  }
+
+  it('lists nothing before anything was remembered', async () => {
+    expect(await (await get('/api/memories')).json()).toEqual([])
+  })
+
+  it('lists, edits and deletes', async () => {
+    seed()
+    expect(((await (await get('/api/memories')).json()) as { text: string }[]).map((m) => m.text)).toEqual(['Favorite color is green'])
+    const edited = await send('/api/memories/a1', 'PATCH', { text: 'Favorite color is blue' })
+    expect(((await edited.json()) as { text: string }).text).toBe('Favorite color is blue')
+    expect((await send('/api/memories/a1', 'PATCH', { text: '  ' })).status).toBe(400)
+    expect((await send('/api/memories/a1', 'DELETE')).status).toBe(200)
+    expect((await send('/api/memories/a1', 'DELETE')).status).toBe(404)
   })
 })
 

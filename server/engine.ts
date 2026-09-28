@@ -5,6 +5,7 @@ import { readModelConfig } from './model-config.ts'
 import { canTurnOff, cheapestReasoning, fitReasoning, reasoningCapability } from './capabilities.ts'
 import type { ReasoningCapability } from './capabilities.ts'
 import { Slots, parallelLimit } from './slots.ts'
+import { MEMORY_PLUGIN, Memories } from './memory.ts'
 import { metaOf } from '../src/types.ts'
 import type { ChatEvent, ContextSummary, Integration, Message, ServerConfig } from '../src/types.ts'
 
@@ -306,6 +307,8 @@ export class Engine {
     /** How to learn what a model accepts; injectable so tests needn't stub LM Studio twice. */
     private capabilities: (config: ServerConfig) => Promise<ReasoningCapability | null> = reasoningCapability,
     state: EngineState = newEngineState(),
+    /** The shared memory pool, read into the prompt for chats with memory on. */
+    private memories: Memories = new Memories(),
   ) {
     this.running = state.running
     this.compacting = state.compacting
@@ -425,12 +428,19 @@ export class Engine {
       ? fitReasoning(requested, (await this.capabilities(config)) ?? manifestCapability(config.model))
       : null
     if (reasoning) body.reasoning = reasoning
+    // Memory is per chat, falling back to the Settings default; when on, the
+    // model gets the memory tools and what it has saved so far.
+    const memoryOn = conv.memory ?? config.memoryDefault === 'on'
     const integrations = parseIntegrations(config.mcpTools)
+    if (memoryOn && !integrations.some((i) => i.id === MEMORY_PLUGIN)) integrations.push({ type: 'plugin', id: MEMORY_PLUGIN })
     if (integrations.length) body.integrations = integrations
     // Every turn carries its own context, so no turn depends on the last one
     // having succeeded.
     const limit = historyLimit(config.historyChars)
-    const prompt = buildHistoryPrompt(config.systemPrompt, history, limit, conv.summary)
+    const systemPrompt = memoryOn
+      ? [config.systemPrompt.trim(), this.memories.promptBlock()].filter(Boolean).join('\n\n')
+      : config.systemPrompt
+    const prompt = buildHistoryPrompt(systemPrompt, history, limit, conv.summary)
     if (prompt) body.system_prompt = prompt
 
     const stallSeconds = Number(config.stallSeconds) || 0

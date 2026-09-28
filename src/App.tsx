@@ -4,6 +4,7 @@ import Header from './components/Header';
 import ChatThread from './components/ChatThread';
 import Composer from './components/Composer';
 import SettingsSheet from './components/SettingsSheet';
+import MemoriesSheet from './components/MemoriesSheet';
 import ConversationList from './components/ConversationList';
 import ReasoningPicker, { labelFor } from './components/ReasoningPicker';
 import useServerState from './hooks/useServerState';
@@ -15,7 +16,7 @@ export default function App() {
   const server = useServerState();
   const {
     conversations, activeId, active, loadingActive, config, status, startedAt, busy, working,
-    send, stop, retry, newChat, openChat, deleteChat, restoreChat, renameChat, setReasoning, saveConfig,
+    send, stop, retry, newChat, openChat, deleteChat, restoreChat, renameChat, setReasoning, setMemory, saveConfig,
   } = server;
 
   const modelConfig = useModelConfig(config?.model);
@@ -26,6 +27,9 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatsOpen, setChatsOpen] = useState(false);
   const [reasoningOpen, setReasoningOpen] = useState(false);
+  const [memoriesOpen, setMemoriesOpen] = useState(false);
+  // This chat's own setting, else the Settings default.
+  const memoryOn = active?.memory ?? config?.memoryDefault === 'on';
 
   // Nothing to talk to yet: get the server configured first.
   useEffect(() => {
@@ -64,6 +68,8 @@ export default function App() {
         onStop={() => void stop()}
         reasoningLabel={labelFor(reasoning, config?.reasoning)}
         onOpenReasoning={() => setReasoningOpen(true)}
+        memoryOn={memoryOn}
+        onToggleMemory={active ? () => void setMemory(!memoryOn) : undefined}
       />
       <ReasoningPicker
         open={reasoningOpen}
@@ -90,7 +96,9 @@ export default function App() {
         modelConfig={modelConfig}
         onSave={saveConfig}
         onClose={() => setSettingsOpen(false)}
+        onOpenMemories={() => { setSettingsOpen(false); setMemoriesOpen(true); }}
       />
+      <MemoriesSheet open={memoriesOpen} onClose={() => setMemoriesOpen(false)} />
     </div>
   );
 }
