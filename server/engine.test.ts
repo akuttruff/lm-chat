@@ -186,9 +186,8 @@ describe('streaming', () => {
     expect(store.get(convId)!.responseId).toBe('r9')
 
     // Durable, not just in memory.
-    const onDisk = JSON.parse(fs.readFileSync(path.join(dir, 'conversations.json'), 'utf8')) as
-      { items: { messages: Message[] }[] }
-    expect(onDisk.items[0]!.messages.some((m) => m.text === 'Hello')).toBe(true)
+    const reopened = new Store({ dir }).get(convId)!.messages
+    expect(reopened.some((m) => m.text === 'Hello')).toBe(true)
   })
 
   it('handles frames split across chunk boundaries', async () => {
@@ -377,6 +376,65 @@ describe('failures', () => {
     void engine.runTurn(convId, 'first')
     await vi.waitFor(() => expect(engine.isRunning(convId)).toBe(true))
     await expect(engine.runTurn(convId, 'second')).rejects.toThrow(/already in flight/)
+  })
+})
+
+describe('retrying the last message', () => {
+  const reply = (text: string) => streams([
+    evt({ type: 'message.delta', content: text }), evt({ type: 'chat.end', result: {} }),
+  ])
+
+  it('replaces a failed reply with a fresh one, without sending the message twice', async () => {
+    vi.stubGlobal('fetch', streams([evt({ type: 'error', error: { message: 'model exploded' } })]))
+    await engine.runTurn(convId, 'what is my forecast?')
+    expect(messages().at(-1)!.role).toBe('error')
+
+    const fetchAgain = reply('Sunny.')
+    vi.stubGlobal('fetch', fetchAgain)
+    await engine.retryTurn(convId)
+
+    expect(messages().map((m) => m.role)).toEqual(['user', 'assistant'])
+    expect(messages()[0]!.text).toBe('what is my forecast?')
+    expect(messages()[1]!.text).toBe('Sunny.')
+    // The model is asked the same thing once, as the message -- not as prior history too.
+    expect(bodyOf(fetchAgain).input).toBe('what is my forecast?')
+    expect(String(bodyOf(fetchAgain).system_prompt ?? '')).not.toMatch(/what is my forecast\?/)
+  })
+
+  it('drops a partial reply and its tool calls too, keeping earlier turns', async () => {
+    vi.stubGlobal('fetch', reply('First answer.'))
+    await engine.runTurn(convId, 'one')
+    vi.stubGlobal('fetch', reply('Second answer.'))
+    await engine.runTurn(convId, 'two')
+
+    vi.stubGlobal('fetch', reply('Better second answer.'))
+    await engine.retryTurn(convId)
+    expect(messages().map((m) => m.text)).toEqual(['one', 'First answer.', 'two', 'Better second answer.'])
+  })
+
+  it("tells clients to replace everything from the retried message on", async () => {
+    vi.stubGlobal('fetch', reply('First answer.'))
+    await engine.runTurn(convId, 'one')
+    const sent: { type: string; payload: { base?: number } }[] = []
+    bus.add({ write: (chunk: string) => { sent.push(JSON.parse(chunk.replace(/^data: /, ''))); return true } } as never)
+    vi.stubGlobal('fetch', reply('Again.'))
+    await engine.retryTurn(convId)
+    const tails = sent.filter((e) => e.type === 'tail')
+    expect(tails.length).toBeGreaterThan(0)
+    expect(tails.every((e) => e.payload.base === 0)).toBe(true)
+  })
+
+  it('has nothing to retry in a chat with no message sent', async () => {
+    await expect(engine.retryTurn(convId)).rejects.toThrow(/nothing to retry/)
+  })
+
+  it('will not start while a reply is already in flight', async () => {
+    let release: (() => void) | undefined
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { release = () => resolve({ ok: false, status: 500, text: () => Promise.resolve('') }) })))
+    const running = engine.runTurn(convId, 'hi')
+    await expect(engine.retryTurn(convId)).rejects.toThrow(/already in flight/)
+    release?.()
+    await running
   })
 })
 
@@ -825,9 +883,7 @@ describe('streaming load', () => {
     await new Promise((r) => setTimeout(r, 300))
     const last = messages().at(-1)!
     expect(last.streaming).toBe(false)
-    const onDisk = JSON.parse(fs.readFileSync(path.join(dir, 'conversations.json'), 'utf8')) as
-      { items: { messages: Message[] }[] }
-    expect(onDisk.items[0]!.messages.at(-1)!.streaming).toBe(false)
+    expect(new Store({ dir }).get(convId)!.messages.at(-1)!.streaming).toBe(false)
   })
 
   it('makes no backups when a placeholder disappears mid-turn', async () => {

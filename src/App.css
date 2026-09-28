@@ -845,7 +845,10 @@ html, body, #root {
   max-width: 100%;
 }
 
-.msg-row.user { justify-content: flex-end; }
+.msg-row.user { justify-content: flex-end; align-items: center; }
+/* Beside your last message, so it reads as "do this one again". */
+.retry-btn { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; margin-right: 2px; padding: 0; background: none; border: none; border-radius: 50%; color: var(--paper-dim); opacity: 0.7; cursor: pointer; }
+.retry-btn:hover, .retry-btn:focus-visible { opacity: 1; background: var(--bg-raised); color: var(--paper); }
 
 .msg-row.assistant,
 .msg-row.error,

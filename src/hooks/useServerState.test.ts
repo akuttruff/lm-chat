@@ -238,6 +238,18 @@ describe('useServerState', () => {
     expect(calls.some((c) => c.url === '/api/chats/c1/stop')).toBe(true)
   })
 
+  it('retries the last message through the server', async () => {
+    const calls = stubApi()
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv()], 'c1') })
+    })
+    await act(async () => { await result.current.retry() })
+    const retry = calls.find((c) => c.url === '/api/chats/c1/retry')!
+    expect(retry.init?.method).toBe('POST')
+  })
+
   it('sends conversation actions to the server', async () => {
     const calls = stubApi()
     const { result } = renderHook(() => useServerState())

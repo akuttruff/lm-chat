@@ -150,6 +150,26 @@ describe('turns', () => {
     expect((await send(`/api/chats/${id}/turns`, 'POST', { text: 'two' })).status).toBe(409)
   })
 
+  it('retries the last message, replacing what followed it', async () => {
+    api.store.setConfig({ model: 'qwen' })
+    const id = api.store.getConversations().activeId!
+    api.store.setMessages(id, [{ id: 'u1', role: 'user', text: 'hello' }, { id: 'e1', role: 'error', text: 'The reply was cut short' }])
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => { /* pending */ })))
+    const res = await send(`/api/chats/${id}/retry`, 'POST')
+    expect(res.status).toBe(202)
+    await vi.waitFor(() => expect(api.store.get(id)!.messages.map((m) => m.id)).toEqual(['u1']))
+  })
+
+  it('has nothing to retry before a message was sent, and refuses while one is in flight', async () => {
+    api.store.setConfig({ model: 'qwen' })
+    const id = api.store.getConversations().activeId!
+    expect((await send(`/api/chats/${id}/retry`, 'POST')).status).toBe(400)
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => { /* pending */ })))
+    await send(`/api/chats/${id}/turns`, 'POST', { text: 'one' })
+    await vi.waitFor(() => expect(api.engine.isRunning(id)).toBe(true))
+    expect((await send(`/api/chats/${id}/retry`, 'POST')).status).toBe(409)
+  })
+
   it('reports whether a stop had anything to stop', async () => {
     const id = api.store.getConversations().activeId!
     const body = await (await send(`/api/chats/${id}/stop`, 'POST')).json() as { stopped: boolean }

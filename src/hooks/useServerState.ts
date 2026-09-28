@@ -24,6 +24,8 @@ export interface ServerState {
   working: Record<string, ChatStatus>
   send: (text: string) => Promise<void>
   stop: () => Promise<void>
+  /** Re-run the last message you sent, replacing the reply that followed it. */
+  retry: () => Promise<void>
   newChat: () => Promise<void>
   openChat: (id: string) => Promise<void>
   deleteChat: (id: string) => Promise<void>
@@ -203,6 +205,13 @@ export default function useServerState(): ServerState {
     await post(`/api/chats/${encodeURIComponent(id)}/turns`, { text })
   }, [])
 
+  const retry = useCallback(async () => {
+    const id = activeIdRef.current
+    if (!id) return
+    setStatuses((prev) => ({ ...prev, [id]: { state: 'pending', text: 'retrying...', startedAt: prev[id]?.startedAt ?? null } }))
+    await post(`/api/chats/${encodeURIComponent(id)}/retry`)
+  }, [])
+
   const stop = useCallback(async () => {
     const id = activeIdRef.current
     if (id) await post(`/api/chats/${encodeURIComponent(id)}/stop`)
@@ -263,6 +272,7 @@ export default function useServerState(): ServerState {
     working,
     send,
     stop,
+    retry,
     newChat,
     openChat,
     deleteChat,

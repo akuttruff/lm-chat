@@ -263,6 +263,11 @@ interface TurnState {
   stalled: boolean
 }
 
+function lastUserIndex(messages: Message[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) if (messages[i]!.role === 'user') return i
+  return -1
+}
+
 /**
  * Which turns and compactions are in flight. Held apart from the Engine so a
  * dev-server restart, which builds a new Engine from fresh code, still knows
@@ -342,12 +347,21 @@ export class Engine {
     })
   }
 
+  /** Generate the reply to the last message you sent again, discarding what followed it. */
+  async retryTurn(conversationId: string): Promise<void> {
+    const conv = this.store.get(conversationId)
+    if (!conv) throw new Error('no such conversation')
+    const last = lastUserIndex(conv.messages)
+    if (last === -1) throw new Error('nothing to retry')
+    return this.runTurn(conversationId, conv.messages[last]!.text ?? '', { retry: true })
+  }
+
   /**
    * Append the user's message and generate a reply. Resolves when the turn
    * finishes; callers may ignore the promise, since progress is published on
    * the bus and persisted as it goes.
    */
-  async runTurn(conversationId: string, text: string): Promise<void> {
+  async runTurn(conversationId: string, text: string, { retry = false }: { retry?: boolean } = {}): Promise<void> {
     const conv = this.store.get(conversationId)
     if (!conv) throw new Error('no such conversation')
     if (this.running.has(conversationId)) throw new Error('a reply is already in flight')
@@ -357,10 +371,14 @@ export class Engine {
     this.running.set(conversationId, turn)
 
     const config = this.store.getConfig()
-    const history = [...conv.messages]
+    // A retry re-runs the last message you sent: whatever came after it (a
+    // failed or unwanted reply, its tool calls) is dropped, and clients are
+    // sent everything from that message on, replacing their copy.
+    const retryFrom = retry ? lastUserIndex(conv.messages) : -1
+    const history = retry ? conv.messages.slice(0, retryFrom + 1) : [...conv.messages]
     // Everything before here stays as it is for the whole turn, so clients
     // are only ever sent what comes after.
-    const tailFrom = history.length
+    const tailFrom = retry ? retryFrom : history.length
     const base = config.lmStudioUrl.replace(/\/+$/, '')
 
     // A pending throttled update, which a commit must cancel so a stale
@@ -383,8 +401,7 @@ export class Engine {
       this.publish(conversationId, '', statusText, null)
     }
 
-    const userMsg: Message = { id: newId(), role: 'user', text }
-    history.push(userMsg)
+    if (!retry) history.push({ id: newId(), role: 'user', text })
     commit(history, { touch: true })
 
     if (!config.model) {

@@ -147,6 +147,44 @@ describe('jump to latest', () => {
   })
 })
 
+describe('retrying your last message', () => {
+  const TWO_TURNS: Message[] = [
+    msg('1', 'user', 'first'), msg('2', 'assistant', 'first answer'),
+    msg('3', 'user', 'second'), msg('4', 'error', 'The reply was cut short'),
+  ]
+
+  it('offers a retry beside only the last message you sent', () => {
+    render(<ChatThread messages={TWO_TURNS} onRetry={vi.fn()} />)
+    expect(screen.getAllByRole('button', { name: 'Retry this message' })).toHaveLength(1)
+    const row = screen.getByText('second').closest('.msg-row')!
+    expect(row.querySelector('.retry-btn')).not.toBeNull()
+  })
+
+  it('calls back when tapped', () => {
+    const onRetry = vi.fn()
+    render(<ChatThread messages={TWO_TURNS} onRetry={onRetry} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Retry this message' }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('is not offered while a reply is in flight, or with nothing sent', () => {
+    const { rerender } = render(<ChatThread messages={TWO_TURNS} />)
+    expect(screen.queryByRole('button', { name: 'Retry this message' })).not.toBeInTheDocument()
+    rerender(<ChatThread messages={[]} onRetry={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Retry this message' })).not.toBeInTheDocument()
+  })
+
+  it('appears and disappears as a reply starts and finishes', () => {
+    const onRetry = vi.fn()
+    const { rerender } = render(<ChatThread messages={TWO_TURNS} onRetry={onRetry} />)
+    expect(screen.getByRole('button', { name: 'Retry this message' })).toBeInTheDocument()
+    rerender(<ChatThread messages={TWO_TURNS} />)
+    expect(screen.queryByRole('button', { name: 'Retry this message' })).not.toBeInTheDocument()
+    rerender(<ChatThread messages={TWO_TURNS} onRetry={onRetry} />)
+    expect(screen.getByRole('button', { name: 'Retry this message' })).toBeInTheDocument()
+  })
+})
+
 describe('empty state', () => {
   it('still renders with no messages', () => {
     render(<ChatThread messages={[]} />)

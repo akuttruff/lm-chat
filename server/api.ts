@@ -247,6 +247,14 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         }).catch((err: Error) => json(res, 400, { error: err.message }))
         return undefined
       }
+      if (action === '/retry' && method === 'POST') {
+        if (engine.isRunning(id)) return json(res, 409, { error: 'a reply is already in flight' })
+        if (!store.get(id)!.messages.some((m) => m.role === 'user')) return json(res, 400, { error: 'nothing to retry' })
+        void engine.retryTurn(id).catch((err: Error) => {
+          console.log(`[engine] retry failed: ${err.message}`)
+        })
+        return json(res, 202, { ok: true })
+      }
       if (action === '/stop' && method === 'POST') {
         return json(res, 200, { stopped: engine.stop(id) })
       }
