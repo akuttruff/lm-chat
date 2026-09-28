@@ -40,6 +40,12 @@ describe('ConversationList', () => {
     expect(screen.getByText('2h')).toBeInTheDocument()
   })
 
+  it('counts a chat held only in outline, without its messages', async () => {
+    const outlined = convs.map((c) => (c.id === 'a' ? { ...c, messages: [], messageCount: 12, messagesOmitted: true } : c))
+    setup({ conversations: outlined })
+    expect(await screen.findByText('12 msgs · 1m')).toBeInTheDocument()
+  })
+
   it('shows the message count before the time, for a thread that has messages', async () => {
     const withMessages = convs.map((c) => (
       c.id === 'a' ? { ...c, messages: Array.from({ length: 5 }, (_, i) => ({ id: i, role: 'user' as const, text: 'hi' })) } : c

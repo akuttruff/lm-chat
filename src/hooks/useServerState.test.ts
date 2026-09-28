@@ -12,10 +12,16 @@ const conv = (over: Partial<Conversation> = {}): Conversation => ({
 const store = (items: Conversation[], activeId: string | null): ConversationStore =>
   ({ items, activeId })
 
-function stubApi() {
+/** A fake server. `routes` answers GETs of specific URLs with a body. */
+function stubApi(routes: Record<string, unknown> = {}) {
   const calls: { url: string; init?: RequestInit }[] = []
   const f = vi.fn((url: string, init?: RequestInit) => {
     calls.push({ url, init })
+    if (url in routes) return Promise.resolve({ ok: true, json: () => Promise.resolve(routes[url]) })
+    // The shape the real server sends; `{}` here left a resync with no chat list at all.
+    if (url === '/api/chats') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], activeId: null }) })
+    }
     if (url === '/api/config') {
       return Promise.resolve({
         ok: true,
@@ -88,6 +94,42 @@ describe('useServerState', () => {
       FakeEventSource.latest().emit({ type: 'tail', payload: { conversationId: 'c1', base: 5, meta, messages: [] } })
     })
     await waitFor(() => expect(calls.some((c) => c.url === '/api/chats')).toBe(true))
+  })
+
+  it('keeps a background chat\'s count current without re-fetching everything', async () => {
+    const calls = stubApi()
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    const outline = conv({ id: 'c2', messages: [], messageCount: 4, messagesOmitted: true })
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv(), outline], 'c1') })
+    })
+    const { messages: _m, messageCount: _n, messagesOmitted: _o, ...meta } = outline
+    act(() => {
+      FakeEventSource.latest().emit({
+        type: 'tail',
+        payload: { conversationId: 'c2', base: 4, meta, messages: [{ id: 'x', role: 'assistant', text: 'streaming…' }] },
+      })
+    })
+    expect(result.current.conversations.find((c) => c.id === 'c2')!.messageCount).toBe(5)
+    expect(calls.some((c) => c.url === '/api/chats')).toBe(false)
+  })
+
+  it('loads an outlined chat\'s messages once it is the open one', async () => {
+    const full = conv({ id: 'c2', messages: [{ id: 'm1', role: 'user', text: 'from the server' }], messageCount: 1 })
+    const calls = stubApi({ '/api/chats/c2': full })
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      FakeEventSource.latest().emit({
+        type: 'conversations',
+        payload: store([conv(), conv({ id: 'c2', messages: [], messageCount: 1, messagesOmitted: true })], 'c2'),
+      })
+    })
+    expect(result.current.loadingActive).toBe(true)
+    await waitFor(() => expect(result.current.loadingActive).toBe(false))
+    expect(result.current.active!.messages.map((m) => m.text)).toEqual(['from the server'])
+    expect(calls.filter((c) => c.url === '/api/chats/c2')).toHaveLength(1)
   })
 
   it('switches threads at once, before the server answers', async () => {

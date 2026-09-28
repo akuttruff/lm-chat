@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createApi } from './api.ts'
-import type { ConversationStore, PublicConfig } from '../src/types.ts'
+import type { Conversation, ConversationStore, PublicConfig } from '../src/types.ts'
 
 let server: Server
 let base: string
@@ -121,6 +121,68 @@ describe('conversations', () => {
 
   it('404s for an unknown conversation', async () => {
     expect((await send('/api/chats/nope', 'PATCH', { name: 'x' })).status).toBe(404)
+  })
+})
+
+describe('loading chats on demand', () => {
+  /** Two chats with history, the second one open. */
+  const twoChats = async (): Promise<{ first: string; second: string }> => {
+    const first = api.store.getConversations().activeId!
+    api.store.setMessages(first, [{ id: 'a1', role: 'user', text: 'first chat' }, { id: 'a2', role: 'assistant', text: 'reply' }])
+    const second = ((await (await send('/api/chats', 'POST')).json()) as { id: string }).id
+    api.store.setMessages(second, [{ id: 'b1', role: 'user', text: 'second chat' }])
+    return { first, second }
+  }
+
+  it('lists every chat, but sends messages only for the open one', async () => {
+    const { first, second } = await twoChats()
+    const body = await (await get('/api/chats')).json() as ConversationStore
+    const open = body.items.find((c) => c.id === second)!
+    const other = body.items.find((c) => c.id === first)!
+    expect(open.messages.map((m) => m.text)).toEqual(['second chat'])
+    expect(open.messagesOmitted).toBeUndefined()
+    expect(other.messages).toEqual([])
+    expect(other).toMatchObject({ messageCount: 2, messagesOmitted: true, name: 'first chat' })
+  })
+
+  it('sends the same outline to a client that connects for live updates', async () => {
+    await twoChats()
+    const res = await realFetch(`${base}/api/events`)
+    const reader = res.body!.getReader()
+    const { value } = await reader.read()
+    await reader.cancel()
+    const first = JSON.parse(new TextDecoder().decode(value).split('\n')[0]!.replace(/^data: /, '')) as { payload: ConversationStore }
+    expect(first.payload.items.filter((c) => c.messagesOmitted)).toHaveLength(1)
+  })
+
+  it('sends one chat in full when asked', async () => {
+    const { first } = await twoChats()
+    const conv = await (await get(`/api/chats/${first}`)).json() as Conversation
+    expect(conv.messages.map((m) => m.id)).toEqual(['a1', 'a2'])
+    expect(conv.messageCount).toBe(2)
+    expect((await get('/api/chats/nope')).status).toBe(404)
+  })
+
+  it('compresses a large chat for a client that accepts it', async () => {
+    const id = api.store.getConversations().activeId!
+    api.store.setMessages(id, [{ id: 'm', role: 'assistant', text: 'long reply '.repeat(5000) }])
+    const res = await realFetch(`${base}/api/chats/${id}`, { headers: { 'Accept-Encoding': 'gzip' } })
+    expect(res.headers.get('content-encoding')).toBe('gzip')
+    expect(((await res.json()) as Conversation).messages[0]!.text).toMatch(/^long reply/)
+  })
+
+  it('restores a deleted chat in full from its own copy, even from an outline', async () => {
+    const { first } = await twoChats()
+    const outline = ((await (await get('/api/chats')).json()) as ConversationStore).items.find((c) => c.id === first)!
+    await send(`/api/chats/${first}`, 'DELETE')
+    expect((await send('/api/chats/restore', 'POST', outline)).status).toBe(200)
+    expect(api.store.get(first)!.messages.map((m) => m.id)).toEqual(['a1', 'a2'])
+  })
+
+  it('refuses to restore an outline it has no copy of, rather than restore it empty', async () => {
+    const res = await send('/api/chats/restore', 'POST', { id: 'gone', name: 'x', messages: [], messagesOmitted: true })
+    expect(res.status).toBe(409)
+    expect(api.store.get('gone')).toBeUndefined()
   })
 })
 

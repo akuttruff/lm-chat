@@ -40,6 +40,14 @@ export interface Conversation {
   reasoning?: string | null
   /** Older turns folded into a summary, so they aren't replayed verbatim. */
   summary?: ContextSummary | null
+  /** How many messages the server holds. Set on chats it sends in the list. */
+  messageCount?: number
+  /**
+   * True when `messages` was left out of the chat list to keep it small --
+   * only the open chat's messages are sent. Fetch the chat to fill them in.
+   * Never stored: it describes a copy sent over the wire.
+   */
+  messagesOmitted?: boolean
 }
 
 /**

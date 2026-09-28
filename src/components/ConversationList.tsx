@@ -44,6 +44,8 @@ const ACTIONS_WIDTH = 132
 
 function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: RowProps) {
   const [dragged, setDragged] = useState(false)
+  // Only the open chat's messages are loaded; the rest carry a count.
+  const count = conv.messageCount ?? conv.messages.length
 
   // Shared by the swipe actions, the hover buttons and the keyboard.
   const rename = (): void => {
@@ -112,7 +114,7 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: 
           </span>
         ) : (
           <span className="conv-time">
-            {conv.messages.length > 0 ? `${conv.messages.length} msgs · ` : ''}{relTime(conv.updatedAt)}
+            {count > 0 ? `${count} msgs · ` : ''}{relTime(conv.updatedAt)}
           </span>
         )}
       </motion.button>

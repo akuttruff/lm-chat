@@ -469,51 +469,6 @@ export class Store {
     this.savedCounts.set(conv.id, conv.messages.length)
   }
 
-  /** Write every in-memory conversation through to disk now. */
-  persist(): void {
-    for (const conv of this.conversations.items) this.writeMessages(conv)
-    this.stmts.setActiveId.run(this.conversations.activeId)
-  }
-
-  /**
-   * Retained for an older client pushing a whole store. This is the one
-   * remaining "replace the whole document" path, so it keeps the guard at
-   * that same whole-store granularity rather than per-conversation.
-   */
-  replaceAll(store: ConversationStore): void {
-    const before = this.conversations.items.reduce((n, c) => n + c.messages.length, 0)
-    const after = store.items.reduce((n, c) => n + c.messages.length, 0)
-    if (after < before) {
-      const backupDir = path.join(this.paths.dataDir, 'backups')
-      fs.mkdirSync(backupDir, { recursive: true })
-      const name = `conversations.${new Date().toISOString().replace(/[:.]/g, '-')}.json`
-      fs.writeFileSync(path.join(backupDir, name), JSON.stringify(this.conversations, null, 2))
-      console.log(`[chats] message count dropped ${before} -> ${after}; backed up to .data/backups/${name}`)
-      pruneBackups(backupDir)
-    }
-
-    this.db.exec('BEGIN')
-    try {
-      for (const row of this.stmts.selectConversations.all() as unknown as ConversationRow[]) {
-        this.stmts.deleteConversation.run(row.id) // cascades to messages
-      }
-      for (const conv of store.items) {
-        this.stmts.insertConversation.run(
-          conv.id, conv.name, conv.createdAt, conv.updatedAt, conv.responseId, conv.reasoning ?? null,
-          conv.summary?.text ?? null, conv.summary ? String(conv.summary.through) : null,
-        )
-        conv.messages.forEach((m, i) => this.stmts.insertMessage.run(...messageParams(conv.id, i, m)))
-      }
-      this.stmts.setActiveId.run(store.activeId)
-      this.db.exec('COMMIT')
-    } catch (err) {
-      this.db.exec('ROLLBACK')
-      throw err
-    }
-    this.conversations = store
-    this.savedCounts = new Map(store.items.map((c) => [c.id, c.messages.length]))
-  }
-
   create(): Conversation {
     const current = this.get(this.conversations.activeId ?? '')
     // Don't stack up empty threads, but clear any stale server-side context.

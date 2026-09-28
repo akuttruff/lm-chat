@@ -3,21 +3,21 @@ import { render, screen } from '@testing-library/react'
 import MessageBubble from './MessageBubble'
 
 describe('MessageBubble', () => {
-  it('renders assistant markdown as real elements', () => {
+  it('renders assistant markdown as real elements', async () => {
     render(<MessageBubble role="assistant" text={'**bold** and `code`'} model="m" elapsed="1" />)
-    expect(screen.getByText('bold').tagName).toBe('STRONG')
+    expect((await screen.findByText('bold')).tagName).toBe('STRONG')
     expect(screen.getByText('code').tagName).toBe('CODE')
   })
 
-  it('renders markdown lists', () => {
+  it('renders markdown lists', async () => {
     render(<MessageBubble role="assistant" text={'- one\n- two'} model="m" elapsed="1" />)
-    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    expect(await screen.findAllByRole('listitem')).toHaveLength(2)
   })
 
-  it('renders GFM tables', () => {
+  it('renders GFM tables', async () => {
     const md = '| a | b |\n| - | - |\n| 1 | 2 |'
     render(<MessageBubble role="assistant" text={md} model="m" elapsed="1" />)
-    expect(screen.getByRole('table')).toBeInTheDocument()
+    expect(await screen.findByRole('table')).toBeInTheDocument()
   })
 
   it('does not interpret user text as markdown', () => {
@@ -36,7 +36,7 @@ describe('MessageBubble', () => {
     expect(screen.getByText(/qwen/)).toBeInTheDocument()
   })
 
-  it('renders plain text while streaming, markdown once settled', () => {
+  it('renders plain text while streaming, markdown once settled', async () => {
     // Re-parsing a long reply's markdown on every token is quadratic in its
     // length and was the main cost in a big conversation.
     const md = '**bold**'
@@ -46,7 +46,7 @@ describe('MessageBubble', () => {
     expect(screen.getByText(/\*\*bold\*\*/)).toBeInTheDocument()
 
     rerender(<MessageBubble role="assistant" text={md} model="m" elapsed="1" />)
-    expect(screen.getByText('bold').tagName).toBe('STRONG')
+    expect((await screen.findByText('bold')).tagName).toBe('STRONG')
   })
 
   it('hides the meta line while still streaming', () => {

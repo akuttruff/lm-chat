@@ -61,3 +61,6 @@ afterEach(() => {
   vi.clearAllTimers()
   vi.useRealTimers()
 })
+
+// jsdom does no layout, so it has no scrollIntoView; components call it on focus.
+if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {}

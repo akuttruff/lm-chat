@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
+import { gzipSync } from 'node:zlib'
 import type { Plugin } from 'vite'
 import { Bus } from './bus.ts'
 import { Engine, newEngineState } from './engine.ts'
@@ -8,7 +9,7 @@ import { Store } from './store.ts'
 import { readModelConfig } from './model-config.ts'
 import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
 import { metaOf } from '../src/types.ts'
-import type { ConversationStore, ServerConfig } from '../src/types.ts'
+import type { Conversation, ConversationStore, ServerConfig } from '../src/types.ts'
 
 type Next = () => void
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => void
@@ -41,6 +42,42 @@ function json(res: ServerResponse, code: number, body: unknown): void {
   res.setHeader('Cache-Control', 'no-store')
   res.end(JSON.stringify(body))
 }
+
+/**
+ * JSON, gzipped for a client that accepts it once it's big enough to matter:
+ * a long chat is hundreds of KB of text, and over a phone's connection the
+ * transfer, not the server, is what makes opening it slow.
+ */
+function bigJson(req: IncomingMessage, res: ServerResponse, code: number, body: unknown): void {
+  const text = JSON.stringify(body)
+  const accepts = /\bgzip\b/.test(String(req.headers['accept-encoding'] ?? ''))
+  res.statusCode = code
+  res.setHeader('Content-Type', 'application/json')
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Vary', 'Accept-Encoding')
+  if (!accepts || text.length < 8 * 1024) return void res.end(text)
+  res.setHeader('Content-Encoding', 'gzip')
+  res.end(gzipSync(text))
+}
+
+/**
+ * The chat list as clients receive it: every chat, but only the open one
+ * with its messages. The rest carry a count, and a client fetches one when
+ * it's opened. Sending every message of every chat made each page load and
+ * reconnect download the whole history.
+ */
+export function listView(s: ConversationStore): ConversationStore {
+  return {
+    activeId: s.activeId,
+    items: s.items.map((c) => (c.id === s.activeId || c.messages.length === 0
+      ? { ...c, messageCount: c.messages.length }
+      : { ...c, messages: [], messageCount: c.messages.length, messagesOmitted: true })),
+  }
+}
+
+/** How long, and how many, deleted chats the server keeps for Undo. */
+const UNDO_MS = 30 * 60_000
+const UNDO_MAX = 20
 
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -76,8 +113,14 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
   const { store, bus } = state
   const engine = new Engine(store, bus, undefined, state.engine)
 
-  const broadcast = (): void =>
-    bus.send({ type: 'conversations', payload: store.getConversations() })
+  /** Recently deleted chats, whole, so Undo can restore one the client only held in outline. */
+  const deleted = new Map<string, { conv: Conversation; at: number }>()
+  const remember = (conv: Conversation): void => {
+    const now = Date.now()
+    for (const [k, v] of deleted) if (now - v.at > UNDO_MS) deleted.delete(k)
+    deleted.set(conv.id, { conv, at: now })
+    while (deleted.size > UNDO_MAX) deleted.delete(deleted.keys().next().value!)
+  }
 
   const middleware: Middleware = (req, res, next) => {
     const [rawUrl = '', query = ''] = (req.url || '').split('?')
@@ -94,7 +137,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         Connection: 'keep-alive',
       })
       // Send current state immediately so a reconnecting client catches up.
-      res.write(`data: ${JSON.stringify({ type: 'conversations', payload: store.getConversations() })}\n\n`)
+      res.write(`data: ${JSON.stringify({ type: 'conversations', payload: listView(store.getConversations()) })}\n\n`)
       // And which chats are mid-reply, so every one shows its own progress.
       res.write(`data: ${JSON.stringify({ type: 'statuses', payload: engine.activeStatuses() })}\n\n`)
       const remove = bus.add(res)
@@ -166,31 +209,25 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
 
     // --- conversations --------------------------------------------------
     if (url === '/api/chats' && method === 'GET') {
-      return json(res, 200, store.getConversations())
+      return bigJson(req, res, 200, listView(store.getConversations()))
     }
     if (url === '/api/chats' && method === 'POST') {
       const conv = store.create()
       bus.send({ type: 'created', payload: { conversation: conv, activeId: store.getConversations().activeId } })
       return json(res, 200, conv)
     }
-    if (url === '/api/chats' && method === 'PUT') {
-      // Retained so an older client can still push a whole store.
-      void readBody(req).then((body) => {
-        const parsed = body as ConversationStore
-        if (!parsed || !Array.isArray(parsed.items)) {
-          return json(res, 400, { error: 'expected { items: [] }' })
-        }
-        store.replaceAll(parsed)
-        broadcast()
-        return json(res, 200, { ok: true, count: parsed.items.length })
-      }).catch((err: Error) => json(res, 400, { error: err.message }))
-      return undefined
-    }
-
     if (url === '/api/chats/restore' && method === 'POST') {
       void readBody(req).then((body) => {
+        // The server's own copy, when it still has one: the client's list
+        // may hold the chat without its messages (see listView).
+        const input = body as Partial<Conversation> | null
+        const kept = typeof input?.id === 'string' ? deleted.get(input.id) : undefined
+        if (!kept && input?.messagesOmitted) {
+          return json(res, 409, { error: 'That chat can no longer be restored.' })
+        }
         const before = store.getConversations().items.map((c) => c.id)
-        const conv = store.restore(body as never)
+        const conv = store.restore((kept?.conv ?? body) as never)
+        if (kept) deleted.delete(kept.conv.id)
         const after = store.getConversations()
         // A blank placeholder the deletion had left is gone again.
         for (const id of before) {
@@ -211,6 +248,9 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
 
       if (!store.get(id)) return json(res, 404, { error: 'no such conversation' })
 
+      if (!action && method === 'GET') {
+        return bigJson(req, res, 200, { ...store.get(id)!, messageCount: store.get(id)!.messages.length })
+      }
       if (!action && method === 'PATCH') {
         void readBody(req).then((body) => {
           const conv = store.patch(id, body as Record<string, never>)
@@ -221,6 +261,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       }
       if (!action && method === 'DELETE') {
         const before = new Set(store.getConversations().items.map((c) => c.id))
+        remember(structuredClone(store.get(id)!))
         store.remove(id)
         const after = store.getConversations()
         // Deleting the last thread leaves a fresh blank one in its place.

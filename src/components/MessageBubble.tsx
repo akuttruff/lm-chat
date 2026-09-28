@@ -1,7 +1,7 @@
-import { memo } from 'react'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { Suspense, lazy, memo } from 'react'
 import type { MessageRole } from '../types.ts'
+
+const MarkdownText = lazy(() => import('./MarkdownText'))
 
 interface MessageBubbleProps {
   role: MessageRole
@@ -24,7 +24,10 @@ function MessageBubble({
       <div className="bubble">
         {role === 'assistant' && !streaming ? (
           <div className="md">
-            <Markdown remarkPlugins={[remarkGfm]}>{text ?? ''}</Markdown>
+            {/* The words are readable at once; formatting follows a moment later. */}
+            <Suspense fallback={text}>
+              <MarkdownText text={text ?? ''} />
+            </Suspense>
           </div>
         ) : (
           // Plain text while tokens arrive. Re-parsing the markdown of a

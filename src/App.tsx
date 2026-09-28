@@ -14,7 +14,7 @@ import './App.css';
 export default function App() {
   const server = useServerState();
   const {
-    conversations, activeId, active, config, status, startedAt, busy, working,
+    conversations, activeId, active, loadingActive, config, status, startedAt, busy, working,
     send, stop, retry, newChat, openChat, deleteChat, restoreChat, renameChat, setReasoning, saveConfig,
   } = server;
 
@@ -47,10 +47,16 @@ export default function App() {
       />
       {/* Keyed by thread: switching mounts a fresh one, rather than animating
           one thread's messages out while the other's animate in. */}
-      <ChatThread
-        key={activeId ?? 'none'} messages={messages} summary={active?.summary} conversationId={activeId ?? 'none'}
-        onRetry={busy ? undefined : () => void retry()}
-      />
+      {loadingActive
+        // Mounted only once its messages are here: the thread restores your
+        // reading position from them, once, as it mounts.
+        ? <div className="thread" aria-busy="true" />
+        : (
+          <ChatThread
+            key={activeId ?? 'none'} messages={messages} summary={active?.summary} conversationId={activeId ?? 'none'}
+            onRetry={busy ? undefined : () => void retry()}
+          />
+        )}
       <Composer
         onSend={(text) => void send(text)}
         disabled={busy}

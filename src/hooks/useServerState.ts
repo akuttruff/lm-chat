@@ -13,6 +13,8 @@ export interface ServerState {
   conversations: Conversation[]
   activeId: string | null
   active: Conversation | null
+  /** The open chat is known, but its messages are still on their way (see listView on the server). */
+  loadingActive: boolean
   config: PublicConfig | null
   /** The active chat's status (or the connection's, when it has none). */
   status: Status
@@ -29,7 +31,7 @@ export interface ServerState {
   newChat: () => Promise<void>
   openChat: (id: string) => Promise<void>
   deleteChat: (id: string) => Promise<void>
-  /** Put back a conversation just deleted, from the copy the client still holds. */
+  /** Put back a conversation just deleted. The server restores its own full copy when it has one. */
   restoreChat: (conversation: Conversation) => Promise<void>
   renameChat: (id: string, name: string) => Promise<void>
   setReasoning: (value: string | null) => Promise<void>
@@ -71,8 +73,15 @@ export function applyEvent(s: ConversationStore, event: ServerEvent): Conversati
       const { conversationId, base, messages, meta } = event.payload
       const conv = s.items.find((c) => c.id === conversationId)
       if (!conv) return s // a thread we don't list; the next snapshot will say
+      // A chat held only in outline: keep its place and count current. Its
+      // messages arrive in full if it's opened.
+      if (conv.messagesOmitted) {
+        const outline: Conversation = { ...conv, ...meta, messageCount: base + messages.length }
+        return { ...s, items: s.items.map((c) => (c.id === conversationId ? outline : c)) }
+      }
       if (conv.messages.length < base) return null
-      const next: Conversation = { ...conv, ...meta, messages: [...conv.messages.slice(0, base), ...messages] }
+      const merged = [...conv.messages.slice(0, base), ...messages]
+      const next: Conversation = { ...conv, ...meta, messages: merged, messageCount: merged.length }
       return { ...s, items: s.items.map((c) => (c.id === conversationId ? next : c)) }
     }
     case 'patch': {
@@ -141,6 +150,28 @@ export default function useServerState(): ServerState {
       if (r.ok) commitStore(await r.json() as ConversationStore)
     } catch { /* the next event or reconnect will try again */ }
   }, [commitStore])
+
+  // The open chat arrives in outline (the server sends only its count), so
+  // fetch its messages. Covers opening one here, another device switching,
+  // and a reconnect's fresh snapshot alike. A reply streaming in meanwhile is
+  // harmless: every tail resends the whole turn, so the next one fills in
+  // anything this copy predates.
+  const loading = useRef(new Set<string>())
+  useEffect(() => {
+    const conv = store.items.find((c) => c.id === store.activeId)
+    if (!conv?.messagesOmitted || loading.current.has(conv.id)) return
+    const id = conv.id
+    loading.current.add(id)
+    fetch(`/api/chats/${encodeURIComponent(id)}`)
+      .then(async (r) => {
+        if (!r.ok) return
+        const full = await r.json() as Conversation
+        const s = storeRef.current
+        commitStore({ ...s, items: s.items.map((c) => (c.id === id ? { ...full, messagesOmitted: false } : c)) })
+      })
+      .catch(() => { /* opening it again, or the next reconnect, will retry */ })
+      .finally(() => loading.current.delete(id))
+  }, [store, commitStore])
 
   // Subscribe to server state. EventSource reconnects on its own, so a phone
   // that slept simply picks the stream back up.
@@ -264,6 +295,7 @@ export default function useServerState(): ServerState {
     conversations: [...store.items].sort((a, b) => b.updatedAt - a.updatedAt),
     activeId: store.activeId,
     active,
+    loadingActive: active?.messagesOmitted === true,
     config,
     status,
     startedAt: mine?.startedAt ?? null,

@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import api from './server/api.ts'
 
+// Any name on the tailnet, not one machine's: `tailscale serve` is what
+// actually limits who can reach this, so a rename shouldn't break it.
+const TAILNET = '.ts.net'
+
 // The browser no longer talks to LM Studio. The app server owns every turn,
 // so there is no cross-origin request to proxy and no CORS surface at all --
 // which also means the API token never leaves this machine.
@@ -26,7 +30,7 @@ export default defineConfig(({ command, isPreview }) => {
       port: 8000,
       strictPort: true,
       // Also reachable over Tailscale, via `tailscale serve`.
-      allowedHosts: ['amies-mac-studio.tail1585ef.ts.net'],
+      allowedHosts: [TAILNET],
       // The coverage report and data dirs live in the project; watching them
       // would reload the app on every test run.
       watch: { ignored: ['**/coverage/**', '**/.data/**', '**/.data-dev/**'] },
@@ -34,6 +38,6 @@ export default defineConfig(({ command, isPreview }) => {
     // A separate port from `server` above: this is the persistent, built
     // instance Tailscale points at, so it can run alongside `npm run dev`
     // (unbundled, for local iteration) without a port clash.
-    preview: { host: true, port: 8010, strictPort: true, allowedHosts: ['amies-mac-studio.tail1585ef.ts.net'] },
+    preview: { host: true, port: 8010, strictPort: true, allowedHosts: [TAILNET] },
   }
 })
