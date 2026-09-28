@@ -112,7 +112,7 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: 
           </span>
         ) : (
           <span className="conv-time">
-            {conv.messages.length > 0 ? `${conv.messages.length} · ` : ''}{relTime(conv.updatedAt)}
+            {conv.messages.length > 0 ? `${conv.messages.length} msgs · ` : ''}{relTime(conv.updatedAt)}
           </span>
         )}
       </motion.button>

@@ -45,7 +45,7 @@ describe('ConversationList', () => {
       c.id === 'a' ? { ...c, messages: Array.from({ length: 5 }, (_, i) => ({ id: i, role: 'user' as const, text: 'hi' })) } : c
     ))
     setup({ conversations: withMessages })
-    expect(await screen.findByText('5 · 1m')).toBeInTheDocument()
+    expect(await screen.findByText('5 msgs · 1m')).toBeInTheDocument()
   })
 
   it('marks chats that are replying or queued in place of their time', async () => {
