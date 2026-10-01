@@ -105,6 +105,18 @@ describe('request body', () => {
     expect(messages().at(-1)!.role).toBe('error')
   })
 
+  it('tells the model when each message was sent, without changing what is saved', async () => {
+    const f = streams([evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', f)
+    await engine.runTurn(convId, 'What day is it?')
+    const sent = String(bodyOf(f).input)
+    // e.g. "What day is it?\n\n[Sent Wednesday, October 1, 2026 at 12:34 AM PDT]"
+    expect(sent).toMatch(/^What day is it\?\n\n\[Sent \w+day, \w+ \d{1,2}, \d{4} at \d{1,2}:\d{2} [AP]M [A-Z]{2,5}\]$/)
+    expect(messages().at(-1)!.text).toBe('What day is it?')
+    // The stamp rides on the new message only: the system prompt (and so the cached prefix) is untouched.
+    expect(String(bodyOf(f).system_prompt ?? '')).not.toMatch(/\[Sent/)
+  })
+
   it('omits context_length so LM Studio reuses the loaded instance', async () => {
     const f = streams([evt({ type: 'chat.end', result: {} })])
     vi.stubGlobal('fetch', f)
@@ -516,7 +528,7 @@ describe('retrying the last message', () => {
     expect(messages()[0]!.text).toBe('what is my forecast?')
     expect(messages()[1]!.text).toBe('Sunny.')
     // The model is asked the same thing once, as the message -- not as prior history too.
-    expect(bodyOf(fetchAgain).input).toBe('what is my forecast?')
+    expect(String(bodyOf(fetchAgain).input)).toMatch(/^what is my forecast\?\n\n\[Sent /)
     expect(String(bodyOf(fetchAgain).system_prompt ?? '')).not.toMatch(/what is my forecast\?/)
   })
 
@@ -735,7 +747,7 @@ describe('conversation context', () => {
     expect(body).not.toHaveProperty('previous_response_id')
     expect(String(body.system_prompt)).toMatch(/User: what is my sign\?/)
     expect(String(body.system_prompt)).toMatch(/Assistant: Sagittarius/)
-    expect(body.input).toBe('and tomorrow?')
+    expect(String(body.input)).toMatch(/^and tomorrow\?\n\n\[Sent /)
   })
 
   it('keeps full context even when the turn between failed', async () => {

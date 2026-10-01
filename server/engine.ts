@@ -272,6 +272,26 @@ export function outputCap(raw: string): number {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
+// --- the date, in every message ---------------------------------------------
+
+/**
+ * The message as sent to the model: your text, then a line saying when it
+ * was sent. The model has no clock, and "what's my forecast for today" or
+ * "how many days until Friday" needs one; a tool call for it costs a whole
+ * extra round trip (prompt re-read and all), every time. Stamped on the
+ * message -- the part of the prompt that is new anyway -- it costs nothing
+ * and leaves LM Studio's cached prefix alone, where a line at the top of
+ * the system prompt would invalidate it every turn. The saved message is
+ * never changed; only what's sent.
+ */
+export function stampInput(text: string, now: Date = new Date()): string {
+  const when = now.toLocaleString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+  })
+  return `${text}\n\n[Sent ${when}]`
+}
+
 // --- auto-titling -----------------------------------------------------------
 
 export const TITLE_PROMPT = [
@@ -534,7 +554,7 @@ export class Engine {
     const startedAt = Date.now()
     this.publish(conversationId, 'pending', 'thinking...', startedAt)
 
-    const body: Record<string, unknown> = { model: config.model, input: text, stream: true }
+    const body: Record<string, unknown> = { model: config.model, input: stampInput(text), stream: true }
     const ctx = Number.parseInt(config.contextLength, 10)
     // Applied at load time: sending it every turn makes LM Studio JIT-load a new
     // model instance per message instead of reusing the loaded one.
