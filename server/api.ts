@@ -293,9 +293,16 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       return bigJson(req, res, 200, listView(store.getConversations()))
     }
     if (url === '/api/chats' && method === 'POST') {
-      const conv = store.create()
-      bus.send({ type: 'created', payload: { conversation: conv, activeId: store.getConversations().activeId } })
-      return json(res, 200, conv)
+      void readBody(req).then((body) => {
+        const folderId = (body as { folderId?: unknown } | null)?.folderId
+        let conv = store.create()
+        // Started from a folder's + in the drawer: filed there before the
+        // first message, so the folder's reasoning and tools apply to it.
+        if (typeof folderId === 'string') conv = store.patch(conv.id, { folderId }, { touch: false }) ?? conv
+        bus.send({ type: 'created', payload: { conversation: conv, activeId: store.getConversations().activeId } })
+        json(res, 200, conv)
+      }).catch((err: Error) => json(res, 400, { error: err.message }))
+      return undefined
     }
     // A one-off backfill, not something the app offers: name the chats that
     // still carry their placeholder names (from before titles were written).

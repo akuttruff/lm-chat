@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Drawer } from 'vaul'
 import { motion } from 'motion/react'
-import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost } from 'lucide-react'
+import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Conversation, Folder } from '../types.ts'
 import type { ChatStatus } from '../hooks/useServerState.ts'
@@ -33,6 +33,8 @@ interface ConversationListProps {
   onRename: (id: string, name: string) => void
   onStar?: (id: string, starred: boolean) => void
   onOpenFolderPicker?: (id: string) => void
+  /** Start a chat filed into this folder, from the + on its header. */
+  onNewChat?: (folderId: string) => void
   onClose: () => void
 }
 
@@ -186,6 +188,8 @@ interface Section {
   key: string
   /** Null for the flat, no-folders-in-use case: no header at all. */
   label: string | null
+  /** The folder this section is, or null for the unfiled chats. */
+  folderId: string | null
   chats: Conversation[]
 }
 
@@ -211,15 +215,15 @@ function sectionsOf(conversations: Conversation[], folders: Folder[]): Section[]
   const sections: Section[] = []
   for (const f of folders) {
     const chats = byFolder.get(f.id)
-    if (chats?.length) sections.push({ key: f.id, label: f.name, chats })
+    if (chats?.length) sections.push({ key: f.id, label: f.name, folderId: f.id, chats })
   }
-  if (unfiled.length) sections.push({ key: '__unfiled', label: sections.length ? 'Unfiled' : null, chats: unfiled })
+  if (unfiled.length) sections.push({ key: '__unfiled', label: sections.length ? 'Unfiled' : null, folderId: null, chats: unfiled })
   return sections
 }
 
 export default function ConversationList({
   open, conversations, activeId, folders, working = {}, onOpen, onDelete, onRestore = () => {}, onRename,
-  onStar = () => {}, onOpenFolderPicker = () => {}, onClose,
+  onStar = () => {}, onOpenFolderPicker = () => {}, onNewChat, onClose,
 }: ConversationListProps) {
   return (
     <Drawer.Root open={open} onOpenChange={(v) => !v && onClose()}>
@@ -231,7 +235,23 @@ export default function ConversationList({
           <div className="conv-list drawer-scroll" data-vaul-no-drag>
             {sectionsOf(conversations, folders).map((section) => (
               <div key={section.key}>
-                {section.label && <div className="conv-section-head">{section.label}</div>}
+                {section.label && (
+                  <div className="conv-section-head">
+                    <span>{section.label}</span>
+                    {/* Start a chat already filed here, so the folder's reasoning and tools apply from the first message. */}
+                    {section.folderId && onNewChat && (
+                      <button
+                        type="button"
+                        className="conv-section-add"
+                        aria-label={`New chat in ${section.label}`}
+                        title={`New chat in ${section.label}`}
+                        onClick={() => { onNewChat(section.folderId!); onClose() }}
+                      >
+                        <Plus size={15} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                )}
                 {section.chats.map((c) => (
                   <Row
                     key={c.id}

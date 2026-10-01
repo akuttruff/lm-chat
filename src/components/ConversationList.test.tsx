@@ -193,17 +193,29 @@ describe('ConversationList', () => {
     it('is a flat list, no headers, when nothing is filed', async () => {
       setup({ folders })
       await screen.findByText('Astrology forecast')
-      expect(screen.queryByText('Astrology', { selector: '.conv-section-head' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Astrology', { selector: '.conv-section-head span' })).not.toBeInTheDocument()
       expect(screen.queryByText('Unfiled')).not.toBeInTheDocument()
     })
 
     it('groups filed chats under their folder, and the rest under Unfiled', async () => {
       const filed = convs.map((c) => (c.id === 'a' ? { ...c, folderId: 'f1' } : c))
       setup({ folders, conversations: filed })
-      expect(await screen.findByText('Astrology', { selector: '.conv-section-head' })).toBeInTheDocument()
+      expect(await screen.findByText('Astrology', { selector: '.conv-section-head span' })).toBeInTheDocument()
       expect(screen.getByText('Unfiled')).toBeInTheDocument()
       // An empty folder (Empty, f2) gets no section -- nothing to scroll past for it.
       expect(screen.queryByText('Empty')).not.toBeInTheDocument()
+    })
+
+    it("starts a new chat in a folder from the + on its header, and closes", async () => {
+      const user = userEvent.setup()
+      const filed = convs.map((c) => (c.id === 'a' ? { ...c, folderId: 'f1' } : c))
+      const onNewChat = vi.fn()
+      const props = setup({ folders, conversations: filed, onNewChat })
+      await user.click(await screen.findByRole('button', { name: 'New chat in Astrology' }))
+      expect(onNewChat).toHaveBeenCalledWith('f1')
+      expect(props.onClose).toHaveBeenCalled()
+      // Unfiled is a grouping, not a folder: nothing to start "in" it.
+      expect(screen.queryByRole('button', { name: /New chat in Unfiled/ })).not.toBeInTheDocument()
     })
 
     it('treats a folder id that no longer exists as unfiled, rather than dropping the chat', async () => {

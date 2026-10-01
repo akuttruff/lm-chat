@@ -148,6 +148,18 @@ describe('memories', () => {
   })
 })
 
+describe('a new chat in a folder', () => {
+  it('is filed there from the start, and an unknown folder just means unfiled', async () => {
+    const folder = await (await send('/api/folders', 'POST', { name: 'Astrology' })).json() as { id: string }
+    const created = await (await send('/api/chats', 'POST', { folderId: folder.id })).json() as { id: string; folderId: string | null }
+    expect(created.folderId).toBe(folder.id)
+    expect(api.store.get(created.id)!.folderId).toBe(folder.id)
+    api.store.setMessages(created.id, [{ id: 'm', role: 'user', text: 'seed' }]) // so the next create is a new chat
+    const stray = await (await send('/api/chats', 'POST', { folderId: 'nope' })).json() as { folderId: string | null }
+    expect(stray.folderId).toBeNull()
+  })
+})
+
 describe('retitling', () => {
   it('answers at once with how many chats it will name', async () => {
     const res = await send('/api/chats/retitle', 'POST')

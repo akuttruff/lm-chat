@@ -113,6 +113,7 @@ export default function App() {
         onRename={(id, name) => void renameChat(id, name)}
         onStar={(id, starred) => void setStarred(id, starred)}
         onOpenFolderPicker={(id) => setFolderPickerFor(id)}
+        onNewChat={(folderId) => void newChat(folderId)}
         onClose={() => setChatsOpen(false)}
       />
       <SettingsSheet

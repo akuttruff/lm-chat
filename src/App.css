@@ -454,6 +454,9 @@ html, body, #root {
 }
 
 .conv-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 14px 6px 6px;
   font-size: 12px;
   font-weight: 600;
@@ -461,6 +464,21 @@ html, body, #root {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+/* "+" on a folder's header: a new chat filed there. Small, but a full-size tap target. */
+.conv-section-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: -6px -4px -6px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  color: var(--moss);
+  cursor: pointer;
+}
+.conv-section-add:active { background: var(--bg); }
 .conv-list > div:first-child .conv-section-head { padding-top: 4px; }
 
 .conv-row-wrap {

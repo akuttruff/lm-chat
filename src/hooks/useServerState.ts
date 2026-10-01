@@ -28,7 +28,8 @@ export interface ServerState {
   stop: () => Promise<void>
   /** Re-run the last message you sent, replacing the reply that followed it. */
   retry: () => Promise<void>
-  newChat: () => Promise<void>
+  /** A fresh chat; filed into `folderId` from the start when given, so that folder's defaults apply. */
+  newChat: (folderId?: string | null) => Promise<void>
   openChat: (id: string) => Promise<void>
   deleteChat: (id: string) => Promise<void>
   /** Put back a conversation just deleted. The server restores its own full copy when it has one. */
@@ -302,7 +303,9 @@ export default function useServerState(): ServerState {
     if (id) await post(`/api/chats/${encodeURIComponent(id)}/stop`)
   }, [])
 
-  const newChat = useCallback(async () => { await post('/api/chats') }, [])
+  const newChat = useCallback(async (folderId?: string | null) => {
+    await post('/api/chats', folderId ? { folderId } : {})
+  }, [])
 
   const openChat = useCallback(async (id: string) => {
     // Switch now; the server's confirmation is only for other devices.
