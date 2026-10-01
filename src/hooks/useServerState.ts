@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { Conversation, ConversationMeta, ConversationStore, Message, PublicConfig, Status } from '../types.ts'
+import type { Conversation, ConversationMeta, ConversationStore, Folder, FolderUpdate, Message, PublicConfig, Status } from '../types.ts'
 
 /**
  * The whole client state, streamed from the app server.
@@ -37,6 +37,19 @@ export interface ServerState {
   setReasoning: (value: string | null) => Promise<void>
   /** This chat's memory switch; null goes back to the Settings default. */
   setMemory: (value: boolean | null) => Promise<void>
+  /** Which saved memories a chat injects; null goes back to automatic. */
+  setMemorySelection: (id: string, value: string[] | null) => Promise<void>
+  setStarred: (id: string, value: boolean) => Promise<void>
+  /** Which folder a chat is filed under; null takes it out of any folder. */
+  setFolder: (id: string, folderId: string | null) => Promise<void>
+  /** On: nothing about this chat is saved from now on, and whatever was already saved for it is thrown away. Off: catches disk up with it. */
+  setTemporary: (id: string, value: boolean) => Promise<void>
+  /** Every folder, name-sorted -- shared between the chat list (grouping) and the folder picker. */
+  folders: Folder[]
+  createFolder: (name: string) => Promise<Folder>
+  /** Rename a folder or change its defaults; fields left out of the patch stay as they were. */
+  updateFolder: (id: string, patch: FolderUpdate) => Promise<void>
+  deleteFolder: (id: string) => Promise<void>
   saveConfig: (patch: Partial<PublicConfig> & { apiToken?: string }) => Promise<void>
   refreshConfig: () => Promise<void>
 }
@@ -120,6 +133,7 @@ const post = (url: string, body?: unknown): Promise<Response> =>
 export default function useServerState(): ServerState {
   const [store, setStore] = useState<ConversationStore>({ items: [], activeId: null })
   const [config, setConfig] = useState<PublicConfig | null>(null)
+  const [folders, setFolders] = useState<Folder[]>([])
   // Status is per chat: switching away from one that's replying must neither
   // lock the next chat's composer nor lose the first one's progress.
   const [statuses, setStatuses] = useState<Record<string, ChatStatus>>({})
@@ -136,6 +150,44 @@ export default function useServerState(): ServerState {
   }, [])
 
   useEffect(() => { void refreshConfig() }, [refreshConfig])
+
+  useEffect(() => {
+    let live = true
+    fetch('/api/folders')
+      .then((r) => (r.ok ? r.json() as Promise<unknown> : []))
+      // A malformed response reads as "no folders" rather than crashing the
+      // grouping in ConversationList, which trusts this is always an array.
+      .then((list) => { if (live && Array.isArray(list)) setFolders(list as Folder[]) })
+      .catch(() => { /* the drawer just shows an unfiled list */ })
+    return () => { live = false }
+  }, [])
+
+  const byName = (list: Folder[]): Folder[] => [...list].sort((a, b) => a.name.localeCompare(b.name))
+
+  const createFolder = useCallback(async (name: string): Promise<Folder> => {
+    const r = await fetch('/api/folders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+    })
+    const body = await r.json() as Folder & { error?: string }
+    if (!r.ok) throw new Error(body.error ?? 'Could not create folder')
+    setFolders((list) => byName([...list, body]))
+    return body
+  }, [])
+
+  const updateFolder = useCallback(async (id: string, patch: FolderUpdate): Promise<void> => {
+    const r = await fetch(`/api/folders/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+    })
+    const body = await r.json() as Folder & { error?: string }
+    if (!r.ok) throw new Error(body.error ?? 'Could not update folder')
+    setFolders((list) => byName(list.map((f) => (f.id === id ? body : f))))
+  }, [])
+
+  const deleteFolder = useCallback(async (id: string): Promise<void> => {
+    const r = await fetch(`/api/folders/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    if (!r.ok) throw new Error('Could not delete folder')
+    setFolders((list) => list.filter((f) => f.id !== id))
+  }, [])
 
   // The latest store, for applying events in order as they arrive -- each
   // one builds on the last, and some decide whether to re-fetch.
@@ -289,6 +341,22 @@ export default function useServerState(): ServerState {
     if (id) await patchChat(id, { memory: value })
   }, [])
 
+  const setMemorySelection = useCallback(async (id: string, value: string[] | null) => {
+    await patchChat(id, { memorySelection: value })
+  }, [])
+
+  const setStarred = useCallback(async (id: string, value: boolean) => {
+    await patchChat(id, { starred: value })
+  }, [])
+
+  const setFolder = useCallback(async (id: string, folderId: string | null) => {
+    await patchChat(id, { folderId })
+  }, [])
+
+  const setTemporary = useCallback(async (id: string, value: boolean) => {
+    await patchChat(id, { temporary: value })
+  }, [])
+
   const saveConfig = useCallback(async (patch: Partial<PublicConfig> & { apiToken?: string }) => {
     const r = await fetch('/api/config', {
       method: 'PUT',
@@ -299,7 +367,12 @@ export default function useServerState(): ServerState {
   }, [])
 
   return {
-    conversations: [...store.items].sort((a, b) => b.updatedAt - a.updatedAt),
+    // Starred chats first, each group newest first. `starred` is optional --
+    // Number(undefined) is NaN, which is falsy and silently skips the whole
+    // comparison, so this needs Boolean() first, not just Number().
+    conversations: [...store.items].sort(
+      (a, b) => Number(Boolean(b.starred)) - Number(Boolean(a.starred)) || b.updatedAt - a.updatedAt,
+    ),
     activeId: store.activeId,
     active,
     loadingActive: active?.messagesOmitted === true,
@@ -319,6 +392,14 @@ export default function useServerState(): ServerState {
     renameChat,
     setReasoning,
     setMemory,
+    setMemorySelection,
+    setStarred,
+    setFolder,
+    setTemporary,
+    folders,
+    createFolder,
+    updateFolder,
+    deleteFolder,
     saveConfig,
     refreshConfig,
   }

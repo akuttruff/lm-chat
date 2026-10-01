@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Drawer } from 'vaul'
 import { motion } from 'motion/react'
-import { Trash2, Pencil, MessageSquare } from 'lucide-react'
+import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Conversation } from '../types.ts'
+import type { Conversation, Folder } from '../types.ts'
 import type { ChatStatus } from '../hooks/useServerState.ts'
 
 interface RowProps {
@@ -15,12 +15,15 @@ interface RowProps {
   onDelete: (id: string) => void
   onRestore: (conv: Conversation) => void
   onRename: (id: string, name: string) => void
+  onStar: (id: string, starred: boolean) => void
+  onOpenFolderPicker: (id: string) => void
 }
 
 interface ConversationListProps {
   open: boolean
   conversations: Conversation[]
   activeId: string | null
+  folders: Folder[]
   /** Chats with a reply in flight, by id. */
   working?: Record<string, ChatStatus>
   onOpen: (id: string) => void
@@ -28,21 +31,23 @@ interface ConversationListProps {
   /** Undo a deletion, from the copy the list still holds. */
   onRestore?: (conv: Conversation) => void
   onRename: (id: string, name: string) => void
+  onStar?: (id: string, starred: boolean) => void
+  onOpenFolderPicker?: (id: string) => void
   onClose: () => void
 }
 
-function relTime(ts: number): string {
-  const s = Math.floor((Date.now() - ts) / 1000)
-  if (s < 60) return 'now'
-  if (s < 3600) return `${Math.floor(s / 60)}m`
-  if (s < 86400) return `${Math.floor(s / 3600)}h`
-  if (s < 604800) return `${Math.floor(s / 86400)}d`
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+/** "Sep 28, 2026, 8:15 PM" -- unambiguous, unlike a relative "2h" that keeps sliding as you read the list. */
+export function fullDateTime(ts: number): string {
+  return new Date(ts).toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  })
 }
 
-const ACTIONS_WIDTH = 132
+// Four revealed buttons now (star, folder, rename, delete) -- wide enough
+// that the drag can't be dismissed by a swipe that only clears a shorter span.
+const ACTIONS_WIDTH = 246
 
-function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: RowProps) {
+function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename, onStar, onOpenFolderPicker }: RowProps) {
   const [dragged, setDragged] = useState(false)
   // Only the open chat's messages are loaded; the rest carry a count.
   const count = conv.messageCount ?? conv.messages.length
@@ -61,6 +66,8 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: 
     onDelete(conv.id)
     toast('Chat deleted', { action: { label: 'Undo', onClick: () => onRestore(snapshot) } })
   }
+  const toggleStar = (): void => onStar(conv.id, !conv.starred)
+  const openFolderPicker = (): void => { setDragged(false); onOpenFolderPicker(conv.id) }
 
   return (
     <div className="conv-row-wrap">
@@ -73,6 +80,17 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: 
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragged(false)
         }}
       >
+        <button
+          type="button"
+          className={conv.starred ? 'starred' : ''}
+          aria-label={conv.starred ? `Unstar ${conv.name || 'New chat'}` : `Star ${conv.name || 'New chat'}`}
+          onClick={toggleStar}
+        >
+          <Star size={15} aria-hidden="true" fill={conv.starred ? 'currentColor' : 'none'} />
+        </button>
+        <button type="button" aria-label={`Move ${conv.name || 'New chat'} to a folder`} onClick={openFolderPicker}>
+          <FolderInput size={15} aria-hidden="true" />
+        </button>
         <button type="button" aria-label={`Rename ${conv.name || 'New chat'}`} onClick={rename}>
           <Pencil size={15} aria-hidden="true" />
         </button>
@@ -107,6 +125,16 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: 
       >
         <MessageSquare size={15} className="conv-glyph" aria-hidden="true" />
         <span className="conv-name">{conv.name || 'New chat'}</span>
+        {/* A plain indicator, not a control: the actual toggle lives in the
+            actions above/below, reachable by swipe, hover or keyboard focus --
+            two interactive buttons can't nest inside this row's own button. */}
+        {conv.starred && <Star size={12} className="conv-star" aria-hidden="true" fill="currentColor" />}
+        {/* Nothing about a temporary chat is on disk -- worth knowing at a glance, not just while you're in it. */}
+        {conv.temporary && (
+          <span className="conv-temporary" role="img" aria-label="Temporary: not being saved">
+            <Ghost size={12} aria-hidden="true" />
+          </span>
+        )}
         {status ? (
           <span className="conv-working" title={status.text}>
             <span className="dot pending" aria-hidden="true" />
@@ -114,7 +142,7 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: 
           </span>
         ) : (
           <span className="conv-time">
-            {count > 0 ? `${count} msgs · ` : ''}{relTime(conv.updatedAt)}
+            {count > 0 ? `${count} msgs · ` : ''}{fullDateTime(conv.updatedAt)}
           </span>
         )}
       </motion.button>
@@ -124,6 +152,25 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: 
       {/* aria-hidden: a mouse-only duplicate of the actions above, which
           keyboards and screen readers already reach. */}
       <div className="conv-hover-actions" aria-hidden="true">
+        <button
+          type="button"
+          tabIndex={-1}
+          className={conv.starred ? 'starred' : ''}
+          aria-label={conv.starred ? `Unstar ${conv.name || 'New chat'}` : `Star ${conv.name || 'New chat'}`}
+          title={conv.starred ? 'Unstar' : 'Star'}
+          onClick={toggleStar}
+        >
+          <Star size={14} aria-hidden="true" fill={conv.starred ? 'currentColor' : 'none'} />
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={`Move ${conv.name || 'New chat'} to a folder`}
+          title="Move to folder"
+          onClick={openFolderPicker}
+        >
+          <FolderInput size={14} aria-hidden="true" />
+        </button>
         <button type="button" tabIndex={-1} aria-label={`Rename ${conv.name || 'New chat'}`} title="Rename" onClick={rename}>
           <Pencil size={14} aria-hidden="true" />
         </button>
@@ -135,8 +182,44 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename }: 
   )
 }
 
+interface Section {
+  key: string
+  /** Null for the flat, no-folders-in-use case: no header at all. */
+  label: string | null
+  chats: Conversation[]
+}
+
+/**
+ * `conversations` arrives already sorted (starred first, then recency); this
+ * only regroups it by folder, so each section keeps that same order inside
+ * it. A folder with nothing in it isn't shown here -- it's still there to
+ * file something into, from the picker, just not a section to scroll past.
+ */
+function sectionsOf(conversations: Conversation[], folders: Folder[]): Section[] {
+  const byFolder = new Map<string, Conversation[]>()
+  const unfiled: Conversation[] = []
+  const known = new Set(folders.map((f) => f.id))
+  for (const c of conversations) {
+    if (c.folderId && known.has(c.folderId)) {
+      const list = byFolder.get(c.folderId)
+      if (list) list.push(c)
+      else byFolder.set(c.folderId, [c])
+    } else {
+      unfiled.push(c)
+    }
+  }
+  const sections: Section[] = []
+  for (const f of folders) {
+    const chats = byFolder.get(f.id)
+    if (chats?.length) sections.push({ key: f.id, label: f.name, chats })
+  }
+  if (unfiled.length) sections.push({ key: '__unfiled', label: sections.length ? 'Unfiled' : null, chats: unfiled })
+  return sections
+}
+
 export default function ConversationList({
-  open, conversations, activeId, working = {}, onOpen, onDelete, onRestore = () => {}, onRename, onClose,
+  open, conversations, activeId, folders, working = {}, onOpen, onDelete, onRestore = () => {}, onRename,
+  onStar = () => {}, onOpenFolderPicker = () => {}, onClose,
 }: ConversationListProps) {
   return (
     <Drawer.Root open={open} onOpenChange={(v) => !v && onClose()}>
@@ -146,23 +229,30 @@ export default function ConversationList({
           <div className="drawer-handle" />
           <Drawer.Title className="drawer-title">Chats</Drawer.Title>
           <div className="conv-list drawer-scroll" data-vaul-no-drag>
-            {conversations.map((c) => (
-              <Row
-                key={c.id}
-                conv={c}
-                isActive={c.id === activeId}
-                status={working[c.id]}
-                onOpen={(id) => { onOpen(id); onClose() }}
-                onDelete={onDelete}
-                onRestore={onRestore}
-                onRename={onRename}
-              />
+            {sectionsOf(conversations, folders).map((section) => (
+              <div key={section.key}>
+                {section.label && <div className="conv-section-head">{section.label}</div>}
+                {section.chats.map((c) => (
+                  <Row
+                    key={c.id}
+                    conv={c}
+                    isActive={c.id === activeId}
+                    status={working[c.id]}
+                    onOpen={(id) => { onOpen(id); onClose() }}
+                    onDelete={onDelete}
+                    onRestore={onRestore}
+                    onRename={onRename}
+                    onStar={onStar}
+                    onOpenFolderPicker={onOpenFolderPicker}
+                  />
+                ))}
+              </div>
             ))}
           </div>
           <div className="drawer-actions">
             <div className="hint drawer-foot">
-              <span className="touch-only">Swipe a row left to rename or delete.</span>
-              <span className="pointer-only">Hover a row to rename or delete; Delete removes the focused chat.</span>
+              <span className="touch-only">Swipe a row left to star, move, rename or delete.</span>
+              <span className="pointer-only">Hover a row to star, move, rename or delete; Delete removes the focused chat.</span>
             </div>
           </div>
         </Drawer.Content>

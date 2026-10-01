@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Toaster } from 'sonner'
-import ConversationList from './ConversationList.tsx'
-import type { Conversation } from '../types.ts'
+import ConversationList, { fullDateTime } from './ConversationList.tsx'
+import type { Conversation, Folder } from '../types.ts'
 
 const now = Date.now()
 const convs: Conversation[] = [
@@ -16,9 +16,12 @@ function setup(overrides = {}) {
     open: true,
     conversations: convs,
     activeId: 'a',
+    folders: [] as Folder[],
     onOpen: vi.fn(),
     onDelete: vi.fn(),
     onRename: vi.fn(),
+    onStar: vi.fn(),
+    onOpenFolderPicker: vi.fn(),
     onClose: vi.fn(),
     ...overrides,
   }
@@ -33,25 +36,25 @@ describe('ConversationList', () => {
     expect(screen.getByText('New chat')).toBeInTheDocument()
   })
 
-  it('shows relative times', async () => {
+  it('shows the full date and time, not a relative one that keeps sliding', async () => {
     setup()
     await screen.findByText('Astrology forecast')
-    expect(screen.getByText('1m')).toBeInTheDocument()
-    expect(screen.getByText('2h')).toBeInTheDocument()
+    expect(screen.getByText(fullDateTime(convs[0]!.updatedAt))).toBeInTheDocument()
+    expect(screen.getByText(fullDateTime(convs[1]!.updatedAt))).toBeInTheDocument()
   })
 
   it('counts a chat held only in outline, without its messages', async () => {
     const outlined = convs.map((c) => (c.id === 'a' ? { ...c, messages: [], messageCount: 12, messagesOmitted: true } : c))
     setup({ conversations: outlined })
-    expect(await screen.findByText('12 msgs · 1m')).toBeInTheDocument()
+    expect(await screen.findByText(`12 msgs · ${fullDateTime(convs[0]!.updatedAt)}`)).toBeInTheDocument()
   })
 
-  it('shows the message count before the time, for a thread that has messages', async () => {
+  it('shows the message count before the date, for a thread that has messages', async () => {
     const withMessages = convs.map((c) => (
       c.id === 'a' ? { ...c, messages: Array.from({ length: 5 }, (_, i) => ({ id: i, role: 'user' as const, text: 'hi' })) } : c
     ))
     setup({ conversations: withMessages })
-    expect(await screen.findByText('5 msgs · 1m')).toBeInTheDocument()
+    expect(await screen.findByText(`5 msgs · ${fullDateTime(convs[0]!.updatedAt)}`)).toBeInTheDocument()
   })
 
   it('marks chats that are replying or queued in place of their time', async () => {
@@ -63,7 +66,7 @@ describe('ConversationList', () => {
     })
     expect(await screen.findByText('replying')).toBeInTheDocument()
     expect(screen.getByText('queued')).toBeInTheDocument()
-    expect(screen.queryByText('1m')).not.toBeInTheDocument()
+    expect(screen.queryByText(fullDateTime(convs[0]!.updatedAt))).not.toBeInTheDocument()
   })
 
   it('opens a conversation and closes the drawer', async () => {
@@ -78,6 +81,41 @@ describe('ConversationList', () => {
     setup()
     expect(await screen.findByRole('button', { name: /rename Astrology forecast/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /delete Astrology forecast/i })).toBeInTheDocument()
+  })
+
+  it('shows a badge on a starred chat, and none on an unstarred one', async () => {
+    const starred = convs.map((c) => (c.id === 'a' ? { ...c, starred: true } : c))
+    setup({ conversations: starred })
+    const row = (await screen.findByText('Astrology forecast')).closest('.conv-row')!
+    expect(row.querySelector('.conv-star')).toBeInTheDocument()
+    const other = screen.getByText('New chat').closest('.conv-row')!
+    expect(other.querySelector('.conv-star')).not.toBeInTheDocument()
+  })
+
+  it('badges a temporary chat, so it reads as unsaved without opening it', async () => {
+    const temp = convs.map((c) => (c.id === 'a' ? { ...c, temporary: true } : c))
+    setup({ conversations: temp })
+    const row = (await screen.findByText('Astrology forecast')).closest('.conv-row')!
+    expect(row.querySelector('.conv-temporary')).toBeInTheDocument()
+    const other = screen.getByText('New chat').closest('.conv-row')!
+    expect(other.querySelector('.conv-temporary')).not.toBeInTheDocument()
+  })
+
+  it('stars an unstarred chat and unstars a starred one', async () => {
+    const user = userEvent.setup()
+    const onStar = vi.fn()
+    const props = {
+      open: true, activeId: 'a', folders: [] as Folder[],
+      onOpen: vi.fn(), onDelete: vi.fn(), onRename: vi.fn(), onClose: vi.fn(), onStar,
+    }
+    const { rerender } = render(<ConversationList {...props} conversations={convs} />)
+    await user.click(await screen.findByRole('button', { name: 'Star Astrology forecast' }))
+    expect(onStar).toHaveBeenCalledWith('a', true)
+
+    const starred = convs.map((c) => (c.id === 'a' ? { ...c, starred: true } : c))
+    rerender(<ConversationList {...props} conversations={starred} />)
+    await user.click(await screen.findByRole('button', { name: 'Unstar Astrology forecast' }))
+    expect(onStar).toHaveBeenLastCalledWith('a', false)
   })
 
   it('deletes a conversation', async () => {
@@ -140,5 +178,40 @@ describe('ConversationList', () => {
   it('renders nothing when closed', () => {
     setup({ open: false })
     expect(screen.queryByText('Astrology forecast')).not.toBeInTheDocument()
+  })
+
+  it('opens the folder picker for the chat whose button was pressed', async () => {
+    const user = userEvent.setup()
+    const props = setup()
+    await user.click(await screen.findByRole('button', { name: /move Astrology forecast to a folder/i }))
+    expect(props.onOpenFolderPicker).toHaveBeenCalledWith('a')
+  })
+
+  describe('grouped by folder', () => {
+    const folders: Folder[] = [{ id: 'f1', name: 'Astrology', createdAt: 1 }, { id: 'f2', name: 'Empty', createdAt: 2 }]
+
+    it('is a flat list, no headers, when nothing is filed', async () => {
+      setup({ folders })
+      await screen.findByText('Astrology forecast')
+      expect(screen.queryByText('Astrology', { selector: '.conv-section-head' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Unfiled')).not.toBeInTheDocument()
+    })
+
+    it('groups filed chats under their folder, and the rest under Unfiled', async () => {
+      const filed = convs.map((c) => (c.id === 'a' ? { ...c, folderId: 'f1' } : c))
+      setup({ folders, conversations: filed })
+      expect(await screen.findByText('Astrology', { selector: '.conv-section-head' })).toBeInTheDocument()
+      expect(screen.getByText('Unfiled')).toBeInTheDocument()
+      // An empty folder (Empty, f2) gets no section -- nothing to scroll past for it.
+      expect(screen.queryByText('Empty')).not.toBeInTheDocument()
+    })
+
+    it('treats a folder id that no longer exists as unfiled, rather than dropping the chat', async () => {
+      const stale = convs.map((c) => (c.id === 'a' ? { ...c, folderId: 'gone' } : c))
+      setup({ folders, conversations: stale })
+      expect(await screen.findByText('Astrology forecast')).toBeInTheDocument()
+      // Unfiled, alongside "b" -- not its own stray section, and not dropped.
+      expect(document.querySelectorAll('.conv-section-head')).toHaveLength(0)
+    })
   })
 })

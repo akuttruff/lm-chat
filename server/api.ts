@@ -6,6 +6,7 @@ import { Bus } from './bus.ts'
 import { Engine, newEngineState } from './engine.ts'
 import type { EngineState } from './engine.ts'
 import { Store } from './store.ts'
+import type { FolderPatch } from './store.ts'
 import { MemoryInputError, Memories } from './memory.ts'
 import { readModelConfig } from './model-config.ts'
 import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
@@ -186,11 +187,15 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     }
 
     // --- models (proxied with the server's token) -----------------------
+    // LM Studio's own list, not the OpenAI-compatible one: every LLM it has
+    // downloaded, with which are loaded right now. An unloaded one is fine to
+    // pick -- LM Studio loads it when the first message asks for it.
     if (url === '/api/models' && method === 'GET') {
       const cfg = store.getConfig()
       const base = cfg.lmStudioUrl.replace(/\/+$/, '')
-      void fetch(`${base}/v1/models`, {
+      void fetch(`${base}/api/v1/models`, {
         headers: cfg.apiToken ? { Authorization: `Bearer ${cfg.apiToken.trim()}` } : {},
+        signal: AbortSignal.timeout(5000),
       })
         .then(async (r) => {
           if (!r.ok) {
@@ -199,13 +204,23 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
             try {
               message = (JSON.parse(text) as { error?: { message?: string } }).error?.message || message
             } catch { /* not JSON */ }
-            return json(res, 200, { ok: false, models: [], error: message })
+            return json(res, 200, { ok: false, models: [], loaded: [], error: message })
           }
-          const data = await r.json() as { data?: { id: string }[] }
-          return json(res, 200, { ok: true, models: (data.data || []).map((m) => m.id), error: null })
+          const data = await r.json() as { models?: { type?: string; key?: string; loaded_instances?: unknown[] }[] }
+          const llms = (data.models || [])
+            .filter((m) => m.type === 'llm' && m.key)
+            .map((m) => ({ key: m.key!, loaded: Boolean(m.loaded_instances?.length) }))
+            // Loaded first, then by name: what you can use right now is at the top.
+            .sort((a, b) => Number(b.loaded) - Number(a.loaded) || a.key.localeCompare(b.key))
+          return json(res, 200, {
+            ok: true,
+            models: llms.map((m) => m.key),
+            loaded: llms.filter((m) => m.loaded).map((m) => m.key),
+            error: null,
+          })
         })
         .catch((err: Error) => json(res, 200, {
-          ok: false, models: [],
+          ok: false, models: [], loaded: [],
           error: `Couldn't reach LM Studio at ${base}. (${err.message})`,
         }))
       return undefined
@@ -235,6 +250,44 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       }
     }
 
+    // --- folders --------------------------------------------------------
+    if (url === '/api/folders' && method === 'GET') {
+      return json(res, 200, store.listFolders())
+    }
+    if (url === '/api/folders' && method === 'POST') {
+      void readBody(req).then((body) => json(res, 201, store.createFolder((body as { name?: unknown }).name)))
+        .catch((err: Error) => json(res, 400, { error: err.message }))
+      return undefined
+    }
+    const folderMatch = /^\/api\/folders\/([^/]+)$/.exec(url)
+    if (folderMatch) {
+      const id = decodeURIComponent(folderMatch[1]!)
+      if (method === 'PATCH') {
+        void readBody(req).then((body) => {
+          const { name, reasoning, mcpTools } = body as FolderPatch
+          const updated = store.updateFolder(id, { name, reasoning, mcpTools })
+          return updated ? json(res, 200, updated) : json(res, 404, { error: 'no such folder' })
+        }).catch((err: Error) => json(res, 400, { error: err.message }))
+        return undefined
+      }
+      if (method === 'DELETE') {
+        // Whichever chats were in it, so their cleared folderId can be
+        // broadcast -- other tabs and devices otherwise keep pointing at a
+        // folder id that no longer resolves to anything.
+        const affected = store.getConversations().items.filter((c) => c.folderId === id).map((c) => c.id)
+        const removed = store.deleteFolder(id)
+        if (removed) {
+          for (const convId of affected) {
+            const conv = store.get(convId)
+            if (conv) bus.send({ type: 'patch', payload: { conversationId: convId, meta: metaOf(conv) } })
+          }
+        }
+        return removed
+          ? json(res, 200, { ok: true })
+          : json(res, 404, { error: 'no such folder' })
+      }
+    }
+
     // --- conversations --------------------------------------------------
     if (url === '/api/chats' && method === 'GET') {
       return bigJson(req, res, 200, listView(store.getConversations()))
@@ -243,6 +296,12 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       const conv = store.create()
       bus.send({ type: 'created', payload: { conversation: conv, activeId: store.getConversations().activeId } })
       return json(res, 200, conv)
+    }
+    // A one-off backfill, not something the app offers: name the chats that
+    // still carry their placeholder names (from before titles were written).
+    // Titles land as patch events. `curl -X POST localhost:8010/api/chats/retitle`.
+    if (url === '/api/chats/retitle' && method === 'POST') {
+      return json(res, 202, engine.retitleAll())
     }
     if (url === '/api/chats/restore' && method === 'POST') {
       void readBody(req).then((body) => {

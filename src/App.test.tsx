@@ -19,7 +19,7 @@ const emit = (items: Conversation[], activeId: string | null = 'c1'): void => {
 }
 
 /** Records every request the passive UI makes. */
-function stubApi(config: Record<string, unknown> = {}) {
+function stubApi(config: Record<string, unknown> = {}, folders: { id: string; name: string; createdAt: number }[] = []) {
   const calls: { url: string; init?: RequestInit }[] = []
   vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
     calls.push({ url, init })
@@ -35,6 +35,9 @@ function stubApi(config: Record<string, unknown> = {}) {
     }
     if (url.startsWith('/api/model-config')) {
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ found: false, reasoning: null, thinking: null }) })
+    }
+    if (url === '/api/folders' && (init?.method ?? 'GET') === 'GET') {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(folders) })
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
   }))
@@ -165,5 +168,47 @@ describe('App', () => {
     emit([conv()])
     act(() => { FakeEventSource.latest().onerror?.() })
     expect(screen.getByText('reconnecting...')).toBeInTheDocument()
+  })
+
+  describe('filing a chat into a folder from the composer', () => {
+    it('shows the placeholder for an unfiled chat, and the real name for a filed one', async () => {
+      stubApi({}, [{ id: 'f1', name: 'Astrology', createdAt: 1 }])
+      render(<App />)
+      await ready()
+      emit([conv({ folderId: 'f1' })])
+      expect(await screen.findByRole('button', { name: 'Folder: Astrology' })).toBeInTheDocument()
+
+      emit([conv({ folderId: null })])
+      expect(await screen.findByRole('button', { name: 'Folder: Folder' })).toBeInTheDocument()
+    })
+
+    it('opens the picker for the active chat and assigns the folder tapped', async () => {
+      const user = userEvent.setup()
+      const calls = stubApi({}, [{ id: 'f1', name: 'Astrology', createdAt: 1 }])
+      render(<App />)
+      await ready()
+      emit([conv({ id: 'c1' })])
+      await user.click(await screen.findByRole('button', { name: 'Folder: Folder' }))
+      await user.click(await screen.findByRole('button', { name: 'Astrology' }))
+      const patch = calls.find((c) => c.url === '/api/chats/c1' && String(c.init?.body).includes('folderId'))
+      expect(JSON.parse(String(patch!.init?.body))).toEqual({ folderId: 'f1' })
+    })
+  })
+
+  describe('making a chat temporary from the composer', () => {
+    it('reflects the active chat\'s state, and toggles it', async () => {
+      const user = userEvent.setup()
+      const calls = stubApi()
+      render(<App />)
+      await ready()
+      emit([conv({ id: 'c1', temporary: false })])
+      const chip = await screen.findByRole('button', { name: /save this chat normally/i })
+      await user.click(chip)
+      const patch = calls.find((c) => c.url === '/api/chats/c1' && String(c.init?.body).includes('temporary'))
+      expect(JSON.parse(String(patch!.init?.body))).toEqual({ temporary: true })
+
+      emit([conv({ id: 'c1', temporary: true })])
+      expect(await screen.findByRole('button', { name: /nothing is being saved/i })).toHaveAttribute('aria-pressed', 'true')
+    })
   })
 })

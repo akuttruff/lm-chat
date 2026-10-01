@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { ArrowUp, Brain, Gauge, Square } from 'lucide-react'
+import { ArrowUp, Brain, Folder, Gauge, Ghost, ListChecks, Square } from 'lucide-react'
 
 interface ComposerProps {
   onSend: (text: string) => void
@@ -8,13 +8,22 @@ interface ComposerProps {
   onStop?: () => void
   reasoningLabel?: string
   onOpenReasoning?: () => void
+  /** Nothing about this chat is saved while on. */
+  temporaryOn?: boolean
+  onToggleTemporary?: () => void
   /** Whether this chat uses memory; the chip toggles it. */
   memoryOn?: boolean
   onToggleMemory?: () => void
+  /** Pick which saved memories this chat uses, instead of the automatic set. Shown only while memory is on. */
+  onPickMemories?: () => void
+  /** This chat's folder, or "Folder" when it isn't in one. */
+  folderLabel?: string
+  onOpenFolderPicker?: () => void
 }
 
 export default function Composer({
-  onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning, memoryOn = false, onToggleMemory,
+  onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning, temporaryOn = false, onToggleTemporary,
+  memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker,
 }: ComposerProps) {
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -45,6 +54,9 @@ export default function Composer({
 
   return (
     <form className="composer" onSubmit={handleSubmit}>
+      {/* The chips get a row of their own, above the message box: five of
+          them beside it left a phone a sliver to type in. */}
+      <div className="composer-chips">
       {onOpenReasoning && (
         <button
           type="button"
@@ -56,6 +68,30 @@ export default function Composer({
           <span>{reasoningLabel}</span>
         </button>
       )}
+      {onToggleTemporary && (
+        <button
+          type="button"
+          className={`reasoning-chip temporary-chip${temporaryOn ? ' on' : ''}`}
+          onClick={onToggleTemporary}
+          aria-pressed={temporaryOn}
+          aria-label={temporaryOn ? 'Temporary chat -- nothing is being saved' : 'Save this chat normally -- tap to make it temporary'}
+          title={temporaryOn ? 'Temporary -- nothing is being saved. Tap to save normally.' : 'Tap to make this chat temporary: nothing will be saved.'}
+        >
+          {/* Filled when on, outline when off -- same cue as the memory chip. */}
+          <Ghost size={14} aria-hidden="true" fill={temporaryOn ? 'currentColor' : 'none'} />
+        </button>
+      )}
+      {onOpenFolderPicker && (
+        <button
+          type="button"
+          className="reasoning-chip folder-chip"
+          onClick={onOpenFolderPicker}
+          aria-label={`Folder: ${folderLabel}`}
+        >
+          <Folder size={14} aria-hidden="true" />
+          <span>{folderLabel}</span>
+        </button>
+      )}
       {onToggleMemory && (
         <button
           type="button"
@@ -65,38 +101,54 @@ export default function Composer({
           aria-label={memoryOn ? 'Memory on for this chat' : 'Memory off for this chat'}
           title={memoryOn ? 'Memory on -- tap to turn off for this chat' : 'Memory off -- tap to turn on for this chat'}
         >
-          <Brain size={14} aria-hidden="true" />
+          {/* Filled when on, outline when off -- a second cue alongside color,
+              so on/off doesn't come down to spotting a shade of green. */}
+          <Brain size={14} aria-hidden="true" fill={memoryOn ? 'currentColor' : 'none'} />
         </button>
       )}
-      <textarea
-        ref={textareaRef}
-        className="composer-input"
-        rows={1}
-        placeholder="Message"
-        autoComplete="off"
-        value={text}
-        onChange={(e) => { setText(e.target.value); autoGrow() }}
-        onKeyDown={handleKeyDown}
-      />
-      {busy && onStop ? (
+      {memoryOn && onPickMemories && (
         <button
           type="button"
-          className="send-btn stop"
-          onClick={onStop}
-          aria-label="Stop generating"
+          className="reasoning-chip memory-picker-chip"
+          onClick={onPickMemories}
+          aria-label="Choose which memories this chat uses"
+          title="Choose which memories this chat uses"
         >
-          <Square size={15} aria-hidden="true" />
-        </button>
-      ) : (
-        <button
-          type="submit"
-          className="send-btn"
-          disabled={disabled || !text.trim()}
-          aria-label="Send"
-        >
-          <ArrowUp size={18} aria-hidden="true" />
+          <ListChecks size={14} aria-hidden="true" />
         </button>
       )}
+      </div>
+      <div className="composer-row">
+        <textarea
+          ref={textareaRef}
+          className="composer-input"
+          rows={1}
+          placeholder="Message"
+          autoComplete="off"
+          value={text}
+          onChange={(e) => { setText(e.target.value); autoGrow() }}
+          onKeyDown={handleKeyDown}
+        />
+        {busy && onStop ? (
+          <button
+            type="button"
+            className="send-btn stop"
+            onClick={onStop}
+            aria-label="Stop generating"
+          >
+            <Square size={15} aria-hidden="true" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            className="send-btn"
+            disabled={disabled || !text.trim()}
+            aria-label="Send"
+          >
+            <ArrowUp size={18} aria-hidden="true" />
+          </button>
+        )}
+      </div>
     </form>
   )
 }

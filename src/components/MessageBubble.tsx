@@ -1,5 +1,5 @@
 import { Suspense, lazy, memo } from 'react'
-import type { MessageRole } from '../types.ts'
+import type { MessageRole, ReplyStats } from '../types.ts'
 
 const MarkdownText = lazy(() => import('./MarkdownText'))
 
@@ -11,10 +11,26 @@ interface MessageBubbleProps {
   instance?: string
   elapsed?: string
   streaming?: boolean
+  stats?: ReplyStats
+}
+
+/** 9003 reads better as 9.0K in a footer; small counts stay exact. */
+const compact = (n: number): string => (n >= 10000 ? `${(n / 1000).toFixed(1)}K` : String(n))
+
+/**
+ * The cost of a reply, in LM Studio's own numbers: generation speed, what
+ * went in and came out, and how long the first token took. That last one is
+ * the number to watch -- it's prompt reading plus any wait in the queue,
+ * the part of a slow reply that isn't the model writing.
+ */
+function statsLine(s: ReplyStats): string {
+  const thinking = s.reasoningTokens > 0 ? ` (${compact(s.reasoningTokens)} thinking)` : ''
+  return `${s.tokensPerSecond} tok/s · ${compact(s.inputTokens)} in / ${compact(s.outputTokens)} out${thinking}` +
+    ` · ${s.firstTokenSeconds}s to first token`
 }
 
 function MessageBubble({
-  role, text, model, instance, elapsed, streaming,
+  role, text, model, instance, elapsed, streaming, stats,
 }: MessageBubbleProps) {
   const isError = role === 'error'
   const wrapClass = `msg ${isError ? 'error' : role}`
@@ -40,7 +56,11 @@ function MessageBubble({
         {streaming && <span className="cursor" />}
       </div>
       {role === 'assistant' && !streaming && model && (
-        <div className="meta">{instance || model} &middot; {elapsed}s</div>
+        <div className="meta">
+          {instance || model} &middot; {elapsed}s
+          {stats && <span className="meta-stats"> &middot; {statsLine(stats)}</span>}
+          {stats?.capped && <span className="meta-capped"> &middot; cut off at the reply length cap</span>}
+        </div>
       )}
     </div>
   )

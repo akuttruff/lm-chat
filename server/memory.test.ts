@@ -71,4 +71,38 @@ describe('Memories', () => {
     expect(block).toMatch(/pass it to tools/)
     expect(block).toMatch(/how the user likes a kind of request handled/)
   })
+
+  describe('a hand-picked selection', () => {
+    beforeEach(() => {
+      seed([['a1', 'Born May 10, 1984', 1], ['b2', 'Lives in Seattle', 2], ['c3', 'Prefers short answers', 3]])
+    })
+
+    it('includes only the chosen ids, newest first, ignoring the rest', () => {
+      const { used, block } = new Memories(file).context(4000, ['b2', 'a1'])
+      expect(used.map((m) => m.id)).toEqual(['b2', 'a1'])
+      expect(block).toContain('[a1]')
+      expect(block).toContain('[b2]')
+      expect(block).not.toContain('[c3]')
+    })
+
+    it('skips an id that has since been forgotten, rather than erroring', () => {
+      // Newest first, like automatic -- not the order ids were passed in.
+      const { used } = new Memories(file).context(4000, ['a1', 'gone', 'c3'])
+      expect(used.map((m) => m.id)).toEqual(['c3', 'a1'])
+    })
+
+    it('an empty selection means none, not automatic -- and says so distinctly from truly nothing saved', () => {
+      const { used, block } = new Memories(file).context(4000, [])
+      expect(used).toEqual([])
+      expect(block).toMatch(/chose not to use any saved memories/)
+      expect(block).not.toMatch(/Nothing has been saved/)
+    })
+
+    it('falls back to automatic (newest that fit) when null or omitted', () => {
+      const auto = new Memories(file).context()
+      const explicitNull = new Memories(file).context(4000, null)
+      expect(auto.used.map((m) => m.id)).toEqual(['c3', 'b2', 'a1'])
+      expect(explicitNull.used.map((m) => m.id)).toEqual(auto.used.map((m) => m.id))
+    })
+  })
 })

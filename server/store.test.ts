@@ -22,6 +22,14 @@ const messageTexts = (conversationId: string): string[] => {
     db.close()
   }
 }
+const rawName = (id: string): string | undefined => {
+  const db = openRaw()
+  try {
+    return (db.prepare('SELECT name FROM conversations WHERE id = ?').get(id) as { name: string } | undefined)?.name
+  } finally {
+    db.close()
+  }
+}
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-store-'))
@@ -59,6 +67,16 @@ describe('conversations', () => {
     expect(reopened.get(id)!.messages[0]!.text).toBe('remember me')
   })
 
+  it("keeps a reply's stats, and reads a corrupt stats value as none", () => {
+    const id = store.getConversations().activeId!
+    const stats = { inputTokens: 9003, outputTokens: 747, reasoningTokens: 497, tokensPerSecond: 19.6, firstTokenSeconds: 1.8 }
+    store.setMessages(id, [msg('q'), { id: 'a', role: 'assistant', text: 'hi', stats }])
+    expect(new Store({ dir }).get(id)!.messages[1]!.stats).toEqual(stats)
+    const db = openRaw()
+    try { db.prepare("UPDATE messages SET stats = 'not json' WHERE id = 'a'").run() } finally { db.close() }
+    expect(new Store({ dir }).get(id)!.messages[1]!.stats).toBeUndefined()
+  })
+
   it('creates a new thread and switches to it', () => {
     const first = store.getConversations().activeId!
     store.setMessages(first, [msg('old')])
@@ -72,6 +90,16 @@ describe('conversations', () => {
     store.create()
     store.create()
     expect(store.getConversations().items).toHaveLength(1)
+  })
+
+  it('hands a reused empty thread back as a clean slate: unfiled, with no settings of its own', () => {
+    const id = store.getConversations().activeId!
+    const folder = store.createFolder('Astrology')
+    store.patch(id, { folderId: folder.id, reasoning: 'off', memory: true, memorySelection: ['m1'] })
+    const reused = store.create()
+    expect(reused.id).toBe(id)
+    expect(reused).toMatchObject({ folderId: null, reasoning: null, memory: null, memorySelection: null, temporary: false })
+    expect(new Store({ dir }).get(id)!.folderId).toBeNull()
   })
 
   it('clears stale server context when reusing an empty thread', () => {
@@ -315,6 +343,245 @@ describe('per-chat memory setting', () => {
       expect(upgraded.getConfig()).toMatchObject({ model: 'qwen', memoryDefault: 'off' })
       upgraded.patch('old', { memory: false })
       expect(new Store({ dir: oldDir }).get('old')!.memory).toBe(false)
+    } finally {
+      fs.rmSync(oldDir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('starring a chat', () => {
+  it('defaults to unstarred, saves on/off, and survives a restart', () => {
+    const id = store.getConversations().activeId!
+    expect(store.get(id)!.starred).toBe(false)
+    store.patch(id, { starred: true })
+    expect(new Store({ dir }).get(id)!.starred).toBe(true)
+    store.patch(id, { starred: 'yes' as never })
+    expect(store.get(id)!.starred).toBe(false)
+  })
+
+  it('adds the starred column to a database made before it existed, keeping its chats', () => {
+    const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-old-'))
+    try {
+      const db = new DatabaseSync(path.join(oldDir, 'lm-chat.sqlite'))
+      db.exec(`CREATE TABLE conversations (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL, response_id TEXT, reasoning TEXT, summary_text TEXT, summary_through TEXT, memory INTEGER);
+        CREATE TABLE config (id INTEGER PRIMARY KEY CHECK (id = 1), lm_studio_url TEXT NOT NULL DEFAULT 'http://127.0.0.1:1234',
+        api_token TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', system_prompt TEXT NOT NULL DEFAULT '',
+        mcp_tools TEXT NOT NULL DEFAULT '', context_length TEXT NOT NULL DEFAULT '', reasoning TEXT NOT NULL DEFAULT '',
+        stall_seconds TEXT NOT NULL DEFAULT '180', history_chars TEXT NOT NULL DEFAULT '24000', parallel TEXT NOT NULL DEFAULT '4',
+        memory_default TEXT NOT NULL DEFAULT 'off');
+        INSERT INTO conversations (id, name, created_at, updated_at) VALUES ('old', 'An old chat', 1, 2);
+        INSERT INTO config (id, model) VALUES (1, 'qwen');
+        PRAGMA user_version = 1;`)
+      db.close()
+      const upgraded = new Store({ dir: oldDir })
+      expect(upgraded.get('old')!.name).toBe('An old chat')
+      expect(upgraded.get('old')!.starred).toBe(false)
+      upgraded.patch('old', { starred: true })
+      expect(new Store({ dir: oldDir }).get('old')!.starred).toBe(true)
+    } finally {
+      fs.rmSync(oldDir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('a chat\'s hand-picked memory selection', () => {
+  it('defaults to automatic (null), saves an explicit list, and survives a restart', () => {
+    const id = store.getConversations().activeId!
+    expect(store.get(id)!.memorySelection).toBeNull()
+    store.patch(id, { memorySelection: ['a1', 'b2'] })
+    expect(new Store({ dir }).get(id)!.memorySelection).toEqual(['a1', 'b2'])
+    store.patch(id, { memorySelection: null })
+    expect(store.get(id)!.memorySelection).toBeNull()
+  })
+
+  it('treats anything but an array of strings as "go back to automatic"', () => {
+    const id = store.getConversations().activeId!
+    store.patch(id, { memorySelection: 'a1' as never })
+    expect(store.get(id)!.memorySelection).toBeNull()
+    store.patch(id, { memorySelection: [1, 2] as never })
+    expect(store.get(id)!.memorySelection).toBeNull()
+  })
+
+  it('an empty array is a real selection (none), distinct from automatic', () => {
+    const id = store.getConversations().activeId!
+    store.patch(id, { memorySelection: [] })
+    expect(new Store({ dir }).get(id)!.memorySelection).toEqual([])
+  })
+
+  it('adds the memory_selection column to a database made before it existed, keeping its chats', () => {
+    const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-old-'))
+    try {
+      const db = new DatabaseSync(path.join(oldDir, 'lm-chat.sqlite'))
+      db.exec(`CREATE TABLE conversations (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL, response_id TEXT, reasoning TEXT, summary_text TEXT, summary_through TEXT, memory INTEGER,
+        starred INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE config (id INTEGER PRIMARY KEY CHECK (id = 1), lm_studio_url TEXT NOT NULL DEFAULT 'http://127.0.0.1:1234',
+        api_token TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', system_prompt TEXT NOT NULL DEFAULT '',
+        mcp_tools TEXT NOT NULL DEFAULT '', context_length TEXT NOT NULL DEFAULT '', reasoning TEXT NOT NULL DEFAULT '',
+        stall_seconds TEXT NOT NULL DEFAULT '180', history_chars TEXT NOT NULL DEFAULT '24000', parallel TEXT NOT NULL DEFAULT '4',
+        memory_default TEXT NOT NULL DEFAULT 'off');
+        INSERT INTO conversations (id, name, created_at, updated_at) VALUES ('old', 'An old chat', 1, 2);
+        INSERT INTO config (id, model) VALUES (1, 'qwen');
+        PRAGMA user_version = 2;`)
+      db.close()
+      const upgraded = new Store({ dir: oldDir })
+      expect(upgraded.get('old')!.name).toBe('An old chat')
+      expect(upgraded.get('old')!.memorySelection).toBeNull()
+      upgraded.patch('old', { memorySelection: ['x'] })
+      expect(new Store({ dir: oldDir }).get('old')!.memorySelection).toEqual(['x'])
+    } finally {
+      fs.rmSync(oldDir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('folders', () => {
+  it('starts with none, and a fresh chat is unfiled', () => {
+    const id = store.getConversations().activeId!
+    expect(store.listFolders()).toEqual([])
+    expect(store.get(id)!.folderId).toBeNull()
+  })
+
+  it('creates, lists name-sorted, renames and deletes', () => {
+    const b = store.createFolder('Banter')
+    const a = store.createFolder('Astrology')
+    expect(store.listFolders()).toEqual([a, b])
+    const renamed = store.updateFolder(a.id, { name: '  Astro  ' })
+    expect(renamed).toEqual({ ...a, name: 'Astro' })
+    expect(store.listFolders().map((f) => f.name)).toEqual(['Astro', 'Banter'])
+    expect(store.deleteFolder(a.id)).toBe(true)
+    expect(store.listFolders()).toEqual([b])
+  })
+
+  it('refuses a blank or overlong name, and reports an unknown id', () => {
+    expect(() => store.createFolder('   ')).toThrow(/needs a name/)
+    expect(() => store.createFolder('x'.repeat(61))).toThrow(/60 characters/)
+    expect(store.updateFolder('nope', { name: 'x' })).toBeUndefined()
+    expect(store.deleteFolder('nope')).toBe(false)
+  })
+
+  it('keeps per-folder defaults, telling "no tools" apart from "same as Settings"', () => {
+    const f = store.createFolder('Astrology')
+    expect(f).toMatchObject({ reasoning: null, mcpTools: null })
+    // Fields left out of a patch stay as they were.
+    store.updateFolder(f.id, { reasoning: 'off' })
+    expect(store.getFolder(f.id)).toMatchObject({ name: 'Astrology', reasoning: 'off', mcpTools: null })
+    store.updateFolder(f.id, { mcpTools: '' })
+    expect(store.getFolder(f.id)!.mcpTools).toBe('')
+    store.updateFolder(f.id, { mcpTools: ' mcp/astrology-v2 ', reasoning: '' })
+    // '' reasoning means inherit and is stored as such; the tool list is trimmed.
+    expect(new Store({ dir }).getFolder(f.id)).toMatchObject({ reasoning: null, mcpTools: 'mcp/astrology-v2' })
+    expect(() => store.updateFolder(f.id, { reasoning: 42 })).toThrow(/must be text/)
+  })
+
+  it('files a chat, and clears it back to unfiled on invalid input', () => {
+    const id = store.getConversations().activeId!
+    const f = store.createFolder('Astrology')
+    store.patch(id, { folderId: f.id })
+    expect(new Store({ dir }).get(id)!.folderId).toBe(f.id)
+    store.patch(id, { folderId: 'not-a-real-folder' })
+    expect(store.get(id)!.folderId).toBeNull()
+  })
+
+  it('unfiles a chat -- in memory too, not just on disk -- when its folder is deleted', () => {
+    const id = store.getConversations().activeId!
+    const f = store.createFolder('Astrology')
+    store.patch(id, { folderId: f.id })
+    store.deleteFolder(f.id)
+    expect(store.get(id)!.folderId).toBeNull() // the live copy, no reopen
+    expect(new Store({ dir }).get(id)!.folderId).toBeNull() // and what's on disk
+  })
+
+  it('adds the folders table and folder_id column to a database made before they existed, keeping its chats', () => {
+    const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-old-'))
+    try {
+      const db = new DatabaseSync(path.join(oldDir, 'lm-chat.sqlite'))
+      db.exec(`CREATE TABLE conversations (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL, response_id TEXT, reasoning TEXT, summary_text TEXT, summary_through TEXT, memory INTEGER,
+        starred INTEGER NOT NULL DEFAULT 0, memory_selection TEXT);
+        CREATE TABLE config (id INTEGER PRIMARY KEY CHECK (id = 1), lm_studio_url TEXT NOT NULL DEFAULT 'http://127.0.0.1:1234',
+        api_token TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', system_prompt TEXT NOT NULL DEFAULT '',
+        mcp_tools TEXT NOT NULL DEFAULT '', context_length TEXT NOT NULL DEFAULT '', reasoning TEXT NOT NULL DEFAULT '',
+        stall_seconds TEXT NOT NULL DEFAULT '180', history_chars TEXT NOT NULL DEFAULT '24000', parallel TEXT NOT NULL DEFAULT '4',
+        memory_default TEXT NOT NULL DEFAULT 'off');
+        INSERT INTO conversations (id, name, created_at, updated_at) VALUES ('old', 'An old chat', 1, 2);
+        INSERT INTO config (id, model) VALUES (1, 'qwen');
+        PRAGMA user_version = 3;`)
+      db.close()
+      const upgraded = new Store({ dir: oldDir })
+      expect(upgraded.get('old')!.name).toBe('An old chat')
+      expect(upgraded.get('old')!.folderId).toBeNull()
+      expect(upgraded.listFolders()).toEqual([])
+      const f = upgraded.createFolder('Astrology')
+      upgraded.patch('old', { folderId: f.id })
+      expect(new Store({ dir: oldDir }).get('old')!.folderId).toBe(f.id)
+    } finally {
+      fs.rmSync(oldDir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('temporary chats', () => {
+  it('defaults to false, and nothing about it reaches disk while true', () => {
+    const id = store.getConversations().activeId!
+    expect(store.get(id)!.temporary).toBe(false)
+    store.patch(id, { temporary: true })
+    expect(store.get(id)!.temporary).toBe(true) // the live copy sees it at once
+
+    store.setMessages(id, [msg('a throwaway question')])
+    store.patch(id, { name: 'Renamed while temporary' })
+    expect(messageTexts(id)).toEqual([]) // never written
+    expect(new Store({ dir }).get(id)!.messages).toEqual([]) // and not there on reopen either
+    expect(new Store({ dir }).get(id)!.name).toBe('') // the rename never landed on disk
+  })
+
+  it('throws away whatever was already saved, including the name, the moment it turns on', () => {
+    const id = store.getConversations().activeId!
+    store.setMessages(id, [msg('a real question, saved normally')])
+    expect(messageTexts(id)).toEqual(['a real question, saved normally'])
+    expect(rawName(id)).not.toBe('')
+
+    store.patch(id, { temporary: true })
+    expect(messageTexts(id)).toEqual([]) // purged from disk right away
+    expect(rawName(id)).toBe('') // scrubbed too -- it's a snippet of the question
+    // The live conversation is untouched: the chat doesn't visibly change underneath you.
+    expect(store.get(id)!.messages.map((m) => m.text)).toEqual(['a real question, saved normally'])
+  })
+
+  it('saves everything held in memory, in one go, the moment it turns back off', () => {
+    const id = store.getConversations().activeId!
+    store.patch(id, { temporary: true })
+    store.setMessages(id, [msg('kept only in memory for now')])
+    expect(messageTexts(id)).toEqual([])
+
+    store.patch(id, { temporary: false })
+    expect(messageTexts(id)).toEqual(['kept only in memory for now'])
+    expect(new Store({ dir }).get(id)!.messages.map((m) => m.text)).toEqual(['kept only in memory for now'])
+  })
+
+  it('adds the temporary column to a database made before it existed, keeping its chats', () => {
+    const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-old-'))
+    try {
+      const db = new DatabaseSync(path.join(oldDir, 'lm-chat.sqlite'))
+      db.exec(`CREATE TABLE conversations (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL, response_id TEXT, reasoning TEXT, summary_text TEXT, summary_through TEXT, memory INTEGER,
+        starred INTEGER NOT NULL DEFAULT 0, memory_selection TEXT, folder_id TEXT);
+        CREATE TABLE folders (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL);
+        CREATE TABLE config (id INTEGER PRIMARY KEY CHECK (id = 1), lm_studio_url TEXT NOT NULL DEFAULT 'http://127.0.0.1:1234',
+        api_token TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', system_prompt TEXT NOT NULL DEFAULT '',
+        mcp_tools TEXT NOT NULL DEFAULT '', context_length TEXT NOT NULL DEFAULT '', reasoning TEXT NOT NULL DEFAULT '',
+        stall_seconds TEXT NOT NULL DEFAULT '180', history_chars TEXT NOT NULL DEFAULT '24000', parallel TEXT NOT NULL DEFAULT '4',
+        memory_default TEXT NOT NULL DEFAULT 'off');
+        INSERT INTO conversations (id, name, created_at, updated_at) VALUES ('old', 'An old chat', 1, 2);
+        INSERT INTO config (id, model) VALUES (1, 'qwen');
+        PRAGMA user_version = 4;`)
+      db.close()
+      const upgraded = new Store({ dir: oldDir })
+      expect(upgraded.get('old')!.name).toBe('An old chat')
+      expect(upgraded.get('old')!.temporary).toBe(false)
+      upgraded.patch('old', { temporary: true })
+      expect(upgraded.get('old')!.temporary).toBe(true)
     } finally {
       fs.rmSync(oldDir, { recursive: true, force: true })
     }

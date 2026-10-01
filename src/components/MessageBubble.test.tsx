@@ -36,6 +36,16 @@ describe('MessageBubble', () => {
     expect(screen.getByText(/qwen/)).toBeInTheDocument()
   })
 
+  it("shows what the reply cost in LM Studio's numbers, and when it was cut off", () => {
+    const stats = { inputTokens: 9003, outputTokens: 747, reasoningTokens: 497, tokensPerSecond: 19.6, firstTokenSeconds: 1.8 }
+    const { rerender } = render(<MessageBubble role="assistant" text="hi" model="qwen" elapsed="38.2" stats={stats} />)
+    expect(screen.getByText(/19.6 tok\/s · 9003 in \/ 747 out \(497 thinking\) · 1.8s to first token/)).toBeInTheDocument()
+    expect(screen.queryByText(/cut off/)).not.toBeInTheDocument()
+    rerender(<MessageBubble role="assistant" text="hi" model="qwen" elapsed="38.2" stats={{ ...stats, inputTokens: 111271, reasoningTokens: 0, capped: true }} />)
+    expect(screen.getByText(/111.3K in \/ 747 out · /)).toBeInTheDocument()
+    expect(screen.getByText(/cut off at the reply length cap/)).toBeInTheDocument()
+  })
+
   it('renders plain text while streaming, markdown once settled', async () => {
     // Re-parsing a long reply's markdown on every token is quadratic in its
     // length and was the main cost in a big conversation.

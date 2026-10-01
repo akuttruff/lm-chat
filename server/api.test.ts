@@ -148,6 +148,98 @@ describe('memories', () => {
   })
 })
 
+describe('retitling', () => {
+  it('answers at once with how many chats it will name', async () => {
+    const res = await send('/api/chats/retitle', 'POST')
+    expect(res.status).toBe(202)
+    expect(await res.json()).toEqual({ candidates: 0 })
+  })
+})
+
+describe('folders', () => {
+  it('creates, lists, renames and deletes', async () => {
+    const created = await send('/api/folders', 'POST', { name: 'Astrology' })
+    expect(created.status).toBe(201)
+    const folder = await created.json() as { id: string; name: string }
+    expect((await (await get('/api/folders')).json() as { name: string }[]).map((f) => f.name)).toEqual(['Astrology'])
+
+    const renamed = await send(`/api/folders/${folder.id}`, 'PATCH', { name: 'Astro' })
+    expect((await renamed.json() as { name: string }).name).toBe('Astro')
+
+    expect((await send(`/api/folders/${folder.id}`, 'DELETE')).status).toBe(200)
+    expect(await (await get('/api/folders')).json()).toEqual([])
+  })
+
+  it('reports bad input and unknown ids the same way other resources do', async () => {
+    expect((await send('/api/folders', 'POST', { name: '  ' })).status).toBe(400)
+    expect((await send('/api/folders/nope', 'PATCH', { name: 'x' })).status).toBe(404)
+    expect((await send('/api/folders/nope', 'DELETE')).status).toBe(404)
+  })
+
+  it("sets a folder's reasoning and tool defaults, keeping what a patch leaves out", async () => {
+    const folder = await (await send('/api/folders', 'POST', { name: 'Astrology' })).json() as { id: string }
+    const patched = await send(`/api/folders/${folder.id}`, 'PATCH', { reasoning: 'off', mcpTools: '' })
+    expect(await patched.json()).toMatchObject({ name: 'Astrology', reasoning: 'off', mcpTools: '' })
+    expect(await (await get('/api/folders')).json()).toMatchObject([{ reasoning: 'off', mcpTools: '' }])
+    expect((await send(`/api/folders/${folder.id}`, 'PATCH', { reasoning: 5 })).status).toBe(400)
+  })
+
+  it('files a chat into a folder through the same PATCH the rest of a chat is edited with', async () => {
+    const id = api.store.getConversations().activeId!
+    const folder = await (await send('/api/folders', 'POST', { name: 'Astrology' })).json() as { id: string }
+    await send(`/api/chats/${id}`, 'PATCH', { folderId: folder.id })
+    expect(api.store.get(id)!.folderId).toBe(folder.id)
+  })
+
+  it('unfiles a chat when its folder is deleted, and the chat list reflects it without a reload', async () => {
+    const id = api.store.getConversations().activeId!
+    const folder = await (await send('/api/folders', 'POST', { name: 'Astrology' })).json() as { id: string }
+    await send(`/api/chats/${id}`, 'PATCH', { folderId: folder.id })
+    await send(`/api/folders/${folder.id}`, 'DELETE')
+    const list = await (await get('/api/chats')).json() as ConversationStore
+    expect(list.items.find((c) => c.id === id)!.folderId).toBeNull()
+  })
+})
+
+describe('temporary chats', () => {
+  const rawName = (id: string): string => {
+    const db = new DatabaseSync(path.join(dir, 'lm-chat.sqlite'))
+    try {
+      return (db.prepare('SELECT name FROM conversations WHERE id = ?').get(id) as { name: string }).name
+    } finally {
+      db.close()
+    }
+  }
+
+  it('turns on through the same PATCH the rest of a chat is edited with, and the live copy reflects it at once', async () => {
+    const id = api.store.getConversations().activeId!
+    const patched = await send(`/api/chats/${id}`, 'PATCH', { temporary: true })
+    expect((await patched.json() as Conversation).temporary).toBe(true)
+    expect(api.store.get(id)!.temporary).toBe(true)
+  })
+
+  it('keeps new messages off disk while on, and saves everything held in memory the moment it turns off', async () => {
+    const id = api.store.getConversations().activeId!
+    await send(`/api/chats/${id}`, 'PATCH', { temporary: true })
+    api.store.setMessages(id, [{ id: 'm1', role: 'user', text: 'a throwaway question' }])
+    expect(rawName(id)).toBe('') // never written -- the name would echo the question
+
+    await send(`/api/chats/${id}`, 'PATCH', { temporary: false })
+    expect(rawName(id)).toBe('a throwaway question')
+  })
+
+  it('throws away whatever was already saved for a chat the moment it turns on', async () => {
+    const id = api.store.getConversations().activeId!
+    api.store.setMessages(id, [{ id: 'm1', role: 'user', text: 'a real, saved question' }])
+    expect(rawName(id)).toBe('a real, saved question')
+
+    await send(`/api/chats/${id}`, 'PATCH', { temporary: true })
+    expect(rawName(id)).toBe('')
+    // The live chat is untouched -- only what's on disk was thrown away.
+    expect(api.store.get(id)!.messages.map((m) => m.text)).toEqual(['a real, saved question'])
+  })
+})
+
 describe('loading chats on demand', () => {
   /** Two chats with history, the second one open. */
   const twoChats = async (): Promise<{ first: string; second: string }> => {
@@ -264,17 +356,23 @@ describe('turns', () => {
 })
 
 describe('models', () => {
-  it('proxies the model list using the server token', async () => {
+  it("proxies LM Studio's own model list using the server token: every LLM, loaded ones first", async () => {
     const f = vi.fn(() => Promise.resolve({
       ok: true, status: 200,
-      json: () => Promise.resolve({ data: [{ id: 'qwen' }] }),
+      json: () => Promise.resolve({ models: [
+        { type: 'llm', key: 'zeta', loaded_instances: [] },
+        { type: 'embedding', key: 'nomic', loaded_instances: [] },
+        { type: 'llm', key: 'qwen', loaded_instances: [{ id: 'qwen:1' }] },
+        { type: 'llm', key: 'alpha', loaded_instances: [] },
+      ] }),
       text: () => Promise.resolve(''),
     }))
     vi.stubGlobal('fetch', f)
     api.store.setConfig({ apiToken: 'sk-lm-TOKEN' })
-    const body = await (await get('/api/models')).json() as { ok: boolean; models: string[] }
-    expect(body).toMatchObject({ ok: true, models: ['qwen'] })
-    const init = (f.mock.calls[0] as unknown as [string, RequestInit])[1]
+    const body = await (await get('/api/models')).json() as { ok: boolean; models: string[]; loaded: string[] }
+    expect(body).toMatchObject({ ok: true, models: ['qwen', 'alpha', 'zeta'], loaded: ['qwen'] })
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toMatch(/\/api\/v1\/models$/)
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer sk-lm-TOKEN')
   })
 

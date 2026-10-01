@@ -5,7 +5,7 @@ import path from 'node:path'
 import { Bus } from './bus.ts'
 import {
   Engine, formatToolOutput, parseIntegrations, buildHistoryPrompt, planCompaction, summarizerInput,
-  newEngineState,
+  summaryTokenCap, newEngineState, cleanTitle,
 } from './engine.ts'
 import { Store } from './store.ts'
 import { Memories } from './memory.ts'
@@ -37,8 +37,11 @@ function streams(frames: string[], { status = 200 } = {}) {
   }))
 }
 
+// Auto-titling is off here unless a test turns it on: it makes a second
+// request after the first reply, which the tests of the reply itself don't
+// expect to see.
 function configure(patch: Partial<ServerConfig>): void {
-  store.setConfig({ model: 'qwen', apiToken: 'sk-lm-TOKEN', ...patch })
+  store.setConfig({ model: 'qwen', apiToken: 'sk-lm-TOKEN', autoTitle: 'off', ...patch })
 }
 
 const messages = (): Message[] => store.get(convId)!.messages
@@ -384,6 +387,7 @@ describe('failures', () => {
 describe('memory', () => {
   let memDir: string
   let memoryEngine: Engine
+  let remember: (id: string, text: string, at: number) => void
   beforeEach(() => {
     memDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-engine-memory-'))
     const file = path.join(memDir, 'memory.sqlite')
@@ -391,6 +395,11 @@ describe('memory', () => {
     db.exec('CREATE TABLE memories (id TEXT PRIMARY KEY, text TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)')
     db.prepare('INSERT INTO memories VALUES (?, ?, ?, ?)').run('a1', 'Favorite color is green', 1, 1)
     db.close()
+    remember = (id: string, text: string, at: number) => {
+      const d = new DatabaseSync(file)
+      d.prepare('INSERT INTO memories VALUES (?, ?, ?, ?)').run(id, text, at, at)
+      d.close()
+    }
     memoryEngine = new Engine(store, bus, () => Promise.resolve(null), newEngineState(), new Memories(file))
   })
   afterEach(() => fs.rmSync(memDir, { recursive: true, force: true }))
@@ -406,29 +415,86 @@ describe('memory', () => {
 
   it('is off by default: no memory tools, nothing remembered in the prompt', async () => {
     const body = await turn()
-    expect(plugins(body)).not.toContain('mcp/memory')
+    expect(plugins(body)).not.toContain('mcp/lm-chat-memory')
     expect(String(body.system_prompt ?? '')).not.toMatch(/green/)
   })
 
   it('when on, gives the model the memory tools and what it has saved', async () => {
     configure({ memoryDefault: 'on', systemPrompt: 'Be kind.' })
     const body = await turn()
-    expect(plugins(body)).toContain('mcp/memory')
+    expect(plugins(body)).toContain('mcp/lm-chat-memory')
     expect(String(body.system_prompt)).toMatch(/^Be kind\.[\s\S]*\[a1\] Favorite color is green/)
   })
 
   it('lets a chat turn it off even when the default is on, and on when it is off', async () => {
     configure({ memoryDefault: 'on' })
     store.patch(convId, { memory: false })
-    expect(plugins(await turn())).not.toContain('mcp/memory')
+    expect(plugins(await turn())).not.toContain('mcp/lm-chat-memory')
     configure({ memoryDefault: 'off' })
     store.patch(convId, { memory: true })
-    expect(plugins(await turn())).toContain('mcp/memory')
+    expect(plugins(await turn())).toContain('mcp/lm-chat-memory')
+  })
+
+  it('shows which memories were loaded as a card before the reply, without a tool call', async () => {
+    configure({ memoryDefault: 'on' })
+    await turn()
+    const card = messages().find((m) => m.role === 'tool')!
+    expect(card).toMatchObject({ name: 'memory', plugin: 'auto-loaded', failed: false })
+    expect(card.output).toMatch(/1 memory loaded into this reply:\n- Favorite color is green/)
+    expect(messages().map((m) => m.role)).toEqual(['user', 'tool', 'assistant'])
+  })
+
+  it('limits the prompt and the card to a chat\'s hand-picked memories, ignoring the rest', async () => {
+    remember('b2', 'Lives in Seattle', 2)
+    configure({ memoryDefault: 'on' })
+    store.patch(convId, { memorySelection: ['b2'] })
+    const body = await turn()
+    expect(String(body.system_prompt)).toMatch(/\[b2\] Lives in Seattle/)
+    expect(String(body.system_prompt)).not.toMatch(/Favorite color is green/)
+    const card = messages().find((m) => m.role === 'tool')!
+    expect(card.output).toMatch(/1 memory loaded into this reply:\n- Lives in Seattle/)
+  })
+
+  it('an empty selection loads nothing, distinct from automatic', async () => {
+    remember('b2', 'Lives in Seattle', 2)
+    configure({ memoryDefault: 'on' })
+    store.patch(convId, { memorySelection: [] })
+    const body = await turn()
+    expect(String(body.system_prompt)).toMatch(/chose not to use any saved memories/)
+    expect(messages().some((m) => m.role === 'tool')).toBe(false)
+  })
+
+  it('shows no card with memory off, or when nothing has been saved yet', async () => {
+    await turn()
+    expect(messages().some((m) => m.role === 'tool')).toBe(false)
+    configure({ memoryDefault: 'on' })
+    memoryEngine = new Engine(store, bus, () => Promise.resolve(null), newEngineState(), new Memories(path.join(memDir, 'none.sqlite')))
+    store.patch(convId, { memory: true })
+    await turn()
+    expect(messages().some((m) => m.role === 'tool')).toBe(false)
+  })
+
+  it('does not send the card back to the model on the next turn', async () => {
+    configure({ memoryDefault: 'on' })
+    await turn()
+    const body = await turn()
+    expect(String(body.system_prompt)).not.toMatch(/loaded into this reply/)
+    expect(String(body.system_prompt)).not.toMatch(/Tool memory returned/)
   })
 
   it('does not list the memory server twice when Settings already names it', async () => {
-    configure({ memoryDefault: 'on', mcpTools: 'mcp/memory, deep-research' })
-    expect(plugins(await turn())).toEqual(['mcp/memory', 'mcp/deep-research'])
+    configure({ memoryDefault: 'on', mcpTools: 'mcp/lm-chat-memory, deep-research' })
+    expect(plugins(await turn())).toEqual(['mcp/deep-research', 'mcp/lm-chat-memory'])
+  })
+
+  it('turns memory off for a chat even when Settings still lists it as a general tool', async () => {
+    // Regression: memory was left in mcpTools from before the per-chat
+    // toggle existed. The old code only ever added mcp/memory, never
+    // removed it, so it was in every chat's integrations no matter what
+    // the toggle said -- this is what that looked like.
+    configure({ memoryDefault: 'on', mcpTools: 'mcp/lm-chat-memory, deep-research' })
+    store.patch(convId, { memory: false })
+    expect(plugins(await turn())).toEqual(['mcp/deep-research'])
   })
 })
 
@@ -1111,5 +1177,251 @@ describe('parallel replies', () => {
     expect(store.get(other)!.messages.at(-1)!.text).toBe('Stopped.')
     releases[0]!()
     await first
+  })
+})
+
+describe('auto titles', () => {
+  /** A fetch that answers each call with the next set of frames. */
+  function sequence(...sets: string[][]) {
+    const enc = new TextEncoder()
+    let n = 0
+    return vi.fn(() => {
+      const frames = sets[Math.min(n++, sets.length - 1)]!
+      return Promise.resolve({
+        ok: true, status: 200, text: () => Promise.resolve(''),
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            for (const f of frames) controller.enqueue(enc.encode(f))
+            controller.close()
+          },
+        }),
+      })
+    })
+  }
+  const replyFrames = (text: string) => [evt({ type: 'message.delta', content: text }), evt({ type: 'message.end' }), evt({ type: 'chat.end', result: {} })]
+  const requestBody = (f: { mock: { calls: unknown[][] } }, i: number): Record<string, unknown> =>
+    JSON.parse(String((f.mock.calls[i]![1] as RequestInit).body)) as Record<string, unknown>
+
+  it('writes a title from the first exchange, on the background model, and only once', async () => {
+    const seen: string[] = []
+    engine = new Engine(store, bus, (config) => { seen.push(config.model); return Promise.resolve({ allowed: ['off', 'on'], default: 'on' }) })
+    configure({ autoTitle: 'on', backgroundModel: 'tiny-moe' })
+    const f = sequence(replyFrames('Clear skies, 72 and sunny.'), replyFrames('"Tomorrow\'s Weather."'), replyFrames('More sun.'))
+    vi.stubGlobal('fetch', f)
+    const sent = vi.spyOn(bus, 'send')
+
+    await engine.runTurn(convId, 'What is the forecast for tomorrow?')
+    expect(store.get(convId)!.name).toBe("Tomorrow's Weather")
+    const ask = requestBody(f, 1)
+    expect(ask.model).toBe('tiny-moe')
+    expect(ask.max_output_tokens).toBe(24)
+    expect(ask.reasoning).toBe('off')
+    // Dated with the chat's own day, so "today" in the chat can become a date in the title.
+    const started = new Date(store.get(convId)!.createdAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    expect(String(ask.input)).toMatch(new RegExp(`^Chat date: ${started}\\n\\nUser: What is the forecast[\\s\\S]*Assistant: Clear skies`))
+    expect(String(ask.system_prompt)).toMatch(/put that date in the title/)
+    expect(seen).toContain('tiny-moe')
+    // Other tabs learn the new name without a refresh.
+    expect(sent.mock.calls.some(([e]) => (e as { type: string; payload: { meta?: { name?: string } } }).type === 'patch'
+      && (e as { payload: { meta: { name: string } } }).payload.meta.name === "Tomorrow's Weather")).toBe(true)
+
+    // The next turn doesn't title again: one request, the reply itself.
+    await engine.runTurn(convId, 'And the day after?')
+    expect(f).toHaveBeenCalledTimes(3)
+    expect(store.get(convId)!.name).toBe("Tomorrow's Weather")
+  })
+
+  it('never replaces a name you typed, and does nothing when off, for a temporary chat, or without a reply', async () => {
+    configure({ autoTitle: 'on' })
+    store.patch(convId, { name: 'My weather chat' })
+    let f = sequence(replyFrames('Sunny.'))
+    vi.stubGlobal('fetch', f)
+    await engine.runTurn(convId, 'Forecast?')
+    expect(f).toHaveBeenCalledTimes(1)
+    expect(store.get(convId)!.name).toBe('My weather chat')
+
+    const off = store.create()
+    configure({ autoTitle: 'off' })
+    f = sequence(replyFrames('Sunny.'))
+    vi.stubGlobal('fetch', f)
+    await engine.runTurn(off.id, 'Forecast?')
+    expect(f).toHaveBeenCalledTimes(1)
+
+    configure({ autoTitle: 'on' })
+    const temp = store.create()
+    store.patch(temp.id, { temporary: true })
+    f = sequence(replyFrames('Sunny.'))
+    vi.stubGlobal('fetch', f)
+    await engine.runTurn(temp.id, 'Forecast?')
+    expect(f).toHaveBeenCalledTimes(1)
+
+    const silent = store.create()
+    f = sequence([evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', f)
+    await engine.runTurn(silent.id, 'Forecast?')
+    expect(f).toHaveBeenCalledTimes(1) // nothing to title from
+    expect(store.get(silent.id)!.name).toBe('Forecast?')
+  })
+
+  it('keeps the placeholder when the model answers with nothing usable', async () => {
+    configure({ autoTitle: 'on' })
+    vi.stubGlobal('fetch', sequence(replyFrames('Sunny.'), replyFrames('"..."')))
+    await engine.runTurn(convId, 'Forecast?')
+    expect(store.get(convId)!.name).toBe('Forecast?')
+  })
+
+  it('names the chats still on placeholder names when asked, even with automatic naming off, skipping ones you named', async () => {
+    configure({ autoTitle: 'off' })
+    const exchange = (q: string, a: string): Message[] => [{ id: `u-${q}`, role: 'user', text: q }, { id: `a-${q}`, role: 'assistant', text: a }]
+    store.setMessages(convId, exchange('How do I brew coffee?', 'Grind, then pour.'))
+    const tea = store.create()
+    store.setMessages(tea.id, exchange('How long to steep tea?', 'Three minutes.'))
+    const named = store.create()
+    store.setMessages(named.id, exchange('Anything?', 'Something.'))
+    store.patch(named.id, { name: 'Keep me' })
+    const f = sequence(replyFrames('Tea Steeping Time'), replyFrames('Coffee Brewing'))
+    vi.stubGlobal('fetch', f)
+
+    expect(engine.retitleAll()).toEqual({ candidates: 2 })
+    await vi.waitFor(() => expect(f).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => {
+      const names = [store.get(tea.id)!.name, store.get(convId)!.name].sort()
+      expect(names).toEqual(['Coffee Brewing', 'Tea Steeping Time'])
+    })
+    expect(store.get(named.id)!.name).toBe('Keep me')
+    // Nothing left to do the second time round.
+    expect(engine.retitleAll()).toEqual({ candidates: 0 })
+  })
+
+  it('tidies what the model wrote into a title', () => {
+    expect(cleanTitle('"Tomorrow\'s Weather."')).toBe("Tomorrow's Weather")
+    expect(cleanTitle('Title: **Coffee History**\nSome explanation')).toBe('Coffee History')
+    expect(cleanTitle('  many   spaces  here ')).toBe('many spaces here')
+    expect(cleanTitle('x'.repeat(80))).toBe(`${'x'.repeat(60)}...`)
+    expect(cleanTitle('\n\n')).toBe('')
+  })
+})
+
+describe('folder defaults', () => {
+  const plugins = (body: Record<string, unknown>): string[] =>
+    ((body.integrations as { id: string }[] | undefined) ?? []).map((i) => i.id)
+  const turn = async (text: string): Promise<Record<string, unknown>> => {
+    const f = streams([evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', f)
+    await engine.runTurn(convId, text)
+    return bodyOf(f)
+  }
+
+  beforeEach(() => {
+    engine = new Engine(store, bus, () => Promise.resolve({ allowed: ['off', 'low', 'high'], default: 'low' }))
+    configure({ reasoning: 'high', mcpTools: 'mcp/deep-research' })
+  })
+
+  it("a chat in a folder takes the folder's reasoning and tools over Settings'", async () => {
+    const folder = store.createFolder('Astrology')
+    store.updateFolder(folder.id, { reasoning: 'off', mcpTools: 'mcp/astrology-v2' })
+    store.patch(convId, { folderId: folder.id })
+    const body = await turn('hi')
+    expect(body.reasoning).toBe('off')
+    expect(plugins(body)).toEqual(['mcp/astrology-v2'])
+  })
+
+  it("the chat's own level still wins over the folder's", async () => {
+    const folder = store.createFolder('Astrology')
+    store.updateFolder(folder.id, { reasoning: 'off' })
+    store.patch(convId, { folderId: folder.id, reasoning: 'low' })
+    expect((await turn('hi')).reasoning).toBe('low')
+  })
+
+  it("a folder's empty tool list means no tools at all; an unset one means Settings'", async () => {
+    const folder = store.createFolder('Banter')
+    store.patch(convId, { folderId: folder.id })
+    expect(plugins(await turn('hi'))).toEqual(['mcp/deep-research']) // unset: inherit
+    store.updateFolder(folder.id, { mcpTools: '' })
+    expect(plugins(await turn('again'))).toEqual([]) // set to nothing: none
+    expect((await turn('and again')).reasoning).toBe('high') // reasoning unset: Settings' level
+  })
+})
+
+describe('reply cap and stats', () => {
+  const stats = {
+    input_tokens: 9003, total_output_tokens: 747, reasoning_output_tokens: 497,
+    tokens_per_second: 19.6053, time_to_first_token_seconds: 1.773,
+  }
+  const reply = (result: Record<string, unknown>) => streams([
+    evt({ type: 'message.delta', content: 'hi' }),
+    evt({ type: 'message.end' }),
+    evt({ type: 'chat.end', result }),
+  ])
+
+  it('sends no cap by default, and the Settings cap when one is set', async () => {
+    let f = reply({})
+    vi.stubGlobal('fetch', f)
+    await engine.runTurn(convId, 'one')
+    expect(bodyOf(f)).not.toHaveProperty('max_output_tokens')
+    configure({ maxOutputTokens: '4000' })
+    f = reply({})
+    vi.stubGlobal('fetch', f)
+    await engine.runTurn(convId, 'two')
+    expect(bodyOf(f).max_output_tokens).toBe(4000)
+  })
+
+  it("keeps LM Studio's numbers for the turn on the reply, rounded, and across a restart", async () => {
+    vi.stubGlobal('fetch', reply({ stats }))
+    await engine.runTurn(convId, 'hi')
+    const expected = { inputTokens: 9003, outputTokens: 747, reasoningTokens: 497, tokensPerSecond: 19.6, firstTokenSeconds: 1.8 }
+    expect(messages().at(-1)!.stats).toEqual(expected)
+    expect(new Store({ dir }).get(convId)!.messages.at(-1)!.stats).toEqual(expected)
+  })
+
+  it('marks a reply that ran into the cap', async () => {
+    configure({ maxOutputTokens: '747' })
+    vi.stubGlobal('fetch', reply({ stats }))
+    await engine.runTurn(convId, 'hi')
+    expect(messages().at(-1)!.stats?.capped).toBe(true)
+  })
+
+  it('leaves stats off a reply when LM Studio sent none', async () => {
+    vi.stubGlobal('fetch', reply({ response_id: 'r1' }))
+    await engine.runTurn(convId, 'hi')
+    expect(messages().at(-1)!.stats).toBeUndefined()
+  })
+})
+
+describe('summarizing on a budget', () => {
+  it('uses the background model when one is set, with an output cap', async () => {
+    const seen: string[] = []
+    engine = new Engine(store, bus, (config) => { seen.push(config.model); return Promise.resolve({ allowed: ['off', 'on'], default: 'on' }) })
+    configure({ historyChars: '2000', backgroundModel: 'tiny-moe' })
+    store.setMessages(convId, Array.from({ length: 20 }, (_, i): Message =>
+      ({ id: `m${i}`, role: i % 2 ? 'assistant' : 'user', text: `turn ${i} ${'z'.repeat(200)}` })))
+    const f = streams([evt({ type: 'message.delta', content: 'summary' }), evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', f)
+    await engine.runTurn(convId, 'q')
+    const chat = JSON.parse(String(((f.mock.calls as unknown[][])[0]![1] as RequestInit).body)) as Record<string, unknown>
+    const summarize = JSON.parse(String(((f.mock.calls as unknown[][])[1]![1] as RequestInit).body)) as Record<string, unknown>
+    expect(chat.model).toBe('qwen') // the chat itself is unaffected
+    expect(summarize.model).toBe('tiny-moe')
+    expect(summarize.max_output_tokens).toBe(summaryTokenCap(2000))
+    // Its reasoning options were looked up for the background model, not the chat one.
+    expect(seen).toContain('tiny-moe')
+  })
+
+  it('clips tool outputs first, then the oldest turns, to keep the summarizer input bounded', () => {
+    const fold: Message[] = Array.from({ length: 10 }, (_, i) => ({
+      id: `t${i}`, role: 'tool', name: 't', output: `${i}:${'x'.repeat(6000)}`, failed: false,
+    }))
+    const plan = { fold, through: 't9', previous: null }
+    // Halving each tool output to 1500 chars is enough: every turn stays.
+    const roomy = summarizerInput(plan, 20000)
+    expect(roomy.length).toBeLessThanOrEqual(20000)
+    expect(roomy.match(/Tool t returned/g)).toHaveLength(10)
+    expect(roomy).not.toMatch(/left out/)
+    // Even 375-char clips don't fit: the oldest turns go, and it says so.
+    const tight = summarizerInput(plan, 3000)
+    expect(tight.length).toBeLessThanOrEqual(3000 + 80)
+    expect(tight).toMatch(/3 older turns were too long/)
+    expect(tight).toMatch(/9:xxx/) // the newest is kept
+    expect(tight).not.toMatch(/\n0:xxx|: 0:xxx/) // the oldest went
   })
 })

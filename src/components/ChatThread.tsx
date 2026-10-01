@@ -57,6 +57,10 @@ function sameMessage(a: Message, b: Message): boolean {
     && a.model === b.model
     && a.instance === b.instance
     && a.elapsed === b.elapsed
+    // Set once, at the end of a turn; its object is new on every push, so
+    // compare what it says rather than which object says it.
+    && a.stats?.tokensPerSecond === b.stats?.tokensPerSecond
+    && a.stats?.outputTokens === b.stats?.outputTokens
 }
 
 const ThreadRow = memo(function ThreadRow({ message, onRetry }: { message: Message; onRetry?: () => void }) {
@@ -95,6 +99,7 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry }: { message: Messa
           instance={message.instance}
           elapsed={message.elapsed}
           streaming={message.streaming}
+          stats={message.stats}
         />
         </>
       )}

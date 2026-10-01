@@ -9,6 +9,9 @@
   --rust: #C97B5A;
   --danger: #C97B5A;
   --radius: 10px;
+  /* Reply typography, chosen per device in Settings (see lib/replyStyle.ts). */
+  --reply-font: inherit;
+  --reply-size: 15.5px;
   font-size: 16px;
 }
 
@@ -170,7 +173,19 @@ html, body, #root {
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-bottom-left-radius: 3px;
+  /* Only the reply follows the device's choice: code inside it stays mono
+     (.md code sets its own family), and thinking blocks and tool cards are
+     separate rows with fonts of their own. */
+  font-family: var(--reply-font);
+  font-size: var(--reply-size);
 }
+:root[data-reply-font="serif"] { --reply-font: "New York", ui-serif, Georgia, "Times New Roman", serif; }
+:root[data-reply-font="rounded"] { --reply-font: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif; }
+:root[data-reply-font="mono"] { --reply-font: "SF Mono", ui-monospace, Menlo, monospace; }
+:root[data-reply-size="small"] { --reply-size: 14px; }
+:root[data-reply-size="large"] { --reply-size: 17.5px; }
+/* Serif and mono set a touch smaller than their nominal size looks, so the three sizes feel the same across fonts. */
+:root[data-reply-font="mono"] .msg.assistant .bubble { font-size: calc(var(--reply-size) - 1px); }
 
 .msg.error .bubble {
   background: transparent;
@@ -184,6 +199,9 @@ html, body, #root {
   color: var(--paper-dim);
   margin: 5px 3px 0;
 }
+/* The cost line is longer than the model name; let it wrap under it on a phone. */
+.meta-stats { opacity: 0.8; }
+.meta-capped { color: var(--rust); }
 
 .cursor {
   display: inline-block;
@@ -216,12 +234,16 @@ html, body, #root {
 .composer {
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 8px 12px 10px;
   border-top: 1px solid var(--line);
   background: var(--bg);
 }
+/* Chips first, then the box: the box keeps the full width however many chips there are. */
+.composer-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.composer-chips:empty { display: none; }
+.composer-row { display: flex; align-items: flex-end; gap: 8px; }
 
 .composer-input {
   flex: 1 1 auto;
@@ -431,6 +453,16 @@ html, body, #root {
   margin: 0 -4px;
 }
 
+.conv-section-head {
+  padding: 14px 6px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--paper-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.conv-list > div:first-child .conv-section-head { padding-top: 4px; }
+
 .conv-row-wrap {
   border-bottom: 1px solid var(--line);
 }
@@ -498,6 +530,8 @@ html, body, #root {
   padding: 9px;
   font-size: 13px;
 }
+
+.conv-actions .starred { color: var(--moss); border-color: var(--moss); }
 
 .conv-actions .danger {
   color: var(--rust);
@@ -597,12 +631,16 @@ html, body, #root {
   gap: 7px;
   padding: 6px 10px;
   background: none;
-  border: 1px dashed var(--line);
+  /* --line reads as barely-there on --bg; paper-dim actually shows as a
+     dashed outline instead of disappearing into the background. */
+  border: 1px dashed var(--paper-dim);
   border-radius: var(--radius);
-  color: var(--paper-dim);
+  color: var(--paper);
   font-size: 12px;
   cursor: pointer;
 }
+
+.reasoning-toggle svg { color: var(--moss); }
 
 .reasoning-body { overflow: hidden; }
 
@@ -746,6 +784,8 @@ html, body, #root {
 
 .conv-glyph { flex: 0 0 auto; color: var(--line); }
 .conv-row.active .conv-glyph { color: var(--moss); }
+.conv-star { flex: 0 0 auto; color: var(--moss); margin-left: -4px; }
+.conv-temporary { flex: 0 0 auto; display: inline-flex; color: var(--rust); margin-left: -4px; }
 
 .conv-actions {
   position: absolute;
@@ -775,26 +815,59 @@ html, body, #root {
   align-items: center;
   gap: 5px;
   flex: 0 0 auto;
-  align-self: flex-end;
-  height: 38px;
+  /* Shorter than the send button: these sit in a row of their own now. */
+  height: 30px;
   padding: 0 10px;
   background: var(--bg-raised);
-  border: 1px solid var(--line);
+  /* --line barely shows against --bg-raised; paper-dim makes the chip read
+     as a distinct shape instead of fading into the composer. */
+  border: 1px solid var(--paper-dim);
   border-radius: 19px;
-  color: var(--paper-dim);
+  color: var(--paper);
   font-size: 12px;
   cursor: pointer;
 }
 
 .reasoning-chip:active { background: var(--bg); }
-.memory-chip { padding: 0 11px; margin-left: -4px; }
-.memory-chip.on { color: var(--moss); border-color: var(--moss-dim); }
+/*
+ * On/off needs two independent cues, not just a color swap: off must read
+ * as "resting" (dim icon, quiet outline), on as "lit" (filled green pill,
+ * bright icon). The Brain icon itself also switches from outline to solid
+ * (see Composer.tsx), so it doesn't come down to a color anyone can't
+ * quite place -- shape changes too.
+ */
+.memory-chip { padding: 0 11px; color: var(--paper-dim); border-color: var(--line); }
+.memory-chip.on { color: var(--paper); background: var(--moss-dim); border-color: var(--moss); }
+
+/* A different (cautionary) hue from the memory chip's on state, so the two
+   never read as the same kind of toggle at a glance. */
+.temporary-chip { padding: 0 11px; color: var(--paper-dim); border-color: var(--line); }
+.temporary-chip.on { color: var(--bg); background: var(--rust); border-color: var(--rust); }
+.memory-picker-chip { padding: 0 11px; color: var(--paper-dim); }
+.memory-picker-chip:active { color: var(--paper); }
+
+.folder-chip span { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .toggle-row { display: flex; align-items: center; gap: 10px; font-size: 14px; margin: 4px 0 8px; cursor: pointer; }
 .toggle-row input { width: 18px; height: 18px; accent-color: var(--moss); }
 
+.memory-select-hint { margin: 0 2px 10px; }
+.memory-select-hint .link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--moss);
+  font-size: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .memory-list { display: flex; flex-direction: column; }
 .memory-row { padding: 12px 2px; border-bottom: 1px solid var(--line); }
+.memory-row.selectable { display: flex; gap: 10px; align-items: flex-start; }
+.memory-body { flex: 1 1 auto; min-width: 0; }
+.memory-check { flex: 0 0 auto; padding-top: 3px; }
+.memory-check input { width: 18px; height: 18px; accent-color: var(--moss); }
 .memory-text { font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 .memory-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--paper-dim); }
 .memory-meta .spacer { flex: 1; }
@@ -803,6 +876,107 @@ html, body, #root {
 .memory-meta button.danger { color: var(--rust); }
 .memory-edit textarea { width: 100%; min-height: 72px; padding: 9px 10px; background: var(--bg); color: var(--paper); border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 15px; resize: vertical; }
 .memory-edit .row { margin-top: 8px; }
+
+/* --- folders --- */
+.folder-list { display: flex; flex-direction: column; }
+.folder-row-wrap { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
+.folder-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 2px;
+  background: none;
+  border: none;
+  color: var(--paper);
+  font-size: 15px;
+  text-align: left;
+}
+.folder-row svg { flex: 0 0 auto; color: var(--moss); }
+.folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-actions { flex: 0 0 auto; display: flex; gap: 2px; }
+.folder-actions button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--paper-dim);
+}
+.folder-actions button:active { background: var(--bg); }
+.folder-actions button.danger { color: var(--rust); }
+.folder-edit { flex: 1 1 auto; padding: 10px 2px; }
+.folder-edit input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--paper);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 15px;
+}
+.folder-edit .row { margin-top: 8px; }
+/* Under a folder's name: what it changes for its chats, e.g. "Reasoning off · Tools: astrology-v2". */
+.folder-name { display: flex; flex-direction: column; gap: 2px; }
+.folder-sub { color: var(--paper-dim); font-size: 12px; white-space: normal; }
+
+/* --- a folder's settings page, inside the same sheet --- */
+.folder-editor-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.folder-editor-head .drawer-title { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-back {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: -8px;
+  padding: 6px 8px 6px 4px;
+  background: none;
+  border: none;
+  color: var(--moss);
+  font-size: 14px;
+}
+.folder-tool-list { margin-top: 8px; padding: 6px 2px 0; }
+.folder-tool-list input[type="text"] { margin-top: 4px; }
+.folder-danger { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line); }
+.danger-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  color: var(--rust);
+  font-size: 14px;
+}
+.folder-new { display: flex; gap: 8px; padding: 0 2px; }
+.folder-new input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--paper);
+  border-radius: 9px;
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 15px;
+}
+.folder-new button {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  border-radius: 9px;
+  border: none;
+  background: var(--moss);
+  color: var(--bg);
+}
+.folder-new button:disabled { opacity: 0.45; }
 
 .level-list { display: flex; flex-direction: column; }
 
@@ -942,6 +1116,8 @@ html, body, #root {
   cursor: pointer;
 }
 .conv-hover-actions button:hover { color: var(--paper); border-color: var(--paper-dim); }
+.conv-hover-actions .starred { color: var(--moss); border-color: var(--moss-dim); }
+.conv-hover-actions .starred:hover { color: var(--moss); border-color: var(--moss); }
 .conv-hover-actions .danger:hover { color: var(--danger); border-color: var(--danger); }
 .pointer-only { display: none; }
 

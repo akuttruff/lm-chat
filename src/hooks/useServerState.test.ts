@@ -305,6 +305,10 @@ describe('useServerState', () => {
       await result.current.renameChat('c1', ' Renamed ')
       await result.current.deleteChat('c1')
       await result.current.setReasoning('xhigh')
+      await result.current.setStarred('c1', true)
+      await result.current.setMemorySelection('c1', ['a1'])
+      await result.current.setFolder('c1', 'f1')
+      await result.current.setTemporary('c1', true)
     })
     const urls = calls.map((c) => `${c.init?.method ?? 'GET'} ${c.url}`)
     expect(urls).toContain('POST /api/chats')
@@ -314,6 +318,31 @@ describe('useServerState', () => {
     expect(JSON.parse(String(rename!.init?.body))).toEqual({ name: 'Renamed' })
     const reason = calls.find((c) => String(c.init?.body).includes('xhigh'))
     expect(JSON.parse(String(reason!.init?.body))).toEqual({ reasoning: 'xhigh' })
+    const star = calls.find((c) => c.url === '/api/chats/c1' && String(c.init?.body).includes('starred'))
+    expect(JSON.parse(String(star!.init?.body))).toEqual({ starred: true })
+    const selection = calls.find((c) => c.url === '/api/chats/c1' && String(c.init?.body).includes('memorySelection'))
+    expect(JSON.parse(String(selection!.init?.body))).toEqual({ memorySelection: ['a1'] })
+    const folder = calls.find((c) => c.url === '/api/chats/c1' && String(c.init?.body).includes('folderId'))
+    expect(JSON.parse(String(folder!.init?.body))).toEqual({ folderId: 'f1' })
+    const temp = calls.find((c) => c.url === '/api/chats/c1' && String(c.init?.body).includes('temporary'))
+    expect(JSON.parse(String(temp!.init?.body))).toEqual({ temporary: true })
+  })
+
+  it('sorts starred chats to the top, each group newest first', async () => {
+    stubApi()
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      FakeEventSource.latest().emit({
+        type: 'conversations',
+        payload: store([
+          conv({ id: 'newest', updatedAt: 30 }),
+          conv({ id: 'starred-old', updatedAt: 10, starred: true }),
+          conv({ id: 'starred-new', updatedAt: 20, starred: true }),
+        ], 'newest'),
+      })
+    })
+    expect(result.current.conversations.map((c) => c.id)).toEqual(['starred-new', 'starred-old', 'newest'])
   })
 
   it('loads config without ever seeing the token', async () => {
@@ -331,5 +360,60 @@ describe('useServerState', () => {
     const source = FakeEventSource.latest()
     unmount()
     expect(source.closed).toBe(true)
+  })
+
+  describe('folders', () => {
+    // Unlike stubApi, this tells GET and POST/PATCH/DELETE to the same URL
+    // apart -- createFolder etc. read the response body, which the fire-
+    // and-forget chat-patch actions above never need to.
+    function stubFolders(list: { id: string; name: string; createdAt: number }[]) {
+      return vi.fn((url: string, init?: RequestInit) => {
+        const method = init?.method ?? 'GET'
+        if (url === '/api/chats') return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], activeId: null }) })
+        if (url === '/api/config') return Promise.resolve({ ok: true, json: () => Promise.resolve({ model: 'qwen' }) })
+        if (url === '/api/folders' && method === 'GET') return Promise.resolve({ ok: true, json: () => Promise.resolve(list) })
+        if (url === '/api/folders' && method === 'POST') {
+          const { name } = JSON.parse(String(init?.body)) as { name: string }
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'new', name, createdAt: 9 }) })
+        }
+        if (url.startsWith('/api/folders/') && method === 'PATCH') {
+          const { name } = JSON.parse(String(init?.body)) as { name: string }
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'f1', name, createdAt: 1 }) })
+        }
+        if (url.startsWith('/api/folders/') && method === 'DELETE') return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) })
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      })
+    }
+
+    it('fetches the folder list once, on mount', async () => {
+      vi.stubGlobal('fetch', stubFolders([{ id: 'f1', name: 'Astrology', createdAt: 1 }]))
+      const { result } = renderHook(() => useServerState())
+      await waitFor(() => expect(result.current.folders).toEqual([{ id: 'f1', name: 'Astrology', createdAt: 1 }]))
+    })
+
+    it('adds a created folder to the list, name-sorted', async () => {
+      vi.stubGlobal('fetch', stubFolders([{ id: 'f1', name: 'Banter', createdAt: 1 }]))
+      const { result } = renderHook(() => useServerState())
+      await waitFor(() => expect(result.current.folders).toHaveLength(1))
+      const created = await act(() => result.current.createFolder('Astrology'))
+      expect(created).toEqual({ id: 'new', name: 'Astrology', createdAt: 9 })
+      expect(result.current.folders.map((f) => f.name)).toEqual(['Astrology', 'Banter'])
+    })
+
+    it('updates a renamed folder in place', async () => {
+      vi.stubGlobal('fetch', stubFolders([{ id: 'f1', name: 'Astrology', createdAt: 1 }]))
+      const { result } = renderHook(() => useServerState())
+      await waitFor(() => expect(result.current.folders).toHaveLength(1))
+      await act(() => result.current.updateFolder('f1', { name: 'Astro' }))
+      expect(result.current.folders).toEqual([{ id: 'f1', name: 'Astro', createdAt: 1 }])
+    })
+
+    it('removes a deleted folder from the list', async () => {
+      vi.stubGlobal('fetch', stubFolders([{ id: 'f1', name: 'Astrology', createdAt: 1 }]))
+      const { result } = renderHook(() => useServerState())
+      await waitFor(() => expect(result.current.folders).toHaveLength(1))
+      await act(() => result.current.deleteFolder('f1'))
+      expect(result.current.folders).toEqual([])
+    })
   })
 })

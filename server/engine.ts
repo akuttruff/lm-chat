@@ -1,13 +1,13 @@
 import type { Bus } from './bus.ts'
 import type { Store } from './store.ts'
-import { newId } from './store.ts'
+import { deriveName, newId } from './store.ts'
 import { readModelConfig } from './model-config.ts'
 import { canTurnOff, cheapestReasoning, fitReasoning, reasoningCapability } from './capabilities.ts'
 import type { ReasoningCapability } from './capabilities.ts'
 import { Slots, parallelLimit } from './slots.ts'
-import { MEMORY_PLUGIN, Memories } from './memory.ts'
+import { AUTO_LOADED, MEMORY_PLUGIN, Memories } from './memory.ts'
 import { metaOf } from '../src/types.ts'
-import type { ChatEvent, ContextSummary, Integration, Message, ServerConfig } from '../src/types.ts'
+import type { ChatEvent, ContextSummary, Integration, Message, ReplyStats, ServerConfig } from '../src/types.ts'
 
 /**
  * Runs a turn against LM Studio, server-side.
@@ -101,7 +101,8 @@ function replayable(m: Message): boolean {
   if (m.role === 'user' || m.role === 'assistant') return Boolean((m.text || '').trim())
   // Tool results are context, not noise: a follow-up question usually
   // refers to the data a tool fetched.
-  if (m.role === 'tool') return Boolean((m.output || '').trim())
+  // (Not the card showing which memories were loaded: they are in the system prompt.)
+  if (m.role === 'tool') return m.plugin !== AUTO_LOADED && Boolean((m.output || '').trim())
   return false
 }
 
@@ -204,12 +205,122 @@ export function summarizerPrompt(limit: number): string {
   ].join(' ')
 }
 
-export function summarizerInput(plan: CompactionPlan): string {
+/**
+ * Most characters the summarizer is handed. A thread whose fold is a
+ * dozen big tool results otherwise makes an 80K-token summarizing request
+ * that sits at "reading prompt" for minutes -- on a model that then writes
+ * a few hundred words. Tool outputs are clipped harder first, since they're
+ * where the bulk is; only if that isn't enough are the oldest turns left
+ * out (any earlier summary still covers what came before them).
+ */
+export const MAX_SUMMARY_INPUT = 20000
+
+export function summarizerInput(plan: CompactionPlan, cap = MAX_SUMMARY_INPUT): string {
+  const previous = plan.previous ? `Previous summary:\n\n${plan.previous.text.trim()}` : ''
+  const budget = Math.max(cap - previous.length, Math.floor(cap / 2))
+  const folded = plan.fold.filter(replayable)
+  const build = (perTool: number): string[] => folded.map((m) => transcriptLine(m, perTool))
+  const size = (lines: string[]): number => lines.reduce((n, l) => n + l.length + 2, 0)
+
+  let perTool = SUMMARY_TOOL_OUTPUT
+  let lines = build(perTool)
+  while (size(lines) > budget && perTool > 500) {
+    perTool = Math.floor(perTool / 2)
+    lines = build(perTool)
+  }
+  let dropped = 0
+  while (lines.length > 1 && size(lines) > budget) {
+    lines.shift()
+    dropped++
+  }
   return [
-    plan.previous ? `Previous summary:\n\n${plan.previous.text.trim()}` : '',
+    previous,
     'New turns to fold in:',
-    plan.fold.filter(replayable).map((m) => transcriptLine(m, SUMMARY_TOOL_OUTPUT)).join('\n\n'),
+    dropped ? `(${dropped} older ${dropped === 1 ? 'turn was' : 'turns were'} too long to include and left out.)` : '',
+    lines.join('\n\n'),
   ].filter(Boolean).join('\n\n')
+}
+
+/**
+ * An output cap for the summarizer: roughly twice the words it was asked
+ * for, in tokens, plus slack. It stops a model that ignores the word limit
+ * from writing for half an hour.
+ */
+export function summaryTokenCap(limit: number): number {
+  const words = Math.max(80, Math.round((limit * SUMMARY_RATIO) / 6))
+  return words * 2 + 200
+}
+
+/** LM Studio's turn stats, in this app's shape. Null when it sent none. */
+export function replyStats(raw: NonNullable<ChatEvent['result']>['stats'], cap: number): ReplyStats | null {
+  if (!raw || typeof raw.tokens_per_second !== 'number') return null
+  const outputTokens = raw.total_output_tokens ?? 0
+  const stats: ReplyStats = {
+    inputTokens: raw.input_tokens ?? 0,
+    outputTokens,
+    reasoningTokens: raw.reasoning_output_tokens ?? 0,
+    tokensPerSecond: Math.round(raw.tokens_per_second * 10) / 10,
+    firstTokenSeconds: Math.round((raw.time_to_first_token_seconds ?? 0) * 10) / 10,
+  }
+  if (cap > 0 && outputTokens >= cap) stats.capped = true
+  return stats
+}
+
+/** A Settings number field: blank, junk or 0 means "no cap". */
+export function outputCap(raw: string): number {
+  const n = Number.parseInt(raw, 10)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+// --- auto-titling -----------------------------------------------------------
+
+export const TITLE_PROMPT = [
+  'Write a title for this chat: at most five words, plain words in the language of the conversation,',
+  'no quotation marks, no trailing period, no preamble. The chat\'s date is given: when the chat is about',
+  'a particular day -- "today", "tomorrow", "this week" -- put that date in the title (e.g. "Forecast for',
+  'Sept 30") rather than the relative word, since the title is read long after. Output only the title.',
+].join(' ')
+/** Room for five words in any script, and a stray sentence if the model ignores the ask. */
+export const TITLE_MAX_TOKENS = 24
+const TITLE_TIMEOUT_MS = 60 * 1000
+/** Per side of the first exchange: enough to know what it's about, not the whole essay. */
+const TITLE_EXCERPT = 1200
+
+/** Still carrying the placeholder name (the opening words of the first message), with a reply to title from. */
+export function needsTitle(messages: Message[], name: string): boolean {
+  const replied = messages.some((m) => m.role === 'assistant' && (m.text || '').trim())
+  return replied && name === deriveName(messages)
+}
+
+/**
+ * The first message and the first reply, clipped, dated -- what the title is
+ * written from. The date is the chat's own (when it was started), so "my
+ * forecast for today" can become "Forecast for Sept 30" instead of a
+ * "Today's..." that means nothing a week later.
+ */
+export function titleInput(messages: Message[], createdAt: number): string {
+  const user = messages.find((m) => m.role === 'user' && (m.text || '').trim())
+  const reply = messages.find((m) => m.role === 'assistant' && (m.text || '').trim())
+  if (!user || !reply) return ''
+  const clip = (t: string): string => (t.length > TITLE_EXCERPT ? `${t.slice(0, TITLE_EXCERPT)}...` : t)
+  const date = new Date(createdAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  return `Chat date: ${date}\n\nUser: ${clip((user.text || '').trim())}\n\nAssistant: ${clip((reply.text || '').trim())}`
+}
+
+/**
+ * The model's answer as a title: first line only, quotes and a trailing
+ * period dropped, whitespace collapsed, and never longer than a chat row
+ * can show. '' when there's nothing usable.
+ */
+export function cleanTitle(raw: string): string {
+  const line = raw.split('\n').map((l) => l.trim()).find(Boolean) ?? ''
+  const title = line
+    .replace(/^(title:)\s*/i, '')
+    .replace(/^["'“”‘’`*_]+|["'“”‘’`*_]+$/g, '')
+    .replace(/[.。]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return title.length > 60 ? `${title.slice(0, 60).trimEnd()}...` : title
 }
 
 /** Reasoning options from the model's manifest, for when LM Studio can't be asked. */
@@ -278,6 +389,8 @@ function lastUserIndex(messages: Message[]): number {
 export interface EngineState {
   running: Map<string, TurnState>
   compacting: Set<string>
+  /** Chats a title is being written for right now. */
+  titling?: Set<string>
   /** The latest in-progress status per chat, for clients that connect mid-reply. */
   statuses: Map<string, StatusPayload>
   /** Created by the first Engine, which knows where the limit is configured. */
@@ -298,6 +411,7 @@ export function newEngineState(): EngineState {
 export class Engine {
   private running: Map<string, TurnState>
   private compacting: Set<string>
+  private titling: Set<string>
   private statuses: Map<string, StatusPayload>
   readonly slots: Slots
 
@@ -313,6 +427,7 @@ export class Engine {
     this.running = state.running
     this.compacting = state.compacting
     // ??= : state kept from before a code change may predate a field.
+    this.titling = state.titling ??= new Set()
     this.statuses = state.statuses ??= new Map()
     this.slots = state.slots ??= new Slots(() => parallelLimit(this.store.getConfig().parallel))
   }
@@ -374,6 +489,9 @@ export class Engine {
     this.running.set(conversationId, turn)
 
     const config = this.store.getConfig()
+    // The chat's folder, whose defaults sit between the chat's own settings
+    // and the global ones.
+    const folder = conv.folderId ? this.store.getFolder(conv.folderId) : undefined
     // A retry re-runs the last message you sent: whatever came after it (a
     // failed or unwanted reply, its tool calls) is dropped, and clients are
     // sent everything from that message on, replacing their copy.
@@ -421,24 +539,33 @@ export class Engine {
     // Applied at load time: sending it every turn makes LM Studio JIT-load a new
     // model instance per message instead of reusing the loaded one.
     if (Number.isFinite(ctx) && ctx > 0) body.context_length = ctx
+    const cap = outputCap(config.maxOutputTokens)
+    if (cap) body.max_output_tokens = cap
+    // Chat, then folder, then Settings. `||` for the folder and Settings:
+    // an unset level is stored as '' and means inherit, not "no reasoning".
     // A chat's saved level may predate a model switch (medium, say, on a
     // model that only takes off|on), which LM Studio rejects outright.
-    const requested = conv.reasoning ?? (config.reasoning || null)
+    const requested = conv.reasoning ?? (folder?.reasoning || config.reasoning || null)
     const reasoning = requested
       ? fitReasoning(requested, (await this.capabilities(config)) ?? manifestCapability(config.model))
       : null
     if (reasoning) body.reasoning = reasoning
     // Memory is per chat, falling back to the Settings default; when on, the
-    // model gets the memory tools and what it has saved so far.
+    // model gets the memory tools and what it has saved so far. The toggle
+    // owns the memory plugin outright: if it's also (still) listed in the general
+    // Settings tools field, that must not override "off" for this chat, so
+    // it's stripped from there and re-added only when memory is on.
     const memoryOn = conv.memory ?? config.memoryDefault === 'on'
-    const integrations = parseIntegrations(config.mcpTools)
-    if (memoryOn && !integrations.some((i) => i.id === MEMORY_PLUGIN)) integrations.push({ type: 'plugin', id: MEMORY_PLUGIN })
+    // `??` here: a folder's '' is "no tools", its null "same as Settings".
+    const integrations = parseIntegrations(folder?.mcpTools ?? config.mcpTools).filter((i) => i.id !== MEMORY_PLUGIN)
+    if (memoryOn) integrations.push({ type: 'plugin', id: MEMORY_PLUGIN })
     if (integrations.length) body.integrations = integrations
     // Every turn carries its own context, so no turn depends on the last one
     // having succeeded.
     const limit = historyLimit(config.historyChars)
-    const systemPrompt = memoryOn
-      ? [config.systemPrompt.trim(), this.memories.promptBlock()].filter(Boolean).join('\n\n')
+    const memory = memoryOn ? this.memories.context(4000, conv.memorySelection) : null
+    const systemPrompt = memory
+      ? [config.systemPrompt.trim(), memory.block].filter(Boolean).join('\n\n')
       : config.systemPrompt
     const prompt = buildHistoryPrompt(systemPrompt, history, limit, conv.summary)
     if (prompt) body.system_prompt = prompt
@@ -455,6 +582,16 @@ export class Engine {
     }
 
     const produced: Message[] = []
+    // The notes were loaded for this reply without a tool call; show that, so
+    // it is visible what the model started from.
+    if (memory?.used.length) {
+      const n = memory.used.length
+      produced.push({
+        id: newId(), role: 'tool', name: 'memory', plugin: AUTO_LOADED, failed: false,
+        output: `${n} ${n === 1 ? 'memory' : 'memories'} loaded into this reply:\n` +
+          memory.used.map((m) => `- ${m.text}`).join('\n'),
+      })
+    }
     let assistantId: string | null = null
     let acc = ''
     let reasoningId: string | null = null
@@ -516,7 +653,7 @@ export class Engine {
       closeReasoning()
       const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1)
       const producedSomething = produced.some(
-        (m) => m.role === 'tool' || m.role === 'reasoning' ||
+        (m) => (m.role === 'tool' && m.plugin !== AUTO_LOADED) || m.role === 'reasoning' ||
           (m.role === 'assistant' && m.id !== assistantId && m.text),
       )
       if (assistantId !== null && acc.trim() === '' && producedSomething) {
@@ -685,7 +822,7 @@ export class Engine {
             case 'tool_call.arguments': {
               const name = evt.tool_name || evt.tool
               if (!name) break
-              const lastTool = [...produced].reverse().find((m) => m.role === 'tool')
+              const lastTool = [...produced].reverse().find((m) => m.role === 'tool' && m.plugin !== AUTO_LOADED)
               if (lastTool) {
                 lastTool.name = name
                 const plugin = evt.provider_info?.plugin_id
@@ -696,7 +833,7 @@ export class Engine {
               break
             }
             case 'tool_call.success': {
-              const lastTool = [...produced].reverse().find((m) => m.role === 'tool')
+              const lastTool = [...produced].reverse().find((m) => m.role === 'tool' && m.plugin !== AUTO_LOADED)
               if (lastTool) {
                 lastTool.output = formatToolOutput(evt.output).slice(0, MAX_TOOL_OUTPUT)
                 // Last chance to learn the name, if neither earlier event did.
@@ -708,7 +845,7 @@ export class Engine {
               break
             }
             case 'tool_call.failure': {
-              const lastTool = [...produced].reverse().find((m) => m.role === 'tool')
+              const lastTool = [...produced].reverse().find((m) => m.role === 'tool' && m.plugin !== AUTO_LOADED)
               if (lastTool) {
                 lastTool.failed = true
                 lastTool.output = evt.reason || 'Tool call failed'
@@ -724,13 +861,19 @@ export class Engine {
             }
             case 'error':
               throw new Error(evt.error?.message || 'LM Studio reported an error')
-            case 'chat.end':
+            case 'chat.end': {
               completed = true
               if (evt.result?.response_id) {
                 turnResponseId = evt.result.response_id
                 this.store.patch(conversationId, { responseId: turnResponseId }, { touch: false })
               }
+              // On the reply that ends the turn: the numbers are for the
+              // whole turn, and that is the message whose footer shows them.
+              const stats = replyStats(evt.result?.stats, cap)
+              const reply = [...produced].reverse().find((m) => m.role === 'assistant')
+              if (stats && reply) reply.stats = stats
               break
+            }
             default:
               break
           }
@@ -782,7 +925,86 @@ export class Engine {
 
     // After the turn is released, so the user can already send the next one;
     // that turn simply replays a little more until the summary lands.
-    if (succeeded) await this.compact(conversationId)
+    if (succeeded) {
+      await this.compact(conversationId)
+      await this.title(conversationId)
+    }
+  }
+
+  /**
+   * Title every chat still on its placeholder name -- the ones from before
+   * titles were written, or whose titling failed -- one at a time in the
+   * background, so a backlog never crowds out a reply. Returns at once with
+   * how many it will try; each title arrives as a `patch` event.
+   */
+  retitleAll(): { candidates: number } {
+    const config = this.store.getConfig()
+    const candidates = this.store.getConversations().items
+      .filter((c) => !c.temporary && needsTitle(c.messages, c.name))
+    if (config.model && candidates.length) {
+      void (async () => {
+        for (const c of candidates) await this.title(c.id, { manual: true })
+      })()
+    }
+    return { candidates: candidates.length }
+  }
+
+  /**
+   * Give a chat a title written from its first exchange, in place of the
+   * opening words of the first message it was named after. Runs once, after
+   * the first reply, and only while the chat still has that placeholder
+   * name -- so a title the user typed, or one already written, is never
+   * replaced. Best effort, like compaction: a failure leaves the placeholder.
+   */
+  async title(conversationId: string, { manual = false }: { manual?: boolean } = {}): Promise<boolean> {
+    if (this.titling.has(conversationId)) return false
+    const conv = this.store.get(conversationId)
+    const config = this.store.getConfig()
+    // Asked for by hand, it runs even with automatic naming switched off.
+    if (!conv || (!manual && config.autoTitle === 'off') || conv.temporary || !config.model) return false
+    if (!needsTitle(conv.messages, conv.name)) return false
+    const input = titleInput(conv.messages, conv.createdAt)
+    if (!input) return false
+
+    this.titling.add(conversationId)
+    let releaseSlot: (() => void) | undefined
+    try {
+      releaseSlot = await this.slots.acquire('background')
+      const model = config.backgroundModel.trim() || config.model
+      const body: Record<string, unknown> = {
+        model, system_prompt: TITLE_PROMPT, input, stream: true, max_output_tokens: TITLE_MAX_TOKENS,
+      }
+      const reasoning = cheapestReasoning(
+        (await this.capabilities({ ...config, model })) ?? manifestCapability(model),
+      )
+      if (reasoning) body.reasoning = reasoning
+
+      const res = await fetch(`${config.lmStudioUrl.replace(/\/+$/, '')}/api/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}),
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(TITLE_TIMEOUT_MS),
+      })
+      if (!res.ok || !res.body) throw new Error(await describeHttpError(res))
+      const name = cleanTitle(await collectMessage(res.body))
+      if (!name) throw new Error('empty title')
+
+      // Renamed, cleared or deleted while we waited: leave it be.
+      const current = this.store.get(conversationId)
+      if (!current || !needsTitle(current.messages, current.name)) return false
+      const updated = this.store.patch(conversationId, { name }, { touch: false })
+      if (updated) this.bus.send({ type: 'patch', payload: { conversationId, meta: metaOf(updated) } })
+      return true
+    } catch (err) {
+      console.log(`[engine] titling skipped: ${(err as Error).message}`)
+      return false
+    } finally {
+      releaseSlot?.()
+      this.titling.delete(conversationId)
+    }
   }
 
   /**
@@ -804,14 +1026,18 @@ export class Engine {
     let releaseSlot: (() => void) | undefined
     try {
       releaseSlot = await this.slots.acquire('background')
+      // A model of its own, if Settings names one: summarizing is the job
+      // for a small fast model, leaving the chat model to the chats.
+      const model = config.backgroundModel.trim() || config.model
       const body: Record<string, unknown> = {
-        model: config.model,
+        model,
         system_prompt: summarizerPrompt(limit),
         input: summarizerInput(plan),
         stream: true,
+        max_output_tokens: summaryTokenCap(limit),
       }
       const reasoning = cheapestReasoning(
-        (await this.capabilities(config)) ?? manifestCapability(config.model),
+        (await this.capabilities({ ...config, model })) ?? manifestCapability(model),
       )
       if (reasoning) body.reasoning = reasoning
 

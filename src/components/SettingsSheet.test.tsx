@@ -16,6 +16,9 @@ const base: PublicConfig = {
   historyChars: '24000',
   parallel: '4',
   memoryDefault: 'off',
+  backgroundModel: '',
+  maxOutputTokens: '',
+  autoTitle: 'on',
   hasToken: false,
 }
 
@@ -218,6 +221,28 @@ describe('layout', () => {
 })
 
 describe('connection test', () => {
+  it('lists every model as soon as it opens, marking the loaded ones, without touching the saved choice', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ ok: true, models: ['gemma', 'qwen'], loaded: ['gemma'], error: null }),
+    })))
+    setup({ config: { model: 'qwen' } })
+    const select = await screen.findByLabelText('Model') as HTMLSelectElement
+    await waitFor(() => expect([...select.options].map((o) => o.textContent)).toEqual(['gemma (loaded)', 'qwen']))
+    expect(select).toHaveValue('qwen')
+  })
+
+  it('keeps a saved model that LM Studio no longer lists selectable, and says so', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ ok: true, models: ['gemma'], loaded: [], error: null }),
+    })))
+    setup({ config: { model: 'gone' } })
+    const select = await screen.findByLabelText('Model') as HTMLSelectElement
+    await waitFor(() => expect([...select.options].map((o) => o.textContent)).toEqual(["gone (not in LM Studio's list)", 'gemma']))
+    expect(select).toHaveValue('gone')
+  })
+
   it('asks the server to reach LM Studio and lists models', async () => {
     const user = userEvent.setup()
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
@@ -238,6 +263,19 @@ describe('connection test', () => {
     setup()
     await user.click(screen.getByRole('button', { name: /test connection/i }))
     expect(await screen.findByText(/Invalid LM Studio API token/)).toBeInTheDocument()
+  })
+})
+
+describe('reply text', () => {
+  it('changes the font and size at once, without Save, keeping the other choice', async () => {
+    const user = userEvent.setup()
+    const onReplyStyleChange = vi.fn<(s: { font: string; size: string }) => void>()
+    render(<SettingsSheet open config={base} modelConfig={null} onSave={vi.fn(() => Promise.resolve())} onClose={vi.fn()}
+      replyStyle={{ font: 'system', size: 'large' }} onReplyStyleChange={onReplyStyleChange} />)
+    await user.selectOptions(await screen.findByLabelText('Font'), 'serif')
+    expect(onReplyStyleChange).toHaveBeenCalledWith({ font: 'serif', size: 'large' })
+    await user.selectOptions(screen.getByLabelText('Size'), 'small')
+    expect(onReplyStyleChange).toHaveBeenCalledWith({ font: 'system', size: 'small' })
   })
 })
 

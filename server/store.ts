@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { SQLInputValue, StatementSync } from 'node:sqlite'
-import type { Conversation, ConversationStore, Message, MessageRole, ServerConfig } from '../src/types.ts'
+import type { Conversation, ConversationStore, Folder, Message, MessageRole, ReplyStats, ServerConfig } from '../src/types.ts'
 
 /**
  * Everything durable lives next to the app on disk, so conversations survive
@@ -24,6 +24,9 @@ const DEFAULT_CONFIG: ServerConfig = {
   historyChars: '24000',
   parallel: '4',
   memoryDefault: 'off',
+  backgroundModel: '',
+  maxOutputTokens: '',
+  autoTitle: 'on',
 }
 
 const MAX_CONVERSATIONS = 60
@@ -51,6 +54,10 @@ export function blankConversation(): Conversation {
     reasoning: null,
     summary: null,
     memory: null,
+    memorySelection: null,
+    starred: false,
+    folderId: null,
+    temporary: false,
   }
 }
 
@@ -83,7 +90,18 @@ CREATE TABLE IF NOT EXISTS conversations (
   reasoning TEXT,
   summary_text TEXT,
   summary_through TEXT,
-  memory INTEGER
+  memory INTEGER,
+  starred INTEGER NOT NULL DEFAULT 0,
+  memory_selection TEXT,
+  folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
+  temporary INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS folders (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  reasoning TEXT,
+  mcp_tools TEXT
 );
 CREATE TABLE IF NOT EXISTS messages (
   conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -100,6 +118,7 @@ CREATE TABLE IF NOT EXISTS messages (
   output TEXT,
   failed INTEGER,
   response_id TEXT,
+  stats TEXT,
   PRIMARY KEY (conversation_id, position)
 );
 CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY CHECK (id = 1), active_id TEXT);
@@ -115,7 +134,10 @@ CREATE TABLE IF NOT EXISTS config (
   stall_seconds TEXT NOT NULL DEFAULT '180',
   history_chars TEXT NOT NULL DEFAULT '24000',
   parallel TEXT NOT NULL DEFAULT '4',
-  memory_default TEXT NOT NULL DEFAULT 'off'
+  memory_default TEXT NOT NULL DEFAULT 'off',
+  background_model TEXT NOT NULL DEFAULT '',
+  max_output_tokens TEXT NOT NULL DEFAULT '',
+  auto_title TEXT NOT NULL DEFAULT 'on'
 );
 `
 
@@ -148,6 +170,50 @@ function migrateSchema(db: DatabaseSync): void {
     if (!has('config', 'memory_default')) db.exec("ALTER TABLE config ADD COLUMN memory_default TEXT NOT NULL DEFAULT 'off'")
     db.exec('PRAGMA user_version = 1')
   }
+  if (version < 2) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    if (!has('conversations', 'starred')) db.exec('ALTER TABLE conversations ADD COLUMN starred INTEGER NOT NULL DEFAULT 0')
+    db.exec('PRAGMA user_version = 2')
+  }
+  if (version < 3) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    if (!has('conversations', 'memory_selection')) db.exec('ALTER TABLE conversations ADD COLUMN memory_selection TEXT')
+    db.exec('PRAGMA user_version = 3')
+  }
+  if (version < 4) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    db.exec('CREATE TABLE IF NOT EXISTS folders (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL)')
+    if (!has('conversations', 'folder_id')) {
+      db.exec('ALTER TABLE conversations ADD COLUMN folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL')
+    }
+    db.exec('PRAGMA user_version = 4')
+  }
+  if (version < 5) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    if (!has('conversations', 'temporary')) db.exec('ALTER TABLE conversations ADD COLUMN temporary INTEGER NOT NULL DEFAULT 0')
+    db.exec('PRAGMA user_version = 5')
+  }
+  if (version < 6) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    // Per-folder defaults, a reply's cost, a background model and an output cap.
+    if (!has('folders', 'reasoning')) db.exec('ALTER TABLE folders ADD COLUMN reasoning TEXT')
+    if (!has('folders', 'mcp_tools')) db.exec('ALTER TABLE folders ADD COLUMN mcp_tools TEXT')
+    if (!has('messages', 'stats')) db.exec('ALTER TABLE messages ADD COLUMN stats TEXT')
+    if (!has('config', 'background_model')) db.exec("ALTER TABLE config ADD COLUMN background_model TEXT NOT NULL DEFAULT ''")
+    if (!has('config', 'max_output_tokens')) db.exec("ALTER TABLE config ADD COLUMN max_output_tokens TEXT NOT NULL DEFAULT ''")
+    db.exec('PRAGMA user_version = 6')
+  }
+  if (version < 7) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    if (!has('config', 'auto_title')) db.exec("ALTER TABLE config ADD COLUMN auto_title TEXT NOT NULL DEFAULT 'on'")
+    db.exec('PRAGMA user_version = 7')
+  }
 }
 
 interface ConversationRow {
@@ -160,6 +226,22 @@ interface ConversationRow {
   summary_text: string | null
   summary_through: string | null
   memory: number | null
+  starred: number
+  memory_selection: string | null
+  folder_id: string | null
+  temporary: number
+}
+
+interface FolderRow { id: string; name: string; created_at: number; reasoning: string | null; mcp_tools: string | null }
+const folderFromRow = (r: FolderRow): Folder => ({
+  id: r.id, name: r.name, createdAt: r.created_at, reasoning: r.reasoning, mcpTools: r.mcp_tools,
+})
+
+/** What a folder PATCH may change; an absent field is left as it is. */
+export interface FolderPatch {
+  name?: unknown
+  reasoning?: unknown
+  mcpTools?: unknown
 }
 
 interface MessageRow {
@@ -177,6 +259,7 @@ interface MessageRow {
   output: string | null
   failed: number | null
   response_id: string | null
+  stats: string | null
 }
 
 interface ConfigRow {
@@ -191,6 +274,20 @@ interface ConfigRow {
   history_chars: string
   parallel: string
   memory_default: string
+  background_model: string
+  max_output_tokens: string
+  auto_title: string
+}
+
+/** A row surviving corruption or a hand-edited value reads as "automatic" rather than throwing. */
+function parseSelection(raw: string | null): string[] | null {
+  if (raw == null) return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) && parsed.every((x) => typeof x === 'string') ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 function metaFromRow(row: ConversationRow): Omit<Conversation, 'messages'> {
@@ -203,19 +300,27 @@ function metaFromRow(row: ConversationRow): Omit<Conversation, 'messages'> {
     reasoning: row.reasoning,
     summary: row.summary_text != null ? { text: row.summary_text, through: row.summary_through! } : null,
     memory: row.memory == null ? null : row.memory === 1,
+    memorySelection: parseSelection(row.memory_selection),
+    starred: row.starred === 1,
+    folderId: row.folder_id,
+    temporary: row.temporary === 1,
   }
 }
 
-const CONV_COLUMNS = 'id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through,memory'
+const CONV_COLUMNS =
+  'id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through,memory,starred,memory_selection,folder_id,temporary'
 const UPDATE_CONV_META =
-  'UPDATE conversations SET name=?, updated_at=?, response_id=?, reasoning=?, summary_text=?, summary_through=?, memory=? WHERE id=?'
+  'UPDATE conversations SET name=?, updated_at=?, response_id=?, reasoning=?, summary_text=?, summary_through=?, ' +
+  'memory=?, starred=?, memory_selection=?, folder_id=?, temporary=? WHERE id=?'
 const memoryValue = (m: Conversation['memory']): number | null => (m == null ? null : m ? 1 : 0)
+const selectionValue = (s: Conversation['memorySelection']): string | null => (s == null ? null : JSON.stringify(s))
 
 /** In CONV_COLUMNS order. */
 function convParams(c: Conversation): SQLInputValue[] {
   return [
     c.id, c.name, c.createdAt, c.updatedAt, c.responseId, c.reasoning ?? null,
     c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory),
+    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0,
   ]
 }
 
@@ -223,19 +328,40 @@ function convParams(c: Conversation): SQLInputValue[] {
 function convMetaParams(c: Conversation): SQLInputValue[] {
   return [
     c.name, c.updatedAt, c.responseId, c.reasoning ?? null,
-    c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory), c.id,
+    c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory),
+    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.id,
   ]
 }
 
 const CONFIG_COLUMNS =
-  'lm_studio_url, api_token, model, system_prompt, mcp_tools, context_length, reasoning, stall_seconds, history_chars, parallel, memory_default'
+  'lm_studio_url, api_token, model, system_prompt, mcp_tools, context_length, reasoning, stall_seconds, history_chars, parallel, memory_default, ' +
+  'background_model, max_output_tokens, auto_title'
+const CONFIG_PLACEHOLDERS = Array(14).fill('?').join(',')
 
 /** In CONFIG_COLUMNS order. */
 function configParams(c: ServerConfig): SQLInputValue[] {
   return [
     c.lmStudioUrl, c.apiToken, c.model, c.systemPrompt, c.mcpTools, c.contextLength,
     c.reasoning, c.stallSeconds, c.historyChars, c.parallel, c.memoryDefault,
+    c.backgroundModel, c.maxOutputTokens, c.autoTitle,
   ]
+}
+
+const MESSAGE_COLUMNS =
+  'conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id,stats'
+const MESSAGE_PLACEHOLDERS = Array(15).fill('?').join(',')
+
+/** Stats stored as JSON; a hand-edited or corrupt value reads as none. */
+function parseStats(raw: string | null): ReplyStats | undefined {
+  if (raw == null) return undefined
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' && typeof (parsed as ReplyStats).tokensPerSecond === 'number'
+      ? parsed as ReplyStats
+      : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** Undefined stays absent (vs. an explicit false/null), same as the JSON it replaces. */
@@ -251,6 +377,8 @@ function messageFromRow(row: MessageRow): Message {
   if (row.output != null) m.output = row.output
   if (row.failed != null) m.failed = row.failed === 1
   if (row.response_id != null) m.responseId = row.response_id
+  const stats = parseStats(row.stats)
+  if (stats) m.stats = stats
   return m
 }
 
@@ -270,6 +398,7 @@ function messageParams(conversationId: string, position: number, m: Message): SQ
     m.output ?? null,
     m.failed == null ? null : (m.failed ? 1 : 0),
     m.responseId ?? null,
+    m.stats ? JSON.stringify(m.stats) : null,
   ]
 }
 
@@ -286,6 +415,9 @@ function configFromRow(row: ConfigRow): ServerConfig {
     historyChars: row.history_chars,
     parallel: row.parallel,
     memoryDefault: row.memory_default === 'on' ? 'on' : 'off',
+    backgroundModel: row.background_model ?? '',
+    maxOutputTokens: row.max_output_tokens ?? '',
+    autoTitle: row.auto_title === 'off' ? 'off' : 'on',
   }
 }
 
@@ -314,11 +446,9 @@ function migrateFromJson(paths: ReturnType<typeof locate>): void {
   try {
     ensureSchema(db)
     const insertConv = db.prepare(
-      `INSERT INTO conversations (${CONV_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO conversations (${CONV_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     )
-    const insertMsg = db.prepare(
-      'INSERT INTO messages (conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    )
+    const insertMsg = db.prepare(`INSERT INTO messages (${MESSAGE_COLUMNS}) VALUES (${MESSAGE_PLACEHOLDERS})`)
     db.exec('BEGIN')
     for (const conv of conversations.items) {
       insertConv.run(
@@ -327,7 +457,7 @@ function migrateFromJson(paths: ReturnType<typeof locate>): void {
     }
     db.prepare('INSERT INTO app_state (id, active_id) VALUES (1, ?)').run(conversations.activeId)
     db.prepare(
-      `INSERT INTO config (id, ${CONFIG_COLUMNS}) VALUES (1,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO config (id, ${CONFIG_COLUMNS}) VALUES (1,${CONFIG_PLACEHOLDERS})`,
     ).run(...configParams(config))
     db.exec('COMMIT')
   } catch (err) {
@@ -366,6 +496,12 @@ interface Stmts {
   setActiveId: StatementSync
   insertConfig: StatementSync
   updateConfig: StatementSync
+  selectFolders: StatementSync
+  selectFolderById: StatementSync
+  insertFolder: StatementSync
+  updateFolder: StatementSync
+  deleteFolder: StatementSync
+  scrubConversationName: StatementSync
 }
 
 /** In-memory state with write-through persistence to SQLite. */
@@ -398,25 +534,29 @@ export class Store {
       selectActiveId: this.db.prepare('SELECT active_id FROM app_state WHERE id = 1'),
       selectConfig: this.db.prepare('SELECT * FROM config WHERE id = 1'),
       insertConversation: this.db.prepare(
-        `INSERT INTO conversations (${CONV_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO conversations (${CONV_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ),
       updateConversationMeta: this.db.prepare(
         UPDATE_CONV_META,
       ),
       deleteConversation: this.db.prepare('DELETE FROM conversations WHERE id = ?'),
       deleteMessagesFor: this.db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
-      insertMessage: this.db.prepare(
-        'INSERT INTO messages (conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      ),
+      insertMessage: this.db.prepare(`INSERT INTO messages (${MESSAGE_COLUMNS}) VALUES (${MESSAGE_PLACEHOLDERS})`),
       setActiveId: this.db.prepare(
         'INSERT INTO app_state (id, active_id) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET active_id = excluded.active_id',
       ),
       insertConfig: this.db.prepare(
-        `INSERT INTO config (id, ${CONFIG_COLUMNS}) VALUES (1,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO config (id, ${CONFIG_COLUMNS}) VALUES (1,${CONFIG_PLACEHOLDERS})`,
       ),
       updateConfig: this.db.prepare(
-        `UPDATE config SET lm_studio_url=?, api_token=?, model=?, system_prompt=?, mcp_tools=?, context_length=?, reasoning=?, stall_seconds=?, history_chars=?, parallel=?, memory_default=? WHERE id=1`,
+        `UPDATE config SET lm_studio_url=?, api_token=?, model=?, system_prompt=?, mcp_tools=?, context_length=?, reasoning=?, stall_seconds=?, history_chars=?, parallel=?, memory_default=?, background_model=?, max_output_tokens=?, auto_title=? WHERE id=1`,
       ),
+      selectFolders: this.db.prepare('SELECT * FROM folders ORDER BY name COLLATE NOCASE'),
+      selectFolderById: this.db.prepare('SELECT * FROM folders WHERE id = ?'),
+      insertFolder: this.db.prepare('INSERT INTO folders (id, name, created_at) VALUES (?, ?, ?)'),
+      updateFolder: this.db.prepare('UPDATE folders SET name = ?, reasoning = ?, mcp_tools = ? WHERE id = ?'),
+      deleteFolder: this.db.prepare('DELETE FROM folders WHERE id = ?'),
+      scrubConversationName: this.db.prepare("UPDATE conversations SET name = '' WHERE id = ?"),
     }
 
     const configRow = this.stmts.selectConfig.get() as ConfigRow | undefined
@@ -467,7 +607,9 @@ export class Store {
     this.savedCounts.set(conv.id, conv.messages.length)
   }
 
+  /** A no-op while `conv.temporary`: every meta write in the class goes through here, so that's the one place the rule lives. */
   private writeMeta(conv: Conversation): void {
+    if (conv.temporary) return
     this.stmts.updateConversationMeta.run(
       ...convMetaParams(conv))
   }
@@ -493,7 +635,9 @@ export class Store {
     pruneBackups(backupDir)
   }
 
+  /** Same rule as writeMeta: a no-op while `conv.temporary`, so setMessages's own persist flag doesn't have to know about it. */
   private writeMessages(conv: Conversation): void {
+    if (conv.temporary) return
     this.backupIfShrinking(conv.id, conv.messages.length)
     this.db.exec('BEGIN')
     try {
@@ -511,10 +655,16 @@ export class Store {
 
   create(): Conversation {
     const current = this.get(this.conversations.activeId ?? '')
-    // Don't stack up empty threads, but clear any stale server-side context.
+    // Don't stack up empty threads -- but "new chat" must still mean a clean
+    // slate: an empty chat that was filed into a folder or given its own
+    // settings would otherwise come back exactly as it was, and pressing +
+    // would seem to do nothing at all.
     if (current && current.messages.length === 0) {
-      current.responseId = null
-      current.updatedAt = stamp()
+      const blank = blankConversation()
+      Object.assign(current, {
+        responseId: null, updatedAt: stamp(), reasoning: blank.reasoning, memory: blank.memory,
+        memorySelection: blank.memorySelection, folderId: blank.folderId, temporary: blank.temporary,
+      })
       this.writeMeta(current)
       return current
     }
@@ -547,8 +697,37 @@ export class Store {
     if (!conv) return undefined
     // Anything but a real on/off means "use the default".
     if ('memory' in patch) patch = { ...patch, memory: typeof patch.memory === 'boolean' ? patch.memory : null }
+    if ('starred' in patch) patch = { ...patch, starred: patch.starred === true }
+    // Anything but a real array of ids means "go back to automatic".
+    if ('memorySelection' in patch) {
+      const s = patch.memorySelection
+      patch = { ...patch, memorySelection: Array.isArray(s) && s.every((x) => typeof x === 'string') ? s : null }
+    }
+    // A folder that doesn't exist (deleted from under it, or just bad input) means "no folder", not an error.
+    if ('folderId' in patch) {
+      const f = patch.folderId
+      patch = { ...patch, folderId: typeof f === 'string' && this.stmts.selectFolderById.get(f) ? f : null }
+    }
+    if ('temporary' in patch) patch = { ...patch, temporary: patch.temporary === true }
+
+    const wasTemporary = conv.temporary === true
     Object.assign(conv, patch, touch ? { updatedAt: stamp() } : {})
-    this.writeMeta(conv)
+
+    if (conv.temporary && !wasTemporary) {
+      // Just turned on: this chat's own promise is that nothing about it is
+      // kept, so whatever was already saved for it goes now, not just what
+      // comes next. The name goes too -- it's usually a snippet of the
+      // first message, so it can say as much as the messages themselves.
+      this.stmts.deleteMessagesFor.run(id)
+      this.stmts.scrubConversationName.run(id)
+      this.savedCounts.set(id, 0)
+    } else if (!conv.temporary && wasTemporary) {
+      // Just turned off: everything held in memory while it was temporary
+      // gets saved now, in one go, catching disk up to the live state.
+      this.writeMessages(conv)
+    } else {
+      this.writeMeta(conv) // no-op on its own if conv.temporary is (still) true
+    }
     return conv
   }
 
@@ -645,6 +824,69 @@ export class Store {
       ...configParams(this.config))
     return this.config
   }
+
+  // --- folders -------------------------------------------------------------
+
+  listFolders(): Folder[] {
+    return (this.stmts.selectFolders.all() as unknown as FolderRow[]).map(folderFromRow)
+  }
+
+  createFolder(name: unknown): Folder {
+    // Explicit nulls, the same shape a row reads back as: a new folder inherits everything.
+    const folder: Folder = { id: newId(), name: cleanFolderName(name), createdAt: stamp(), reasoning: null, mcpTools: null }
+    this.stmts.insertFolder.run(folder.id, folder.name, folder.createdAt)
+    return folder
+  }
+
+  getFolder(id: string): Folder | undefined {
+    const row = this.stmts.selectFolderById.get(id) as FolderRow | undefined
+    return row ? folderFromRow(row) : undefined
+  }
+
+  /** Change a folder's name or defaults; fields left out of the patch stay as they were. */
+  updateFolder(id: string, patch: FolderPatch): Folder | undefined {
+    const current = this.getFolder(id)
+    if (!current) return undefined
+    const next: Folder = {
+      ...current,
+      name: patch.name === undefined ? current.name : cleanFolderName(patch.name),
+      reasoning: patch.reasoning === undefined ? current.reasoning : cleanFolderDefault(patch.reasoning, 'reasoning', 40),
+      mcpTools: patch.mcpTools === undefined ? current.mcpTools : cleanFolderDefault(patch.mcpTools, 'tools', 500),
+    }
+    this.stmts.updateFolder.run(next.name, next.reasoning ?? null, next.mcpTools ?? null, id)
+    return next
+  }
+
+  /**
+   * The foreign key's ON DELETE SET NULL clears `folder_id` on disk for any
+   * chat that was in it; the in-memory copies need the same update by hand,
+   * since they were loaded before this delete and won't see it otherwise.
+   */
+  deleteFolder(id: string): boolean {
+    const removed = this.stmts.deleteFolder.run(id).changes > 0
+    if (removed) for (const c of this.conversations.items) if (c.folderId === id) c.folderId = null
+    return removed
+  }
+}
+
+function cleanFolderName(name: unknown): string {
+  const n = typeof name === 'string' ? name.trim() : ''
+  if (!n) throw new Error('A folder needs a name.')
+  if (n.length > 60) throw new Error(`A folder name can be at most 60 characters; this one is ${n.length}.`)
+  return n
+}
+
+/**
+ * A folder default: null means inherit. Reasoning's '' also means inherit,
+ * so it's stored as null; tools' '' is kept, since it means "none".
+ */
+function cleanFolderDefault(value: unknown, what: 'reasoning' | 'tools', max: number): string | null {
+  if (value == null) return null
+  if (typeof value !== 'string') throw new Error(`A folder's ${what} default must be text.`)
+  const v = value.trim()
+  if (v.length > max) throw new Error(`A folder's ${what} default can be at most ${max} characters.`)
+  if (what === 'reasoning' && !v) return null
+  return v
 }
 
 /** Name a thread from its opening message, the way LM Studio titles a chat. */
