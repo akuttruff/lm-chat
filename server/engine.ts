@@ -284,6 +284,17 @@ export function outputCap(raw: string): number {
  * the system prompt would invalidate it every turn. The saved message is
  * never changed; only what's sent.
  */
+/**
+ * Tells the model what the stamp is, so it reads as "now" and not as a
+ * footer to ignore: in tests the model worked that out unprompted, but a
+ * stated rule is cheaper than a lucky inference, and it covers filling
+ * date parameters for tools too.
+ */
+export const DATE_NOTE =
+  'Each message from the user ends with a [Sent ...] line: the date and time it was sent. That is the current ' +
+  "date and time -- treat it as 'now' for anything time-relative (today, tomorrow, this week, how long until) " +
+  'and when filling date parameters for tools.'
+
 export function stampInput(text: string, now: Date = new Date()): string {
   const when = now.toLocaleString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -584,9 +595,10 @@ export class Engine {
     // having succeeded.
     const limit = historyLimit(config.historyChars)
     const memory = memoryOn ? this.memories.context(4000, conv.memorySelection) : null
-    const systemPrompt = memory
-      ? [config.systemPrompt.trim(), memory.block].filter(Boolean).join('\n\n')
-      : config.systemPrompt
+    // The date note goes first and never changes, so it costs the prompt
+    // cache nothing; the stamp it refers to rides on each message (see
+    // stampInput).
+    const systemPrompt = [DATE_NOTE, config.systemPrompt.trim(), memory?.block].filter(Boolean).join('\n\n')
     const prompt = buildHistoryPrompt(systemPrompt, history, limit, conv.summary)
     if (prompt) body.system_prompt = prompt
 

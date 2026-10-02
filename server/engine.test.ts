@@ -5,7 +5,7 @@ import path from 'node:path'
 import { Bus } from './bus.ts'
 import {
   Engine, formatToolOutput, parseIntegrations, buildHistoryPrompt, planCompaction, summarizerInput,
-  summaryTokenCap, newEngineState, cleanTitle,
+  summaryTokenCap, newEngineState, cleanTitle, DATE_NOTE,
 } from './engine.ts'
 import { Store } from './store.ts'
 import { Memories } from './memory.ts'
@@ -113,8 +113,9 @@ describe('request body', () => {
     // e.g. "What day is it?\n\n[Sent Wednesday, October 1, 2026 at 12:34 AM PDT]"
     expect(sent).toMatch(/^What day is it\?\n\n\[Sent \w+day, \w+ \d{1,2}, \d{4} at \d{1,2}:\d{2} [AP]M [A-Z]{2,5}\]$/)
     expect(messages().at(-1)!.text).toBe('What day is it?')
-    // The stamp rides on the new message only: the system prompt (and so the cached prefix) is untouched.
-    expect(String(bodyOf(f).system_prompt ?? '')).not.toMatch(/\[Sent/)
+    // The stamp rides on the new message only: the system prompt explains
+    // it (DATE_NOTE) but never carries one, so the cached prefix stays put.
+    expect(String(bodyOf(f).system_prompt ?? '')).not.toMatch(/\[Sent \w+day,/)
   })
 
   it('omits context_length so LM Studio reuses the loaded instance', async () => {
@@ -145,8 +146,9 @@ describe('request body', () => {
     const first = streams([evt({ type: 'chat.end', result: { response_id: 'resp_1' } })])
     vi.stubGlobal('fetch', first)
     await engine.runTurn(convId, 'hi')
-    // Nothing has been said yet, so there is no transcript to append.
-    expect(bodyOf(first).system_prompt).toBe('be terse')
+    // Nothing has been said yet, so there is no transcript to append -- just
+    // the fixed note explaining the date stamp, then the Settings prompt.
+    expect(bodyOf(first).system_prompt).toBe(`${DATE_NOTE}\n\nbe terse`)
   })
 
   it('fits a saved reasoning level to what the model accepts', async () => {
@@ -435,7 +437,8 @@ describe('memory', () => {
     configure({ memoryDefault: 'on', systemPrompt: 'Be kind.' })
     const body = await turn()
     expect(plugins(body)).toContain('mcp/lm-chat-memory')
-    expect(String(body.system_prompt)).toMatch(/^Be kind\.[\s\S]*\[a1\] Favorite color is green/)
+    expect(String(body.system_prompt).startsWith(DATE_NOTE)).toBe(true)
+    expect(String(body.system_prompt)).toMatch(/\n\nBe kind\.[\s\S]*\[a1\] Favorite color is green/)
   })
 
   it('lets a chat turn it off even when the default is on, and on when it is off', async () => {
@@ -793,7 +796,8 @@ describe('conversation context', () => {
     const f = streams([evt({ type: 'chat.end', result: {} })])
     vi.stubGlobal('fetch', f)
     await engine.runTurn(convId, 'next')
-    expect(String(bodyOf(f).system_prompt).length).toBeLessThan(400)
+    // The fixed date note sits outside the history budget.
+    expect(String(bodyOf(f).system_prompt).length).toBeLessThan(400 + DATE_NOTE.length + 2)
   })
 
   describe('auto-compaction', () => {
