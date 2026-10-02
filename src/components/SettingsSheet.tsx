@@ -473,6 +473,8 @@ export default function SettingsSheet({
             <div className="hint">
               Comma-separated plugin IDs from LM Studio&apos;s <code>mcp.json</code>.
               Requires <b>&quot;Allow calling servers from mcp.json&quot;</b> in Server Settings.
+              This is the default; a folder can set its own list, and any chat can pick its own tools from the{' '}
+              <b>Tools</b> button by the message box. Every tool the model is shown costs ~500 prompt tokens a turn.
             </div>
           </div>
 

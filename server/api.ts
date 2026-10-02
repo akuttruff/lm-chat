@@ -8,6 +8,7 @@ import type { EngineState } from './engine.ts'
 import { Store } from './store.ts'
 import type { FolderPatch } from './store.ts'
 import { MemoryInputError, Memories } from './memory.ts'
+import { ToolCatalogCache } from './tools.ts'
 import { readModelConfig } from './model-config.ts'
 import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
 import { metaOf } from '../src/types.ts'
@@ -21,6 +22,8 @@ export interface ApiOptions {
   dir?: string
   /** The shared memory file; defaults to MEMORY_DB or ~/.lm-memory/memory.sqlite. */
   memoryDb?: string
+  /** The MCP tool catalog; injectable so tests needn't start real servers. */
+  toolCatalog?: ToolCatalogCache
 }
 
 /**
@@ -117,6 +120,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
   const { store, bus } = state
   const memories = new Memories(options.memoryDb)
   const engine = new Engine(store, bus, undefined, state.engine, memories)
+  const toolCatalog = options.toolCatalog ?? new ToolCatalogCache()
 
   /** Recently deleted chats, whole, so Undo can restore one the client only held in outline. */
   const deleted = new Map<string, { conv: Conversation; at: number }>()
@@ -223,6 +227,15 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
           ok: false, models: [], loaded: [],
           error: `Couldn't reach LM Studio at ${base}. (${err.message})`,
         }))
+      return undefined
+    }
+
+    // --- MCP tool catalog: what each server offers, for the per-chat picker ---
+    if (url === '/api/tools' && method === 'GET') {
+      const refresh = new URLSearchParams(query).get('refresh') === '1'
+      void toolCatalog.get(refresh)
+        .then((catalog) => json(res, 200, catalog))
+        .catch((err: Error) => json(res, 500, { error: err.message }))
       return undefined
     }
 

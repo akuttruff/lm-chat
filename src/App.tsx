@@ -7,6 +7,7 @@ import SettingsSheet from './components/SettingsSheet';
 import MemoriesSheet from './components/MemoriesSheet';
 import ConversationList from './components/ConversationList';
 import FolderPicker from './components/FolderPicker';
+import ToolPicker from './components/ToolPicker';
 import ReasoningPicker, { labelFor } from './components/ReasoningPicker';
 import useServerState from './hooks/useServerState';
 import useModelConfig from './hooks/useModelConfig';
@@ -19,7 +20,7 @@ export default function App() {
   const {
     conversations, activeId, active, loadingActive, config, status, startedAt, busy, working,
     send, stop, retry, newChat, openChat, deleteChat, restoreChat, renameChat, setReasoning, setMemory,
-    setMemorySelection, setStarred, setFolder, setTemporary, folders, createFolder, updateFolder, deleteFolder,
+    setMemorySelection, setStarred, setFolder, setTemporary, setTools, folders, createFolder, updateFolder, deleteFolder,
     saveConfig,
   } = server;
 
@@ -37,6 +38,7 @@ export default function App() {
   const [memoriesOpen, setMemoriesOpen] = useState<false | 'browse' | 'select'>(false);
   // The chat a folder is being picked for; null when the picker is closed.
   const [folderPickerFor, setFolderPickerFor] = useState<string | null>(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
   // This chat's own setting, else the Settings default.
   const memoryOn = active?.memory ?? config?.memoryDefault === 'on';
   const temporaryOn = active?.temporary === true;
@@ -89,6 +91,8 @@ export default function App() {
         onToggleTemporary={active ? () => void setTemporary(active.id, !temporaryOn) : undefined}
         folderLabel={folderLabel}
         onOpenFolderPicker={active ? () => setFolderPickerFor(active.id) : undefined}
+        onOpenTools={active ? () => setToolsOpen(true) : undefined}
+        toolsCustomized={active?.tools != null}
         memoryOn={memoryOn}
         onToggleMemory={active ? () => void setMemory(!memoryOn) : undefined}
         onPickMemories={active ? () => setMemoriesOpen('select') : undefined}
@@ -134,6 +138,16 @@ export default function App() {
           onChange: (value) => void setMemorySelection(active.id, value),
         } : undefined}
       />
+      {active && (
+        <ToolPicker
+          open={toolsOpen}
+          onClose={() => setToolsOpen(false)}
+          value={active.tools ?? null}
+          inherited={activeFolder?.mcpTools ?? config?.mcpTools ?? ''}
+          inheritedFrom={activeFolder?.mcpTools != null ? 'folder' : 'Settings'}
+          onChange={(tools) => void setTools(active.id, tools)}
+        />
+      )}
       <FolderPicker
         open={folderPickerFor !== null}
         onClose={() => setFolderPickerFor(null)}

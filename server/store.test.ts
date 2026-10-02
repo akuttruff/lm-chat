@@ -95,11 +95,21 @@ describe('conversations', () => {
   it('hands a reused empty thread back as a clean slate: unfiled, with no settings of its own', () => {
     const id = store.getConversations().activeId!
     const folder = store.createFolder('Astrology')
-    store.patch(id, { folderId: folder.id, reasoning: 'off', memory: true, memorySelection: ['m1'] })
+    store.patch(id, { folderId: folder.id, reasoning: 'off', memory: true, memorySelection: ['m1'], tools: 'mcp/x' })
     const reused = store.create()
     expect(reused.id).toBe(id)
-    expect(reused).toMatchObject({ folderId: null, reasoning: null, memory: null, memorySelection: null, temporary: false })
+    expect(reused).toMatchObject({ folderId: null, reasoning: null, memory: null, memorySelection: null, temporary: false, tools: null })
     expect(new Store({ dir }).get(id)!.folderId).toBeNull()
+  })
+
+  it("keeps a chat's own tool list, telling 'none' apart from 'inherit'", () => {
+    const id = store.getConversations().activeId!
+    store.patch(id, { tools: 'mcp/astrology-v2(verify_claim)' })
+    expect(new Store({ dir }).get(id)!.tools).toBe('mcp/astrology-v2(verify_claim)')
+    store.patch(id, { tools: '' })
+    expect(new Store({ dir }).get(id)!.tools).toBe('')
+    store.patch(id, { tools: 42 as unknown as string }) // junk means inherit
+    expect(store.get(id)!.tools).toBeNull()
   })
 
   it('clears stale server context when reusing an empty thread', () => {

@@ -72,6 +72,12 @@ export interface Conversation {
   /** Which folder this chat is filed under; null/undefined means none. */
   folderId?: string | null
   /**
+   * This chat's own tool list, in the stored form parseIntegrations reads
+   * (see lib/integrations.ts), chosen in the tool picker. null/undefined
+   * means the folder's list, else Settings'; '' means no tools at all.
+   */
+  tools?: string | null
+  /**
    * While true, nothing about this chat is written to disk: not its
    * messages, not its name (usually a snippet of the first one), no meta
    * changes at all. Turning it on discards whatever was already saved for
@@ -217,6 +223,14 @@ export interface Status {
 export interface Integration {
   type: 'plugin'
   id: string
+  /**
+   * Only these of the server's tools are offered to the model. Absent means
+   * all of them. Each tool's schema costs the model ~500 prompt tokens a
+   * turn, so a folder that needs two of a server's fourteen tools saves
+   * thousands by naming them. Written in the tools field as
+   * `mcp/astrology-v2(verify_claim, create_transit_chart)`.
+   */
+  allowed_tools?: string[]
 }
 
 /** Result of probing /v1/models. */

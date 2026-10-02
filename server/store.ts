@@ -214,6 +214,13 @@ function migrateSchema(db: DatabaseSync): void {
     if (!has('config', 'auto_title')) db.exec("ALTER TABLE config ADD COLUMN auto_title TEXT NOT NULL DEFAULT 'on'")
     db.exec('PRAGMA user_version = 7')
   }
+  if (version < 8) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    // A chat's own tool list (null inherits the folder's, then Settings').
+    if (!has('conversations', 'tools')) db.exec('ALTER TABLE conversations ADD COLUMN tools TEXT')
+    db.exec('PRAGMA user_version = 8')
+  }
 }
 
 interface ConversationRow {
@@ -230,6 +237,7 @@ interface ConversationRow {
   memory_selection: string | null
   folder_id: string | null
   temporary: number
+  tools: string | null
 }
 
 interface FolderRow { id: string; name: string; created_at: number; reasoning: string | null; mcp_tools: string | null }
@@ -304,14 +312,16 @@ function metaFromRow(row: ConversationRow): Omit<Conversation, 'messages'> {
     starred: row.starred === 1,
     folderId: row.folder_id,
     temporary: row.temporary === 1,
+    tools: row.tools,
   }
 }
 
 const CONV_COLUMNS =
-  'id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through,memory,starred,memory_selection,folder_id,temporary'
+  'id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through,memory,starred,memory_selection,folder_id,temporary,tools'
+const CONV_PLACEHOLDERS = CONV_COLUMNS.split(',').map(() => '?').join(',')
 const UPDATE_CONV_META =
   'UPDATE conversations SET name=?, updated_at=?, response_id=?, reasoning=?, summary_text=?, summary_through=?, ' +
-  'memory=?, starred=?, memory_selection=?, folder_id=?, temporary=? WHERE id=?'
+  'memory=?, starred=?, memory_selection=?, folder_id=?, temporary=?, tools=? WHERE id=?'
 const memoryValue = (m: Conversation['memory']): number | null => (m == null ? null : m ? 1 : 0)
 const selectionValue = (s: Conversation['memorySelection']): string | null => (s == null ? null : JSON.stringify(s))
 
@@ -320,7 +330,7 @@ function convParams(c: Conversation): SQLInputValue[] {
   return [
     c.id, c.name, c.createdAt, c.updatedAt, c.responseId, c.reasoning ?? null,
     c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory),
-    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0,
+    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.tools ?? null,
   ]
 }
 
@@ -329,7 +339,7 @@ function convMetaParams(c: Conversation): SQLInputValue[] {
   return [
     c.name, c.updatedAt, c.responseId, c.reasoning ?? null,
     c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory),
-    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.id,
+    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.tools ?? null, c.id,
   ]
 }
 
@@ -446,7 +456,7 @@ function migrateFromJson(paths: ReturnType<typeof locate>): void {
   try {
     ensureSchema(db)
     const insertConv = db.prepare(
-      `INSERT INTO conversations (${CONV_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO conversations (${CONV_COLUMNS}) VALUES (${CONV_PLACEHOLDERS})`,
     )
     const insertMsg = db.prepare(`INSERT INTO messages (${MESSAGE_COLUMNS}) VALUES (${MESSAGE_PLACEHOLDERS})`)
     db.exec('BEGIN')
@@ -534,7 +544,7 @@ export class Store {
       selectActiveId: this.db.prepare('SELECT active_id FROM app_state WHERE id = 1'),
       selectConfig: this.db.prepare('SELECT * FROM config WHERE id = 1'),
       insertConversation: this.db.prepare(
-        `INSERT INTO conversations (${CONV_COLUMNS}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO conversations (${CONV_COLUMNS}) VALUES (${CONV_PLACEHOLDERS})`,
       ),
       updateConversationMeta: this.db.prepare(
         UPDATE_CONV_META,
@@ -663,7 +673,7 @@ export class Store {
       const blank = blankConversation()
       Object.assign(current, {
         responseId: null, updatedAt: stamp(), reasoning: blank.reasoning, memory: blank.memory,
-        memorySelection: blank.memorySelection, folderId: blank.folderId, temporary: blank.temporary,
+        memorySelection: blank.memorySelection, folderId: blank.folderId, temporary: blank.temporary, tools: null,
       })
       this.writeMeta(current)
       return current
@@ -709,6 +719,8 @@ export class Store {
       patch = { ...patch, folderId: typeof f === 'string' && this.stmts.selectFolderById.get(f) ? f : null }
     }
     if ('temporary' in patch) patch = { ...patch, temporary: patch.temporary === true }
+    // Anything but text means "same as the folder / Settings"; '' is a real choice of no tools.
+    if ('tools' in patch) patch = { ...patch, tools: typeof patch.tools === 'string' ? patch.tools : null }
 
     const wasTemporary = conv.temporary === true
     Object.assign(conv, patch, touch ? { updatedAt: stamp() } : {})

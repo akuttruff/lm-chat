@@ -45,6 +45,8 @@ export interface ServerState {
   setFolder: (id: string, folderId: string | null) => Promise<void>
   /** On: nothing about this chat is saved from now on, and whatever was already saved for it is thrown away. Off: catches disk up with it. */
   setTemporary: (id: string, value: boolean) => Promise<void>
+  /** This chat's own tool list (stored form; see lib/integrations.ts); null goes back to the folder's / Settings'. */
+  setTools: (id: string, tools: string | null) => Promise<void>
   /** Every folder, name-sorted -- shared between the chat list (grouping) and the folder picker. */
   folders: Folder[]
   createFolder: (name: string) => Promise<Folder>
@@ -360,6 +362,10 @@ export default function useServerState(): ServerState {
     await patchChat(id, { temporary: value })
   }, [])
 
+  const setTools = useCallback(async (id: string, tools: string | null) => {
+    await patchChat(id, { tools })
+  }, [])
+
   const saveConfig = useCallback(async (patch: Partial<PublicConfig> & { apiToken?: string }) => {
     const r = await fetch('/api/config', {
       method: 'PUT',
@@ -398,6 +404,7 @@ export default function useServerState(): ServerState {
     setMemorySelection,
     setStarred,
     setFolder,
+    setTools,
     setTemporary,
     folders,
     createFolder,

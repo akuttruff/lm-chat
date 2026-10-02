@@ -862,6 +862,31 @@ html, body, #root {
 .temporary-chip { padding: 0 11px; color: var(--paper-dim); border-color: var(--line); }
 .temporary-chip.on { color: var(--bg); background: var(--rust); border-color: var(--rust); }
 .memory-picker-chip { padding: 0 11px; color: var(--paper-dim); }
+/* Lit when the chat has a tool list of its own, like the memory chip when on. */
+.tools-chip.on { color: var(--paper); background: var(--moss-dim); border-color: var(--moss); }
+
+/* --- tool picker --- */
+.tool-summary { color: var(--paper-dim); }
+.tool-catalog { margin-top: 10px; }
+.tool-server { margin: 10px 0 4px; padding-top: 8px; border-top: 1px solid var(--line); }
+.tool-server-head { font-weight: 600; }
+.tool-server-name { flex: 1 1 auto; }
+.tool-server-count { font-size: 12px; font-weight: 400; color: var(--paper-dim); }
+.tool-row { margin-left: 28px; align-items: flex-start; }
+.tool-row > span { display: flex; flex-direction: column; gap: 1px; }
+.tool-name { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 13px; }
+.tool-desc { font-size: 12px; color: var(--paper-dim); }
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  color: var(--moss);
+  font-size: 13px;
+}
 .memory-picker-chip:active { color: var(--paper); }
 
 .folder-chip span { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

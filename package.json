@@ -17,6 +17,7 @@
     "deploy": "sh scripts/deploy.sh"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
     "lucide-react": "^1.48.0",
     "motion": "^13.4.4",
     "react": "^19.2.8",

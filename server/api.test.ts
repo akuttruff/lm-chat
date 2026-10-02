@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { createApi } from './api.ts'
+import { ToolCatalogCache } from './tools.ts'
 import type { Conversation, ConversationStore, PublicConfig } from '../src/types.ts'
 
 let server: Server
@@ -157,6 +158,28 @@ describe('a new chat in a folder', () => {
     api.store.setMessages(created.id, [{ id: 'm', role: 'user', text: 'seed' }]) // so the next create is a new chat
     const stray = await (await send('/api/chats', 'POST', { folderId: 'nope' })).json() as { folderId: string | null }
     expect(stray.folderId).toBeNull()
+  })
+})
+
+describe('tool catalog', () => {
+  it('serves what the servers reported, and re-asks them on refresh', async () => {
+    const load = vi.fn(async () => ({ fetchedAt: Date.now(), servers: [
+      { id: 'mcp/astrology-v2', name: 'astrology-v2', tools: [{ name: 'verify_claim', description: 'Check one claim.' }] },
+    ] }))
+    const own = createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite'), toolCatalog: new ToolCatalogCache(load) })
+    const srv = http.createServer((req, res) => own.middleware(req, res, () => { res.statusCode = 404; res.end() }))
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()))
+    const port = (srv.address() as { port: number }).port
+    try {
+      const first = await (await realFetch(`http://127.0.0.1:${port}/api/tools`)).json() as { servers: { id: string }[] }
+      expect(first.servers.map((s) => s.id)).toEqual(['mcp/astrology-v2'])
+      await realFetch(`http://127.0.0.1:${port}/api/tools`)
+      expect(load).toHaveBeenCalledTimes(1)
+      await realFetch(`http://127.0.0.1:${port}/api/tools?refresh=1`)
+      expect(load).toHaveBeenCalledTimes(2)
+    } finally {
+      await new Promise<void>((r) => srv.close(() => r()))
+    }
   })
 })
 

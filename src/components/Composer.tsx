@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { ArrowUp, Brain, Folder, Gauge, Ghost, ListChecks, Square } from 'lucide-react'
+import { ArrowUp, Brain, Folder, Gauge, Ghost, ListChecks, Square, Wrench } from 'lucide-react'
 
 interface ComposerProps {
   onSend: (text: string) => void
@@ -19,11 +19,14 @@ interface ComposerProps {
   /** This chat's folder, or "Folder" when it isn't in one. */
   folderLabel?: string
   onOpenFolderPicker?: () => void
+  /** Pick which tools this chat offers the model; `toolsCustomized` when it has a list of its own. */
+  onOpenTools?: () => void
+  toolsCustomized?: boolean
 }
 
 export default function Composer({
   onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning, temporaryOn = false, onToggleTemporary,
-  memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker,
+  memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false,
 }: ComposerProps) {
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -90,6 +93,18 @@ export default function Composer({
         >
           <Folder size={14} aria-hidden="true" />
           <span>{folderLabel}</span>
+        </button>
+      )}
+      {onOpenTools && (
+        <button
+          type="button"
+          className={`reasoning-chip tools-chip${toolsCustomized ? ' on' : ''}`}
+          onClick={onOpenTools}
+          aria-label={toolsCustomized ? 'Tools: chosen for this chat' : 'Tools: same as the folder or Settings'}
+          title={toolsCustomized ? 'This chat has its own tool list' : 'Choose which tools this chat offers the model'}
+        >
+          <Wrench size={14} aria-hidden="true" />
+          <span>Tools</span>
         </button>
       )}
       {onToggleMemory && (

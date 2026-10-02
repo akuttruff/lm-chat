@@ -7,7 +7,8 @@ import type { ReasoningCapability } from './capabilities.ts'
 import { Slots, parallelLimit } from './slots.ts'
 import { AUTO_LOADED, MEMORY_PLUGIN, Memories } from './memory.ts'
 import { metaOf } from '../src/types.ts'
-import type { ChatEvent, ContextSummary, Integration, Message, ReplyStats, ServerConfig } from '../src/types.ts'
+import { parseIntegrations } from '../src/lib/integrations.ts'
+import type { ChatEvent, ContextSummary, Message, ReplyStats, ServerConfig } from '../src/types.ts'
 
 /**
  * Runs a turn against LM Studio, server-side.
@@ -364,14 +365,7 @@ function manifestCapability(model: string): ReasoningCapability | null {
   return { allowed, default: cfg.reasoning.default }
 }
 
-export function parseIntegrations(mcpTools: string): Integration[] {
-  return (mcpTools || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    // LM Studio wants fully-qualified plugin ids; accept a bare label too.
-    .map((id): Integration => ({ type: 'plugin', id: id.includes('/') ? id : `mcp/${id}` }))
-}
+export { parseIntegrations }
 
 async function describeHttpError(res: Response): Promise<string> {
   let detail = ''
@@ -587,8 +581,10 @@ export class Engine {
     // Settings tools field, that must not override "off" for this chat, so
     // it's stripped from there and re-added only when memory is on.
     const memoryOn = conv.memory ?? config.memoryDefault === 'on'
-    // `??` here: a folder's '' is "no tools", its null "same as Settings".
-    const integrations = parseIntegrations(folder?.mcpTools ?? config.mcpTools).filter((i) => i.id !== MEMORY_PLUGIN)
+    // Chat, then folder, then Settings. `??` throughout: '' is "no tools",
+    // null "same as the level above".
+    const integrations = parseIntegrations(conv.tools ?? folder?.mcpTools ?? config.mcpTools)
+      .filter((i) => i.id !== MEMORY_PLUGIN)
     if (memoryOn) integrations.push({ type: 'plugin', id: MEMORY_PLUGIN })
     if (integrations.length) body.integrations = integrations
     // Every turn carries its own context, so no turn depends on the last one

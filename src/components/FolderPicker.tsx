@@ -26,9 +26,17 @@ type ToolsMode = 'inherit' | 'none' | 'custom'
 const toolsModeOf = (mcpTools: string | null | undefined): ToolsMode =>
   (mcpTools == null ? 'inherit' : mcpTools === '' ? 'none' : 'custom')
 
-/** Plugin ids from a Settings-style list, qualified the way the server does it. */
+/**
+ * Plugin ids from a Settings-style list, qualified the way the server does
+ * it. An entry may carry a tool list in parentheses -- `mcp/astrology-v2(
+ * verify_claim, list_upcoming_transits)` -- whose commas don't split it;
+ * the entry is kept whole, parentheses and all, so the choice survives.
+ */
 const parseIds = (list: string | null | undefined): string[] =>
-  (list || '').split(',').map((s) => s.trim()).filter(Boolean).map((id) => (id.includes('/') ? id : `mcp/${id}`))
+  ((list || '').match(/[^,(]+(?:\([^)]*\))?/g) ?? [])
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((entry) => (entry.includes('/') ? entry : `mcp/${entry}`))
 /** "mcp/astrology-v2" reads as "astrology-v2" in a list where they're all mcp/. */
 const shortId = (id: string): string => id.replace(/^mcp\//, '')
 
@@ -286,7 +294,10 @@ function FolderEditor({ folder, modelConfig, config, onBack, onSave, onDelete }:
               />
             </div>
           )}
-          <div className="hint">Memory is separate -- the brain button on each chat.</div>
+          <div className="hint">
+            What chats here start with; any chat can pick its own tools from the Tools button by the message box.
+            Memory is separate -- the brain button on each chat.
+          </div>
         </div>
 
         <div className="folder-danger">

@@ -93,6 +93,7 @@ describe('parseIntegrations', () => {
   it('returns nothing for an empty field', () => {
     expect(parseIntegrations('')).toEqual([])
   })
+
 })
 
 describe('request body', () => {
@@ -1347,6 +1348,20 @@ describe('folder defaults', () => {
     store.updateFolder(folder.id, { reasoning: 'off' })
     store.patch(convId, { folderId: folder.id, reasoning: 'low' })
     expect((await turn('hi')).reasoning).toBe('low')
+  })
+
+  it("a chat's own tool list wins over the folder's and Settings', tools named and all", async () => {
+    const folder = store.createFolder('Astrology')
+    store.updateFolder(folder.id, { mcpTools: 'mcp/astrology-v2' })
+    store.patch(convId, { folderId: folder.id, tools: 'mcp/astrology-v2(verify_claim, create_transit_chart)' })
+    const body = await turn('hi')
+    expect(body.integrations).toEqual([
+      { type: 'plugin', id: 'mcp/astrology-v2', allowed_tools: ['verify_claim', 'create_transit_chart'] },
+    ])
+    store.patch(convId, { tools: '' }) // a real choice of none
+    expect(plugins(await turn('again'))).toEqual([])
+    store.patch(convId, { tools: null }) // back to the folder's
+    expect(plugins(await turn('and again'))).toEqual(['mcp/astrology-v2'])
   })
 
   it("a folder's empty tool list means no tools at all; an unset one means Settings'", async () => {
