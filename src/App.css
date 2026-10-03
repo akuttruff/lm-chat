@@ -986,8 +986,6 @@ html, body, #root {
   color: var(--moss);
   font-size: 14px;
 }
-.folder-tool-list { margin-top: 8px; padding: 6px 2px 0; }
-.folder-tool-list input[type="text"] { margin-top: 4px; }
 .folder-danger { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line); }
 .danger-link {
   display: inline-flex;

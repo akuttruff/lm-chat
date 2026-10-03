@@ -3,6 +3,7 @@ import { Drawer } from 'vaul'
 import { Check, ChevronLeft, Plus, Settings2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { labelFor, levelsFor } from './ReasoningPicker'
+import ToolCatalog, { describeTools, formatSelection, selectionOf, useToolCatalog, type Selection } from './ToolCatalog'
 import type { Folder, FolderUpdate, ModelConfig, PublicConfig } from '../types.ts'
 
 interface FolderPickerProps {
@@ -26,26 +27,12 @@ type ToolsMode = 'inherit' | 'none' | 'custom'
 const toolsModeOf = (mcpTools: string | null | undefined): ToolsMode =>
   (mcpTools == null ? 'inherit' : mcpTools === '' ? 'none' : 'custom')
 
-/**
- * Plugin ids from a Settings-style list, qualified the way the server does
- * it. An entry may carry a tool list in parentheses -- `mcp/astrology-v2(
- * verify_claim, list_upcoming_transits)` -- whose commas don't split it;
- * the entry is kept whole, parentheses and all, so the choice survives.
- */
-const parseIds = (list: string | null | undefined): string[] =>
-  ((list || '').match(/[^,(]+(?:\([^)]*\))?/g) ?? [])
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((entry) => (entry.includes('/') ? entry : `mcp/${entry}`))
-/** "mcp/astrology-v2" reads as "astrology-v2" in a list where they're all mcp/. */
-const shortId = (id: string): string => id.replace(/^mcp\//, '')
-
 /** What a folder changes for its chats, for the row under its name; '' when nothing. */
 export function describeDefaults(f: Folder): string {
   const parts: string[] = []
   if (f.reasoning) parts.push(`Reasoning ${f.reasoning}`)
   if (f.mcpTools === '') parts.push('No tools')
-  else if (f.mcpTools) parts.push(`Tools: ${parseIds(f.mcpTools).map(shortId).join(', ')}`)
+  else if (f.mcpTools) parts.push(`Tools: ${describeTools(f.mcpTools)}`)
   return parts.join(' · ')
 }
 
@@ -181,39 +168,27 @@ interface FolderEditorProps {
 }
 
 /**
- * One folder's settings. Tools are picked from a checklist of the ids
- * Settings already knows (plus any this folder has), so no one has to type
- * "mcp/astrology-v2" from memory; a free field takes the rest.
+ * One folder's settings. Tools are picked server by server, tool by tool,
+ * from the same catalog as a chat's own Tools button -- so an "Astrology"
+ * folder can start its chats with two of the server's sixteen tools, not
+ * all of them. Starts from Settings' list when the folder has none of its
+ * own, so "only these" begins from what chats here get today.
  */
 function FolderEditor({ folder, modelConfig, config, onBack, onSave, onDelete }: FolderEditorProps) {
-  const settingsIds = parseIds(config?.mcpTools)
-  const ownIds = parseIds(folder.mcpTools)
-  const known = [...new Set([...settingsIds, ...ownIds])]
-
   const [name, setName] = useState(folder.name)
   const [reasoning, setReasoning] = useState(folder.reasoning ?? '')
   const [toolsMode, setToolsMode] = useState<ToolsMode>(toolsModeOf(folder.mcpTools))
-  const [picked, setPicked] = useState<Set<string>>(new Set(ownIds))
-  const [extra, setExtra] = useState('')
+  const [selection, setSelection] = useState<Selection>(() => selectionOf(folder.mcpTools || config?.mcpTools || ''))
   const [saving, setSaving] = useState(false)
-
-  const togglePicked = (id: string): void => {
-    setPicked((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  const { catalog, loading, refresh } = useToolCatalog(toolsMode === 'custom')
 
   const save = async (): Promise<void> => {
-    const ids = [...new Set([...known.filter((id) => picked.has(id)), ...parseIds(extra)])]
     setSaving(true)
     try {
       await onSave({
         name,
         reasoning: reasoning || null,
-        mcpTools: toolsMode === 'inherit' ? null : toolsMode === 'none' ? '' : ids.join(', '),
+        mcpTools: toolsMode === 'inherit' ? null : toolsMode === 'none' ? '' : formatSelection(selection),
       })
     } catch (err) {
       toast.error((err as Error).message)
@@ -233,7 +208,7 @@ function FolderEditor({ folder, modelConfig, config, onBack, onSave, onDelete }:
   }
 
   const settingsReasoning = labelFor(null, config?.reasoning)
-  const settingsTools = settingsIds.length ? settingsIds.map(shortId).join(', ') : 'none'
+  const settingsTools = describeTools(config?.mcpTools ?? '', catalog)
 
   return (
     <>
@@ -275,27 +250,11 @@ function FolderEditor({ folder, modelConfig, config, onBack, onSave, onDelete }:
             <option value="custom">Only these…</option>
           </select>
           {toolsMode === 'custom' && (
-            <div className="folder-tool-list">
-              {known.map((id) => (
-                <label key={id} className="toggle-row">
-                  <input type="checkbox" checked={picked.has(id)} onChange={() => togglePicked(id)} />
-                  {shortId(id)}
-                </label>
-              ))}
-              <input
-                type="text"
-                aria-label="Other plugin IDs"
-                placeholder="Other plugin IDs, comma-separated"
-                autoCapitalize="off"
-                autoCorrect="off"
-                value={extra}
-                onChange={(e) => setExtra(e.target.value)}
-                maxLength={500}
-              />
-            </div>
+            <ToolCatalog catalog={catalog} loading={loading} onRefresh={refresh} selection={selection} onChange={setSelection} />
           )}
           <div className="hint">
             What chats here start with; any chat can pick its own tools from the Tools button by the message box.
+            Each tool the model is shown costs about 500 prompt tokens every turn, so fewer is faster.
             Memory is separate -- the brain button on each chat.
           </div>
         </div>

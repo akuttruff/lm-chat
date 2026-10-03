@@ -1,11 +1,30 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FolderPicker, { describeDefaults } from './FolderPicker.tsx'
 import type { Folder, FolderUpdate, PublicConfig } from '../types.ts'
 
 const astrology: Folder = { id: 'f1', name: 'Astrology', createdAt: 1 }
 const banter: Folder = { id: 'f2', name: 'Banter', createdAt: 2 }
+
+// What the servers report when the editor asks for their tools.
+const catalog = {
+  fetchedAt: 1,
+  servers: [
+    { id: 'mcp/astrology-v2', name: 'astrology-v2', tools: [
+      { name: 'create_natal_chart', description: 'Generate a natal chart.' },
+      { name: 'verify_claim', description: 'Check one transit claim.' },
+      { name: 'forecast_month', description: 'A month ahead.' },
+    ] },
+    { id: 'mcp/deep-research', name: 'deep-research', tools: [
+      { name: 'web_search', description: 'Search the web.' },
+    ] },
+  ],
+}
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve(catalog) })))
+})
 
 const config: PublicConfig = {
   lmStudioUrl: '', model: 'qwen', systemPrompt: '', mcpTools: 'mcp/astrology-v2, mcp/deep-research', contextLength: '',
@@ -62,6 +81,8 @@ describe('FolderPicker', () => {
     expect(describeDefaults(astrology)).toBe('')
     expect(describeDefaults({ ...astrology, reasoning: 'off', mcpTools: 'mcp/astrology-v2' })).toBe('Reasoning off · Tools: astrology-v2')
     expect(describeDefaults({ ...astrology, mcpTools: '' })).toBe('No tools')
+    expect(describeDefaults({ ...astrology, mcpTools: 'mcp/astrology-v2(verify_claim, forecast_month), mcp/deep-research' }))
+      .toBe('Tools: astrology-v2 (2), deep-research')
   })
 
   it("opens a folder's own settings page, titled with its name, and comes back", async () => {
@@ -99,25 +120,49 @@ describe('FolderPicker', () => {
     expect(props.onUpdate).toHaveBeenCalledWith('f1', { name: 'Astrology', reasoning: 'off', mcpTools: '' })
   })
 
-  it("picks a folder's tools from a checklist of the ones Settings knows, plus any typed", async () => {
+  it("picks a folder's tools one by one from the servers' own lists, starting from what Settings gives", async () => {
     const user = userEvent.setup()
     const props = setup()
     await openEditor(user)
     await user.selectOptions(screen.getByLabelText('Tools'), 'custom')
-    await user.click(screen.getByLabelText('astrology-v2'))
-    await user.type(screen.getByLabelText('Other plugin IDs'), 'memory')
+    // Settings offers both servers whole, so everything starts ticked; keep two astrology tools and drop deep-research.
+    const astro = await screen.findByRole('region', { name: 'astrology-v2' })
+    expect(within(astro).getByText('3 of 3')).toBeInTheDocument()
+    await user.click(within(astro).getByRole('checkbox', { name: /create_natal_chart/ }))
+    const research = screen.getByRole('region', { name: 'deep-research' })
+    await user.click(within(research).getByRole('checkbox', { name: /web_search/ }))
     await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(props.onUpdate).toHaveBeenCalledWith('f1', { name: 'Astrology', reasoning: null, mcpTools: 'mcp/astrology-v2, mcp/memory' })
+    expect(props.onUpdate).toHaveBeenCalledWith('f1', {
+      name: 'Astrology', reasoning: null, mcpTools: 'mcp/astrology-v2(forecast_month, verify_claim)',
+    })
   })
 
-  it("starts from a folder's own tool list, checked", async () => {
+  it("starts from a folder's own tool subset, with just those ticked", async () => {
     const user = userEvent.setup()
-    setup({ folders: [{ ...astrology, reasoning: 'low', mcpTools: 'mcp/astrology-v2' }, banter] })
-    expect(await screen.findByText('Reasoning low · Tools: astrology-v2')).toBeInTheDocument()
+    setup({ folders: [{ ...astrology, reasoning: 'low', mcpTools: 'mcp/astrology-v2(verify_claim)' }, banter] })
+    expect(await screen.findByText('Reasoning low · Tools: astrology-v2 (1)')).toBeInTheDocument()
     await openEditor(user)
     expect(screen.getByLabelText('Tools')).toHaveValue('custom')
-    expect(screen.getByLabelText('astrology-v2')).toBeChecked()
-    expect(screen.getByLabelText('deep-research')).not.toBeChecked()
+    const astro = await screen.findByRole('region', { name: 'astrology-v2' })
+    expect(within(astro).getByText('1 of 3')).toBeInTheDocument()
+    expect(within(astro).getByRole('checkbox', { name: /verify_claim/ })).toBeChecked()
+    expect(within(astro).getByRole('checkbox', { name: /create_natal_chart/ })).not.toBeChecked()
+    expect(within(screen.getByRole('region', { name: 'deep-research' })).getByRole('checkbox', { name: /web_search/ })).not.toBeChecked()
+  })
+
+  it('ticking a whole server stores it plain, and deselect all empties the list', async () => {
+    const user = userEvent.setup()
+    const props = setup({ folders: [{ ...astrology, mcpTools: 'mcp/astrology-v2(verify_claim)' }, banter] })
+    await openEditor(user)
+    const astro = await screen.findByRole('region', { name: 'astrology-v2' })
+    await user.click(within(astro).getByRole('checkbox', { name: /^astrology-v2/ }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(props.onUpdate).toHaveBeenLastCalledWith('f1', { name: 'Astrology', reasoning: null, mcpTools: 'mcp/astrology-v2' })
+    // Saving goes back to the list; open the editor again for the second change.
+    await openEditor(user)
+    await user.click(await screen.findByRole('button', { name: 'Deselect all' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(props.onUpdate).toHaveBeenLastCalledWith('f1', { name: 'Astrology', reasoning: null, mcpTools: '' })
   })
 
   it('deletes a folder from its settings page, after confirming', async () => {
