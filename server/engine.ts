@@ -575,12 +575,12 @@ export class Engine {
       ? fitReasoning(requested, (await this.capabilities(config)) ?? manifestCapability(config.model))
       : null
     if (reasoning) body.reasoning = reasoning
-    // Memory is per chat, falling back to the Settings default; when on, the
-    // model gets the memory tools and what it has saved so far. The toggle
-    // owns the memory plugin outright: if it's also (still) listed in the general
-    // Settings tools field, that must not override "off" for this chat, so
-    // it's stripped from there and re-added only when memory is on.
-    const memoryOn = conv.memory ?? config.memoryDefault === 'on'
+    // Memory is per chat, then the folder's, then the Settings default; when
+    // on, the model gets the memory tools and what it has saved so far. The
+    // toggle owns the memory plugin outright: if it's also (still) listed in
+    // the general Settings tools field, that must not override "off" for this
+    // chat, so it's stripped from there and re-added only when memory is on.
+    const memoryOn = conv.memory ?? folder?.memory ?? config.memoryDefault === 'on'
     // Chat, then folder, then Settings. `??` throughout: '' is "no tools",
     // null "same as the level above".
     const integrations = parseIntegrations(conv.tools ?? folder?.mcpTools ?? config.mcpTools)
@@ -590,7 +590,8 @@ export class Engine {
     // Every turn carries its own context, so no turn depends on the last one
     // having succeeded.
     const limit = historyLimit(config.historyChars)
-    const memory = memoryOn ? this.memories.context(4000, conv.memorySelection) : null
+    // Which memories: the chat's own pick, else the folder's, else automatic.
+    const memory = memoryOn ? this.memories.context(4000, conv.memorySelection ?? folder?.memorySelection) : null
     // The date note goes first and never changes, so it costs the prompt
     // cache nothing; the stamp it refers to rides on each message (see
     // stampInput).

@@ -199,10 +199,14 @@ export interface Folder {
    * overridden by a chat's own setting. Reasoning: a level, or null/'' to
    * inherit. Tools: a plugin-id list like Settings' -- '' is "none" and
    * null is inherit, which differ: a folder for plain conversation can turn
-   * the tools off outright.
+   * the tools off outright. Memory: on/off, or null to inherit; its
+   * selection is which saved memories chats here get (null: automatic),
+   * the same shape as a chat's own memorySelection.
    */
   reasoning?: string | null
   mcpTools?: string | null
+  memory?: boolean | null
+  memorySelection?: string[] | null
 }
 
 /** What a client may change about a folder; a field left out stays as it is. */
@@ -210,6 +214,8 @@ export interface FolderUpdate {
   name?: string
   reasoning?: string | null
   mcpTools?: string | null
+  memory?: boolean | null
+  memorySelection?: string[] | null
 }
 
 /** What the browser is allowed to see of the config. */

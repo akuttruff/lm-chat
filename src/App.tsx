@@ -39,8 +39,9 @@ export default function App() {
   // The chat a folder is being picked for; null when the picker is closed.
   const [folderPickerFor, setFolderPickerFor] = useState<string | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
-  // This chat's own setting, else the Settings default.
-  const memoryOn = active?.memory ?? config?.memoryDefault === 'on';
+  const activeFolder = active ? folders.find((f) => f.id === active.folderId) : undefined;
+  // This chat's own setting, else the folder's, else the Settings default.
+  const memoryOn = active?.memory ?? activeFolder?.memory ?? config?.memoryDefault === 'on';
   const temporaryOn = active?.temporary === true;
 
   // Nothing to talk to yet: get the server configured first.
@@ -51,7 +52,6 @@ export default function App() {
   const messages = active?.messages ?? [];
   const reasoning = active?.reasoning ?? null;
   const folderPickerConv = folderPickerFor ? conversations.find((c) => c.id === folderPickerFor) ?? null : null;
-  const activeFolder = active ? folders.find((f) => f.id === active.folderId) : undefined;
   // "Folder" (not "No folder"): short enough for the composer chip, still
   // reads as "tap to set one" rather than a label of its own.
   const folderLabel = active ? activeFolder?.name ?? 'Folder' : undefined;
@@ -134,7 +134,9 @@ export default function App() {
         open={memoriesOpen !== false}
         onClose={() => setMemoriesOpen(false)}
         selectFor={memoriesOpen === 'select' && active ? {
-          selection: active.memorySelection ?? null,
+          // The chat's own pick, else the folder's; a change gives the chat its own.
+          selection: active.memorySelection ?? activeFolder?.memorySelection ?? null,
+          fromFolder: active.memorySelection == null && activeFolder?.memorySelection != null,
           onChange: (value) => void setMemorySelection(active.id, value),
         } : undefined}
       />

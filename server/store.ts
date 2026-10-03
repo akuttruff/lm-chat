@@ -101,7 +101,9 @@ CREATE TABLE IF NOT EXISTS folders (
   name TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   reasoning TEXT,
-  mcp_tools TEXT
+  mcp_tools TEXT,
+  memory INTEGER,
+  memory_selection TEXT
 );
 CREATE TABLE IF NOT EXISTS messages (
   conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -221,6 +223,14 @@ function migrateSchema(db: DatabaseSync): void {
     if (!has('conversations', 'tools')) db.exec('ALTER TABLE conversations ADD COLUMN tools TEXT')
     db.exec('PRAGMA user_version = 8')
   }
+  if (version < 9) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    // A folder's memory defaults, the same shape as a chat's own.
+    if (!has('folders', 'memory')) db.exec('ALTER TABLE folders ADD COLUMN memory INTEGER')
+    if (!has('folders', 'memory_selection')) db.exec('ALTER TABLE folders ADD COLUMN memory_selection TEXT')
+    db.exec('PRAGMA user_version = 9')
+  }
 }
 
 interface ConversationRow {
@@ -240,9 +250,13 @@ interface ConversationRow {
   tools: string | null
 }
 
-interface FolderRow { id: string; name: string; created_at: number; reasoning: string | null; mcp_tools: string | null }
+interface FolderRow {
+  id: string; name: string; created_at: number; reasoning: string | null; mcp_tools: string | null
+  memory: number | null; memory_selection: string | null
+}
 const folderFromRow = (r: FolderRow): Folder => ({
   id: r.id, name: r.name, createdAt: r.created_at, reasoning: r.reasoning, mcpTools: r.mcp_tools,
+  memory: r.memory == null ? null : r.memory === 1, memorySelection: parseSelection(r.memory_selection),
 })
 
 /** What a folder PATCH may change; an absent field is left as it is. */
@@ -250,6 +264,8 @@ export interface FolderPatch {
   name?: unknown
   reasoning?: unknown
   mcpTools?: unknown
+  memory?: unknown
+  memorySelection?: unknown
 }
 
 interface MessageRow {
@@ -564,7 +580,7 @@ export class Store {
       selectFolders: this.db.prepare('SELECT * FROM folders ORDER BY name COLLATE NOCASE'),
       selectFolderById: this.db.prepare('SELECT * FROM folders WHERE id = ?'),
       insertFolder: this.db.prepare('INSERT INTO folders (id, name, created_at) VALUES (?, ?, ?)'),
-      updateFolder: this.db.prepare('UPDATE folders SET name = ?, reasoning = ?, mcp_tools = ? WHERE id = ?'),
+      updateFolder: this.db.prepare('UPDATE folders SET name = ?, reasoning = ?, mcp_tools = ?, memory = ?, memory_selection = ? WHERE id = ?'),
       deleteFolder: this.db.prepare('DELETE FROM folders WHERE id = ?'),
       scrubConversationName: this.db.prepare("UPDATE conversations SET name = '' WHERE id = ?"),
     }
@@ -710,8 +726,7 @@ export class Store {
     if ('starred' in patch) patch = { ...patch, starred: patch.starred === true }
     // Anything but a real array of ids means "go back to automatic".
     if ('memorySelection' in patch) {
-      const s = patch.memorySelection
-      patch = { ...patch, memorySelection: Array.isArray(s) && s.every((x) => typeof x === 'string') ? s : null }
+      patch = { ...patch, memorySelection: cleanSelection(patch.memorySelection) }
     }
     // A folder that doesn't exist (deleted from under it, or just bad input) means "no folder", not an error.
     if ('folderId' in patch) {
@@ -845,7 +860,9 @@ export class Store {
 
   createFolder(name: unknown): Folder {
     // Explicit nulls, the same shape a row reads back as: a new folder inherits everything.
-    const folder: Folder = { id: newId(), name: cleanFolderName(name), createdAt: stamp(), reasoning: null, mcpTools: null }
+    const folder: Folder = {
+      id: newId(), name: cleanFolderName(name), createdAt: stamp(), reasoning: null, mcpTools: null, memory: null, memorySelection: null,
+    }
     this.stmts.insertFolder.run(folder.id, folder.name, folder.createdAt)
     return folder
   }
@@ -864,8 +881,13 @@ export class Store {
       name: patch.name === undefined ? current.name : cleanFolderName(patch.name),
       reasoning: patch.reasoning === undefined ? current.reasoning : cleanFolderDefault(patch.reasoning, 'reasoning', 40),
       mcpTools: patch.mcpTools === undefined ? current.mcpTools : cleanFolderDefault(patch.mcpTools, 'tools', 500),
+      // Same rules as a chat's own: anything but a boolean is "inherit", anything but a list of ids is "automatic".
+      memory: patch.memory === undefined ? current.memory : typeof patch.memory === 'boolean' ? patch.memory : null,
+      memorySelection: patch.memorySelection === undefined ? current.memorySelection : cleanSelection(patch.memorySelection),
     }
-    this.stmts.updateFolder.run(next.name, next.reasoning ?? null, next.mcpTools ?? null, id)
+    this.stmts.updateFolder.run(
+      next.name, next.reasoning ?? null, next.mcpTools ?? null, memoryValue(next.memory), selectionValue(next.memorySelection), id,
+    )
     return next
   }
 
@@ -880,6 +902,10 @@ export class Store {
     return removed
   }
 }
+
+/** A memory selection from a client: a list of ids, or null for automatic. */
+const cleanSelection = (s: unknown): string[] | null =>
+  (Array.isArray(s) && s.every((x) => typeof x === 'string') ? s as string[] : null)
 
 function cleanFolderName(name: unknown): string {
   const n = typeof name === 'string' ? name.trim() : ''

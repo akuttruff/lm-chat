@@ -451,6 +451,34 @@ describe('memory', () => {
     expect(plugins(await turn())).toContain('mcp/lm-chat-memory')
   })
 
+  it("a chat in a folder takes the folder's memory switch over Settings', and its own over the folder's", async () => {
+    configure({ memoryDefault: 'off' })
+    const folder = store.createFolder('Personal')
+    store.updateFolder(folder.id, { memory: true })
+    store.patch(convId, { folderId: folder.id })
+    expect(plugins(await turn())).toContain('mcp/lm-chat-memory')
+    store.patch(convId, { memory: false })
+    expect(plugins(await turn())).not.toContain('mcp/lm-chat-memory')
+    store.patch(convId, { memory: null })
+    store.updateFolder(folder.id, { memory: null }) // back to Settings
+    expect(plugins(await turn())).not.toContain('mcp/lm-chat-memory')
+  })
+
+  it("a folder's memory pick limits its chats' prompt, until a chat picks for itself", async () => {
+    remember('b2', 'Lives in Seattle', 2)
+    configure({ memoryDefault: 'on' })
+    const folder = store.createFolder('Travel')
+    store.updateFolder(folder.id, { memorySelection: ['b2'] })
+    store.patch(convId, { folderId: folder.id })
+    let body = await turn()
+    expect(String(body.system_prompt)).toMatch(/\[b2\] Lives in Seattle/)
+    expect(String(body.system_prompt)).not.toMatch(/Favorite color is green/)
+    store.patch(convId, { memorySelection: ['a1'] }) // the chat's own pick wins
+    body = await turn()
+    expect(String(body.system_prompt)).toMatch(/Favorite color is green/)
+    expect(String(body.system_prompt)).not.toMatch(/Lives in Seattle/)
+  })
+
   it('shows which memories were loaded as a card before the reply, without a tool call', async () => {
     configure({ memoryDefault: 'on' })
     await turn()

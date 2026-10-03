@@ -217,6 +217,8 @@ describe('folders', () => {
     expect(await patched.json()).toMatchObject({ name: 'Astrology', reasoning: 'off', mcpTools: '' })
     expect(await (await get('/api/folders')).json()).toMatchObject([{ reasoning: 'off', mcpTools: '' }])
     expect((await send(`/api/folders/${folder.id}`, 'PATCH', { reasoning: 5 })).status).toBe(400)
+    const withMemory = await send(`/api/folders/${folder.id}`, 'PATCH', { memory: true, memorySelection: ['m1'] })
+    expect(await withMemory.json()).toMatchObject({ reasoning: 'off', mcpTools: '', memory: true, memorySelection: ['m1'] })
   })
 
   it('files a chat into a folder through the same PATCH the rest of a chat is edited with', async () => {

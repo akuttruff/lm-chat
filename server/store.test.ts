@@ -485,6 +485,20 @@ describe('folders', () => {
     expect(() => store.updateFolder(f.id, { reasoning: 42 })).toThrow(/must be text/)
   })
 
+  it("keeps a folder's memory switch and pick, the same shape as a chat's own", () => {
+    const f = store.createFolder('Astrology')
+    expect(f).toMatchObject({ memory: null, memorySelection: null })
+    store.updateFolder(f.id, { memory: true, memorySelection: ['m1', 'm2'] })
+    expect(new Store({ dir }).getFolder(f.id)).toMatchObject({ memory: true, memorySelection: ['m1', 'm2'] })
+    // Fields left out stay; a non-boolean switch is "inherit", a non-list pick is "automatic".
+    store.updateFolder(f.id, { name: 'Astro' })
+    expect(store.getFolder(f.id)).toMatchObject({ memory: true, memorySelection: ['m1', 'm2'] })
+    store.updateFolder(f.id, { memory: 'yes', memorySelection: 'all' })
+    expect(store.getFolder(f.id)).toMatchObject({ memory: null, memorySelection: null })
+    store.updateFolder(f.id, { memory: false, memorySelection: [] })
+    expect(new Store({ dir }).getFolder(f.id)).toMatchObject({ memory: false, memorySelection: [] })
+  })
+
   it('files a chat, and clears it back to unfiled on invalid input', () => {
     const id = store.getConversations().activeId!
     const f = store.createFolder('Astrology')

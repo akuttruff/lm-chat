@@ -277,8 +277,8 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       const id = decodeURIComponent(folderMatch[1]!)
       if (method === 'PATCH') {
         void readBody(req).then((body) => {
-          const { name, reasoning, mcpTools } = body as FolderPatch
-          const updated = store.updateFolder(id, { name, reasoning, mcpTools })
+          const { name, reasoning, mcpTools, memory, memorySelection } = body as FolderPatch
+          const updated = store.updateFolder(id, { name, reasoning, mcpTools, memory, memorySelection })
           return updated ? json(res, 200, updated) : json(res, 404, { error: 'no such folder' })
         }).catch((err: Error) => json(res, 400, { error: err.message }))
         return undefined

@@ -7,6 +7,8 @@ import type { Memory } from '../types.ts'
 interface MemorySelection {
   /** This chat's saved selection; null means automatic (the newest that fit). */
   selection: string[] | null
+  /** The selection shown is the folder's default, not the chat's own. */
+  fromFolder?: boolean
   onChange: (selection: string[] | null) => void
 }
 
@@ -86,9 +88,11 @@ export default function MemoriesSheet({ open, onClose, selectFor }: MemoriesShee
           {selectFor && (
             <>
               <div className="hint memory-select-hint">
-                {selectFor.selection
-                  ? <>Only the checked memories are used here. <button type="button" className="link" onClick={() => selectFor.onChange(null)}>Use the automatic set</button> instead.</>
-                  : 'Automatic: every memory that fits is used. Uncheck any to switch this chat to a custom set.'}
+                {selectFor.selection && selectFor.fromFolder
+                  ? "The folder's pick: only the checked memories are used here. Change any to give this chat its own set."
+                  : selectFor.selection
+                    ? <>Only the checked memories are used here. <button type="button" className="link" onClick={() => selectFor.onChange(null)}>Use the automatic set</button> instead.</>
+                    : 'Automatic: every memory that fits is used. Uncheck any to switch this chat to a custom set.'}
               </div>
               {items && items.length > 0 && (
                 <div className="pick-all">

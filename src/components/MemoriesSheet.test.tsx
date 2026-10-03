@@ -113,6 +113,17 @@ describe('picking memories for a chat', () => {
     expect(onChange).toHaveBeenCalledWith(null)
   })
 
+  it("says when the pick shown is the folder's, and a change gives the chat its own", async () => {
+    const user = userEvent.setup()
+    stub([born, green])
+    const onChange = vi.fn()
+    render(<MemoriesSheet open onClose={vi.fn()} selectFor={{ selection: ['b2'], fromFolder: true, onChange }} />)
+    expect(await screen.findByText(/The folder's pick/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Use the automatic set' })).not.toBeInTheDocument()
+    await user.click(screen.getByLabelText('Not used in this chat: Favorite color is green'))
+    expect(onChange).toHaveBeenCalledWith(['b2', 'a1'])
+  })
+
   it('has no checkboxes, and the ordinary title, when not opened for a chat', async () => {
     stub([green])
     render(<MemoriesSheet open onClose={vi.fn()} />)

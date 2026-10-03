@@ -4,6 +4,7 @@ import { Check, ChevronLeft, Plus, Settings2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { labelFor, levelsFor } from './ReasoningPicker'
 import ToolCatalog, { describeTools, formatSelection, selectionOf, useToolCatalog, type Selection } from './ToolCatalog'
+import MemoryChecklist, { useMemories } from './MemoryChecklist'
 import type { Folder, FolderUpdate, ModelConfig, PublicConfig } from '../types.ts'
 
 interface FolderPickerProps {
@@ -33,6 +34,9 @@ export function describeDefaults(f: Folder): string {
   if (f.reasoning) parts.push(`Reasoning ${f.reasoning}`)
   if (f.mcpTools === '') parts.push('No tools')
   else if (f.mcpTools) parts.push(`Tools: ${describeTools(f.mcpTools)}`)
+  if (f.memory === false) parts.push('Memory off')
+  else if (f.memory === true) parts.push(f.memorySelection ? `Memory on (${f.memorySelection.length} picked)` : 'Memory on')
+  else if (f.memorySelection) parts.push(`${f.memorySelection.length} ${f.memorySelection.length === 1 ? 'memory' : 'memories'} picked`)
   return parts.join(' · ')
 }
 
@@ -179,8 +183,14 @@ function FolderEditor({ folder, modelConfig, config, onBack, onSave, onDelete }:
   const [reasoning, setReasoning] = useState(folder.reasoning ?? '')
   const [toolsMode, setToolsMode] = useState<ToolsMode>(toolsModeOf(folder.mcpTools))
   const [selection, setSelection] = useState<Selection>(() => selectionOf(folder.mcpTools || config?.mcpTools || ''))
+  // Memory: '' inherits Settings, else on/off. Its pick is an explicit id
+  // list, or null for automatic; the checklist only shows while memory is on.
+  const [memory, setMemory] = useState<'' | 'on' | 'off'>(folder.memory == null ? '' : folder.memory ? 'on' : 'off')
+  const [memoryPick, setMemoryPick] = useState<string[] | null>(folder.memorySelection ?? null)
   const [saving, setSaving] = useState(false)
   const { catalog, loading, refresh } = useToolCatalog(toolsMode === 'custom')
+  const memoryOn = memory ? memory === 'on' : config?.memoryDefault === 'on'
+  const memories = useMemories(memoryOn)
 
   const save = async (): Promise<void> => {
     setSaving(true)
@@ -189,6 +199,8 @@ function FolderEditor({ folder, modelConfig, config, onBack, onSave, onDelete }:
         name,
         reasoning: reasoning || null,
         mcpTools: toolsMode === 'inherit' ? null : toolsMode === 'none' ? '' : formatSelection(selection),
+        memory: memory ? memory === 'on' : null,
+        memorySelection: memoryPick,
       })
     } catch (err) {
       toast.error((err as Error).message)
@@ -255,7 +267,32 @@ function FolderEditor({ folder, modelConfig, config, onBack, onSave, onDelete }:
           <div className="hint">
             What chats here start with; any chat can pick its own tools from the Tools button by the message box.
             Each tool the model is shown costs about 500 prompt tokens every turn, so fewer is faster.
-            Memory is separate -- the brain button on each chat.
+          </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor="folder-memory">Memory</label>
+          <select id="folder-memory" value={memory} onChange={(e) => setMemory(e.target.value as '' | 'on' | 'off')}>
+            <option value="">Same as Settings ({config?.memoryDefault === 'on' ? 'on' : 'off'})</option>
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+          {memoryOn && (
+            <>
+              <label htmlFor="folder-memories" className="field-sub">Memories</label>
+              <select
+                id="folder-memories"
+                value={memoryPick ? 'custom' : 'auto'}
+                onChange={(e) => setMemoryPick(e.target.value === 'auto' ? null : (folder.memorySelection ?? memories.items?.map((m) => m.id) ?? []))}
+              >
+                <option value="auto">Automatic (every memory that fits)</option>
+                <option value="custom">Only these…</option>
+              </select>
+              {memoryPick && <MemoryChecklist {...memories} selection={memoryPick} onChange={setMemoryPick} />}
+            </>
+          )}
+          <div className="hint">
+            Whether chats here remember you, and which saved memories they start with; the brain button on a chat still overrides it.
           </div>
         </div>
 
