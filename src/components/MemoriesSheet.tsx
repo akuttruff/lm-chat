@@ -84,11 +84,20 @@ export default function MemoriesSheet({ open, onClose, selectFor }: MemoriesShee
           <div className="drawer-handle" />
           <Drawer.Title className="drawer-title">{selectFor ? 'Memories for this chat' : 'Memories'}</Drawer.Title>
           {selectFor && (
-            <div className="hint memory-select-hint">
-              {selectFor.selection
-                ? <>Only the checked memories are used here. <button type="button" className="link" onClick={() => selectFor.onChange(null)}>Use the automatic set</button> instead.</>
-                : 'Automatic: every memory that fits is used. Uncheck any to switch this chat to a custom set.'}
-            </div>
+            <>
+              <div className="hint memory-select-hint">
+                {selectFor.selection
+                  ? <>Only the checked memories are used here. <button type="button" className="link" onClick={() => selectFor.onChange(null)}>Use the automatic set</button> instead.</>
+                  : 'Automatic: every memory that fits is used. Uncheck any to switch this chat to a custom set.'}
+              </div>
+              {items && items.length > 0 && (
+                <div className="pick-all">
+                  <button type="button" className="link" onClick={() => selectFor.onChange(items.map((m) => m.id))}>Select all</button>
+                  {/* An explicit empty list: this chat uses no memories, as a choice, not as "automatic". */}
+                  <button type="button" className="link" onClick={() => selectFor.onChange([])}>Deselect all</button>
+                </div>
+              )}
+            </>
           )}
           <div className="memory-list drawer-scroll" data-vaul-no-drag>
             {error && <div className="hint bad">Couldn&apos;t load memories: {error}</div>}

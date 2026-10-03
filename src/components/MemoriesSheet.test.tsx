@@ -93,6 +93,17 @@ describe('picking memories for a chat', () => {
     expect(onChange).toHaveBeenCalledWith(['b2', 'a1'])
   })
 
+  it('selects or deselects every memory at once', async () => {
+    const user = userEvent.setup()
+    stub([born, green])
+    const onChange = vi.fn()
+    render(<MemoriesSheet open onClose={vi.fn()} selectFor={{ selection: ['b2'], onChange }} />)
+    await user.click(await screen.findByRole('button', { name: 'Deselect all' }))
+    expect(onChange).toHaveBeenCalledWith([]) // an explicit "none", not automatic
+    await user.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(onChange).toHaveBeenCalledWith(['b2', 'a1'])
+  })
+
   it('offers a way back to automatic once a custom selection is in place', async () => {
     const user = userEvent.setup()
     stub([green])

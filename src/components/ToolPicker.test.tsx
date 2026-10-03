@@ -87,6 +87,20 @@ describe('ToolPicker', () => {
     expect(props.onChange).toHaveBeenCalledWith(null)
   })
 
+  it('deselects everything at once, and selects everything at once', async () => {
+    const user = userEvent.setup()
+    const props = setup({ value: 'mcp/astrology-v2(verify_claim)' })
+    await screen.findByRole('region', { name: 'astrology-v2' })
+    await user.click(screen.getByRole('button', { name: 'Deselect all' }))
+    expect(screen.getByRole('checkbox', { name: /verify_claim/ })).not.toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(props.onChange).toHaveBeenCalledWith('') // a chat with no tools, as a choice
+    await user.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(screen.getByRole('checkbox', { name: /web_search/ })).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(props.onChange).toHaveBeenLastCalledWith('mcp/astrology-v2, mcp/deep-research')
+  })
+
   it('re-asks the servers on request', async () => {
     const user = userEvent.setup()
     setup({ value: '' })

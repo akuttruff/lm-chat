@@ -148,6 +148,14 @@ export default function ToolPicker({ open, onClose, value, inherited, inheritedF
             {mode === 'custom' && (
               <div className="tool-catalog" aria-label="Tool catalog">
                 {loading && !catalog && <div className="hint">Asking each server for its tools…</div>}
+                {servers.length > 0 && (
+                  <div className="pick-all">
+                    <button type="button" className="link" onClick={() => setSelection(new Map(servers.map((s) => [s.id, 'all' as const])))}>
+                      Select all
+                    </button>
+                    <button type="button" className="link" onClick={() => setSelection(new Map())}>Deselect all</button>
+                  </div>
+                )}
                 {servers.map((server) => {
                   const picked = pickedCount(server)
                   const all = server.tools.length > 0 && picked === server.tools.length
