@@ -1,7 +1,7 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { ArrowUp, Brain, Folder, Gauge, Ghost, ImagePlus, ListChecks, Square, Wrench, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { ACCEPTED, imageFiles, prepareImage } from '../lib/images'
+import { ACCEPTED, hasImage, imageFiles, prepareImage } from '../lib/images'
 import type { ImageUpload } from '../types.ts'
 
 interface ComposerProps {
@@ -39,6 +39,8 @@ export default function Composer({
   // already scaled down (see prepareImage), shown as thumbnails until sent.
   const [images, setImages] = useState<ImageUpload[]>([])
   const [preparing, setPreparing] = useState(false)
+  // An image is being dragged over the window: the composer lights up as the target.
+  const [dragging, setDragging] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -70,6 +72,37 @@ export default function Composer({
     }
   }, [images.length])
 
+  // Drop anywhere in the window: a screenshot dragged from the desktop
+  // shouldn't have to land on the message box exactly. Without
+  // preventDefault on dragover the browser refuses the drop (and would
+  // open the image as a page instead); dragleave to outside the window
+  // (relatedTarget null) clears the highlight.
+  useEffect(() => {
+    if (disabled) return
+    const over = (e: DragEvent): void => {
+      if (!hasImage(e.dataTransfer?.items)) return
+      e.preventDefault()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+      setDragging(true)
+    }
+    const leave = (e: DragEvent): void => { if (e.relatedTarget == null) setDragging(false) }
+    const drop = (e: DragEvent): void => {
+      const files = imageFiles(e.dataTransfer?.items)
+      setDragging(false)
+      if (!files.length) return
+      e.preventDefault()
+      void attach(files)
+    }
+    window.addEventListener('dragover', over)
+    window.addEventListener('dragleave', leave)
+    window.addEventListener('drop', drop)
+    return () => {
+      window.removeEventListener('dragover', over)
+      window.removeEventListener('dragleave', leave)
+      window.removeEventListener('drop', drop)
+    }
+  }, [attach, disabled])
+
   const handleSubmit = (e: React.FormEvent | React.KeyboardEvent) => {
     e.preventDefault()
     const trimmed = text.trim()
@@ -99,12 +132,7 @@ export default function Composer({
   const canSend = !disabled && !preparing && (text.trim().length > 0 || images.length > 0)
 
   return (
-    <form
-      className="composer"
-      onSubmit={handleSubmit}
-      onDragOver={(e) => { if (imageFiles(e.dataTransfer?.items).length) e.preventDefault() }}
-      onDrop={(e) => { const files = imageFiles(e.dataTransfer?.items); if (files.length) { e.preventDefault(); void attach(files) } }}
-    >
+    <form className={`composer${dragging ? ' dragging' : ''}`} onSubmit={handleSubmit}>
       {/* The chips get a row of their own, above the message box: five of
           them beside it left a phone a sliver to type in. */}
       <div className="composer-chips">

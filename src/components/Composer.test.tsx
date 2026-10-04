@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Composer from './Composer.tsx'
 
@@ -39,6 +39,32 @@ describe('images', () => {
     await user.click(box)
     await user.paste({ getData: () => '', items: [{ kind: 'file', type: 'image/png', getAsFile: () => pngFile('shot.png') }] } as unknown as DataTransfer)
     expect(await screen.findByRole('img', { name: 'shot.png' })).toBeInTheDocument()
+  })
+
+  it('takes an image dropped anywhere in the window, lighting the box up while it hovers', async () => {
+    const { container } = render(<Composer onSend={vi.fn()} />)
+    // While dragging, the browser withholds the file: only kind and type are visible.
+    const hovering = { items: [{ kind: 'file', type: 'image/png', getAsFile: () => null }], dropEffect: 'none' }
+    const over = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(over, 'dataTransfer', { value: hovering })
+    act(() => { window.dispatchEvent(over) })
+    expect(over.defaultPrevented).toBe(true) // the drop is allowed
+    expect(container.querySelector('.composer')).toHaveClass('dragging')
+    const dropping = { items: [{ kind: 'file', type: 'image/png', getAsFile: () => pngFile('shot.png') }] }
+    const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(drop, 'dataTransfer', { value: dropping })
+    act(() => { window.dispatchEvent(drop) })
+    expect(drop.defaultPrevented).toBe(true)
+    expect(await screen.findByRole('img', { name: 'shot.png' })).toBeInTheDocument()
+    expect(container.querySelector('.composer')).not.toHaveClass('dragging')
+  })
+
+  it('lets a drag of something other than an image pass through untouched', () => {
+    render(<Composer onSend={vi.fn()} />)
+    const over = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent
+    Object.defineProperty(over, 'dataTransfer', { value: { items: [{ kind: 'string', type: 'text/plain', getAsFile: () => null }] } })
+    window.dispatchEvent(over)
+    expect(over.defaultPrevented).toBe(false)
   })
 
   it('ignores files that are not images, and says so', async () => {

@@ -53,6 +53,16 @@ export async function prepareImage(file: File): Promise<ImageUpload> {
   return { name: keepPng ? name : name.replace(/\.[a-z0-9]+$/i, '') + '.jpg', mime, dataUrl }
 }
 
+/**
+ * Whether a drag carries an image. During dragover the browser withholds
+ * the files themselves (getAsFile() is null until the drop), so this goes
+ * by kind and type alone -- which is what decides if the drop is allowed.
+ */
+export function hasImage(items: DataTransferItemList | null | undefined): boolean {
+  if (!items) return false
+  return Array.from(items).some((item) => item.kind === 'file' && ACCEPTED.includes(item.type))
+}
+
 /** The images among a paste or drop, in order; anything else is ignored. */
 export function imageFiles(items: DataTransferItemList | null | undefined): File[] {
   const files: File[] = []

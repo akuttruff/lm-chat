@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { imageFiles, prepareImage } from './images.ts'
+import { hasImage, imageFiles, prepareImage } from './images.ts'
 
 const file = (name: string, type: string, bytes: number[] = [1, 2, 3]): File =>
   new File([new Uint8Array(bytes)], name, { type })
@@ -18,6 +18,16 @@ describe('prepareImage', () => {
   it('refuses what is not an image type the model takes', async () => {
     await expect(prepareImage(file('notes.txt', 'text/plain'))).rejects.toThrow(/not a PNG, JPEG, WebP or GIF/)
     await expect(prepareImage(file('a.svg', 'image/svg+xml'))).rejects.toThrow(/not a PNG/)
+  })
+})
+
+describe('hasImage', () => {
+  it('spots an image in a drag by kind and type, with no file to read yet', () => {
+    const items = (list: { kind: string; type: string }[]) =>
+      list.map((i) => ({ ...i, getAsFile: () => null })) as unknown as DataTransferItemList
+    expect(hasImage(items([{ kind: 'file', type: 'image/png' }]))).toBe(true)
+    expect(hasImage(items([{ kind: 'string', type: 'text/plain' }, { kind: 'file', type: 'application/pdf' }]))).toBe(false)
+    expect(hasImage(undefined)).toBe(false)
   })
 })
 
