@@ -3,6 +3,53 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Composer from './Composer.tsx'
 
+// jsdom has no canvas, so prepareImage sends files as they are; a PNG header is image enough.
+const pngFile = (name = 'cat.png'): File => new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], name, { type: 'image/png' })
+
+describe('images', () => {
+  it('attaches a chosen image, shows it, and sends it with the text', async () => {
+    const user = userEvent.setup()
+    const onSend = vi.fn()
+    render(<Composer onSend={onSend} />)
+    await user.upload(screen.getByLabelText('Choose images'), pngFile())
+    expect(await screen.findByRole('img', { name: 'cat.png' })).toHaveAttribute('src', expect.stringMatching(/^data:image\/png;base64,/))
+    await user.type(screen.getByPlaceholderText(/about the image/), 'what is this')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    expect(onSend).toHaveBeenCalledWith('what is this', [expect.objectContaining({ name: 'cat.png', mime: 'image/png' })])
+    expect(screen.queryByRole('img')).not.toBeInTheDocument() // cleared with the text
+  })
+
+  it('sends an image on its own, and removes one before sending', async () => {
+    const user = userEvent.setup()
+    const onSend = vi.fn()
+    render(<Composer onSend={onSend} />)
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    await user.upload(screen.getByLabelText('Choose images'), [pngFile('a.png'), pngFile('b.png')])
+    await screen.findByRole('img', { name: 'b.png' })
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: 'Remove a.png' }))
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    expect(onSend).toHaveBeenCalledWith('', [expect.objectContaining({ name: 'b.png' })])
+  })
+
+  it('takes an image pasted into the message box', async () => {
+    const user = userEvent.setup()
+    render(<Composer onSend={vi.fn()} />)
+    const box = screen.getByPlaceholderText('Message')
+    await user.click(box)
+    await user.paste({ getData: () => '', items: [{ kind: 'file', type: 'image/png', getAsFile: () => pngFile('shot.png') }] } as unknown as DataTransfer)
+    expect(await screen.findByRole('img', { name: 'shot.png' })).toBeInTheDocument()
+  })
+
+  it('ignores files that are not images, and says so', async () => {
+    const user = userEvent.setup()
+    render(<Composer onSend={vi.fn()} />)
+    await user.upload(screen.getByLabelText('Choose images'), new File(['hi'], 'notes.txt', { type: 'text/plain' }))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  })
+})
+
 describe('memory chip', () => {
   it('shows whether memory is on for this chat, and toggles it', async () => {
     const user = userEvent.setup()

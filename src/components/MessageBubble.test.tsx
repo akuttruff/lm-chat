@@ -3,6 +3,17 @@ import { render, screen } from '@testing-library/react'
 import MessageBubble from './MessageBubble'
 
 describe('MessageBubble', () => {
+  it("shows a user message's images as thumbnails that open the full image, with no empty bubble for a bare image", () => {
+    const images = [{ id: 'img1', name: 'cat.png', mime: 'image/png', bytes: 10 }]
+    const { container, rerender } = render(<MessageBubble role="user" text="" images={images} />)
+    const img = screen.getByRole('img', { name: 'cat.png' })
+    expect(img).toHaveAttribute('src', '/api/images/img1')
+    expect(img.closest('a')).toHaveAttribute('href', '/api/images/img1')
+    expect(container.querySelector('.bubble')).not.toBeInTheDocument()
+    rerender(<MessageBubble role="user" text="what is this" images={images} />)
+    expect(screen.getByText('what is this')).toBeInTheDocument()
+  })
+
   it('renders assistant markdown as real elements', async () => {
     render(<MessageBubble role="assistant" text={'**bold** and `code`'} model="m" elapsed="1" />)
     expect((await screen.findByText('bold')).tagName).toBe('STRONG')

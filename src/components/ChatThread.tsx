@@ -95,6 +95,7 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry }: { message: Messa
         <MessageBubble
           role={message.role}
           text={message.text}
+          images={message.images}
           model={message.model}
           instance={message.instance}
           elapsed={message.elapsed}

@@ -1,8 +1,11 @@
 import { useState, useRef, useCallback } from 'react'
-import { ArrowUp, Brain, Folder, Gauge, Ghost, ListChecks, Square, Wrench } from 'lucide-react'
+import { ArrowUp, Brain, Folder, Gauge, Ghost, ImagePlus, ListChecks, Square, Wrench, X } from 'lucide-react'
+import { toast } from 'sonner'
+import { ACCEPTED, imageFiles, prepareImage } from '../lib/images'
+import type { ImageUpload } from '../types.ts'
 
 interface ComposerProps {
-  onSend: (text: string) => void
+  onSend: (text: string, images?: ImageUpload[]) => void
   disabled?: boolean
   busy?: boolean
   onStop?: () => void
@@ -24,12 +27,20 @@ interface ComposerProps {
   toolsCustomized?: boolean
 }
 
+/** As many as the server takes per message (see api.ts). */
+const MAX_ATTACHMENTS = 6
+
 export default function Composer({
   onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning, temporaryOn = false, onToggleTemporary,
   memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false,
 }: ComposerProps) {
   const [text, setText] = useState('')
+  // Images waiting to go with the next message: picked, pasted or dropped,
+  // already scaled down (see prepareImage), shown as thumbnails until sent.
+  const [images, setImages] = useState<ImageUpload[]>([])
+  const [preparing, setPreparing] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -39,12 +50,33 @@ export default function Composer({
     }
   }, [])
 
+  const attach = useCallback(async (files: File[]): Promise<void> => {
+    if (!files.length) return
+    setPreparing(true)
+    try {
+      const room = MAX_ATTACHMENTS - images.length
+      if (files.length > room) toast.error(`Up to ${MAX_ATTACHMENTS} images per message`)
+      const ready: ImageUpload[] = []
+      for (const f of files.slice(0, Math.max(room, 0))) {
+        try {
+          ready.push(await prepareImage(f))
+        } catch (err) {
+          toast.error((err as Error).message)
+        }
+      }
+      if (ready.length) setImages((prev) => [...prev, ...ready])
+    } finally {
+      setPreparing(false)
+    }
+  }, [images.length])
+
   const handleSubmit = (e: React.FormEvent | React.KeyboardEvent) => {
     e.preventDefault()
     const trimmed = text.trim()
-    if (!trimmed || disabled) return
-    onSend(trimmed)
+    if ((!trimmed && !images.length) || disabled || preparing) return
+    onSend(trimmed, images.length ? images : undefined)
     setText('')
+    setImages([])
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }
 
@@ -55,8 +87,24 @@ export default function Composer({
     }
   }
 
+  // A screenshot pasted from the clipboard is the common case on a Mac;
+  // text pastes go through untouched.
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = imageFiles(e.clipboardData?.items)
+    if (!files.length) return
+    e.preventDefault()
+    void attach(files)
+  }
+
+  const canSend = !disabled && !preparing && (text.trim().length > 0 || images.length > 0)
+
   return (
-    <form className="composer" onSubmit={handleSubmit}>
+    <form
+      className="composer"
+      onSubmit={handleSubmit}
+      onDragOver={(e) => { if (imageFiles(e.dataTransfer?.items).length) e.preventDefault() }}
+      onDrop={(e) => { const files = imageFiles(e.dataTransfer?.items); if (files.length) { e.preventDefault(); void attach(files) } }}
+    >
       {/* The chips get a row of their own, above the message box: five of
           them beside it left a phone a sliver to type in. */}
       <div className="composer-chips">
@@ -133,16 +181,51 @@ export default function Composer({
         </button>
       )}
       </div>
+      <div className="composer-attachments" aria-label="Images to send">
+        {images.map((img, i) => (
+          <div key={`${img.name}-${i}`} className="attachment">
+            <img src={img.dataUrl} alt={img.name} />
+            <button
+              type="button"
+              className="remove"
+              aria-label={`Remove ${img.name}`}
+              onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
+            >
+              <X size={12} aria-hidden="true" />
+            </button>
+          </div>
+        ))}
+      </div>
       <div className="composer-row">
+        <input
+          ref={fileRef}
+          type="file"
+          accept={ACCEPTED.join(',')}
+          multiple
+          hidden
+          aria-label="Choose images"
+          onChange={(e) => { void attach(Array.from(e.target.files ?? [])); e.target.value = '' }}
+        />
+        <button
+          type="button"
+          className="attach-btn"
+          aria-label="Add an image"
+          title="Add an image (or paste one)"
+          disabled={disabled || preparing || images.length >= MAX_ATTACHMENTS}
+          onClick={() => fileRef.current?.click()}
+        >
+          <ImagePlus size={18} aria-hidden="true" />
+        </button>
         <textarea
           ref={textareaRef}
           className="composer-input"
           rows={1}
-          placeholder="Message"
+          placeholder={images.length ? 'Say something about the image, or just send' : 'Message'}
           autoComplete="off"
           value={text}
           onChange={(e) => { setText(e.target.value); autoGrow() }}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
         />
         {busy && onStop ? (
           <button
@@ -157,7 +240,7 @@ export default function Composer({
           <button
             type="submit"
             className="send-btn"
-            disabled={disabled || !text.trim()}
+            disabled={!canSend}
             aria-label="Send"
           >
             <ArrowUp size={18} aria-hidden="true" />

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { Conversation, ConversationMeta, ConversationStore, Folder, FolderUpdate, Message, PublicConfig, Status } from '../types.ts'
+import type {
+  Conversation, ConversationMeta, ConversationStore, Folder, FolderUpdate, ImageUpload, Message, PublicConfig, Status,
+} from '../types.ts'
 
 /**
  * The whole client state, streamed from the app server.
@@ -24,7 +26,7 @@ export interface ServerState {
   busy: boolean
   /** Every chat with a reply in flight, keyed by id, e.g. for the chat list. */
   working: Record<string, ChatStatus>
-  send: (text: string) => Promise<void>
+  send: (text: string, images?: ImageUpload[]) => Promise<void>
   stop: () => Promise<void>
   /** Re-run the last message you sent, replacing the reply that followed it. */
   retry: () => Promise<void>
@@ -286,11 +288,11 @@ export default function useServerState(): ServerState {
     Object.entries(statuses).filter(([, st]) => st.state === 'pending'),
   )
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, images?: ImageUpload[]) => {
     const id = activeIdRef.current
     if (!id) return
     setStatuses((prev) => ({ ...prev, [id]: { state: 'pending', text: 'sending...', startedAt: prev[id]?.startedAt ?? null } }))
-    await post(`/api/chats/${encodeURIComponent(id)}/turns`, { text })
+    await post(`/api/chats/${encodeURIComponent(id)}/turns`, images?.length ? { text, images } : { text })
   }, [])
 
   const retry = useCallback(async () => {

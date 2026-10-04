@@ -3,11 +3,32 @@
 export type MessageRole = 'user' | 'assistant' | 'reasoning' | 'tool' | 'error'
 
 /** One entry in a conversation thread. */
+/**
+ * An image sent with a user message. Only the description lives in the
+ * message; the bytes are kept beside the database (see Store.readImage)
+ * and served at /api/images/:id.
+ */
+export interface MessageImage {
+  id: string
+  name: string
+  mime: string
+  bytes: number
+}
+
+/** An image on its way up from the browser: already resized there, as a base64 data URL. */
+export interface ImageUpload {
+  name: string
+  mime: string
+  dataUrl: string
+}
+
 export interface Message {
   id: string | number
   role: MessageRole
   /** Absent on tool messages, which carry `output` instead. */
   text?: string
+  /** User messages: the images sent with the text (which may then be empty). */
+  images?: MessageImage[]
   /** True while tokens are still arriving. */
   streaming?: boolean
   /** Assistant messages: which model answered, and how long it took. */

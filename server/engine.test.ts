@@ -10,7 +10,7 @@ import {
 import { Store } from './store.ts'
 import { Memories } from './memory.ts'
 import { DatabaseSync } from 'node:sqlite'
-import type { Message, ServerConfig } from '../src/types.ts'
+import type { ImageUpload, Message, ServerConfig } from '../src/types.ts'
 
 let dir: string
 let store: Store
@@ -1344,6 +1344,56 @@ describe('auto titles', () => {
     expect(cleanTitle('  many   spaces  here ')).toBe('many spaces here')
     expect(cleanTitle('x'.repeat(80))).toBe(`${'x'.repeat(60)}...`)
     expect(cleanTitle('\n\n')).toBe('')
+  })
+})
+
+describe('images on a turn', () => {
+  const png = 'data:image/png;base64,' + Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64')
+  const turn = async (text: string, opts?: { images?: ImageUpload[]; retry?: boolean }): Promise<Record<string, unknown>> => {
+    const f = streams([evt({ type: 'message.delta', content: 'a cat' }), evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', f)
+    await engine.runTurn(convId, text, opts)
+    return bodyOf(f)
+  }
+
+  it('sends the text and each image as input parts, and records the images on the message', async () => {
+    const body = await turn('what is this?', { images: [{ name: 'cat.png', mime: 'image/png', dataUrl: png }] })
+    const input = body.input as { type: string; content?: string; data_url?: string }[]
+    expect(input).toHaveLength(2)
+    expect(input[0]).toMatchObject({ type: 'text' })
+    expect(input[0]!.content).toMatch(/^what is this\?\n\n\[Sent /)
+    expect(input[1]).toEqual({ type: 'image', data_url: png })
+    const sent = messages()[0]!
+    expect(sent.images).toHaveLength(1)
+    expect(sent.images![0]).toMatchObject({ name: 'cat.png', mime: 'image/png', bytes: 4 })
+    expect(store.readImage(sent.images![0]!.id)!.bytes.toString('base64')).toBe(png.split(',')[1])
+  })
+
+  it('an image alone is a message: the stamp stands in for the text', async () => {
+    const body = await turn('', { images: [{ name: 'x.png', mime: 'image/png', dataUrl: png }] })
+    expect((body.input as { content: string }[])[0]!.content).toMatch(/^\[Sent /)
+  })
+
+  it('later turns name the image in the transcript instead of resending it', async () => {
+    await turn('look', { images: [{ name: 'cat.png', mime: 'image/png', dataUrl: png }] })
+    const body = await turn('and now?')
+    expect(typeof body.input).toBe('string') // no parts: nothing attached this time
+    expect(String(body.system_prompt)).toContain('User: [image: cat.png] look')
+  })
+
+  it('a retry sends the image again from what was saved', async () => {
+    await turn('look', { images: [{ name: 'cat.png', mime: 'image/png', dataUrl: png }] })
+    const body = await turn('', { retry: true })
+    const input = body.input as { type: string; data_url?: string }[]
+    expect(input[1]).toEqual({ type: 'image', data_url: png })
+    expect(messages().filter((m) => m.role === 'user')).toHaveLength(1)
+  })
+
+  it('refuses an upload whose data is not what it claims', async () => {
+    await expect(engine.runTurn(convId, 'x', { images: [{ name: 'a', mime: 'image/png', dataUrl: 'data:image/jpeg;base64,AAAA' }] }))
+      .rejects.toThrow(/type must match/)
+    await expect(engine.runTurn(convId, 'x', { images: [{ name: 'a', mime: 'image/png', dataUrl: 'http://x/y.png' }] }))
+      .rejects.toThrow(/data URL/)
   })
 })
 

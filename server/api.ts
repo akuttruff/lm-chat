@@ -5,14 +5,39 @@ import type { Plugin } from 'vite'
 import { Bus } from './bus.ts'
 import { Engine, newEngineState } from './engine.ts'
 import type { EngineState } from './engine.ts'
-import { Store } from './store.ts'
+import { MIME_BY_EXT, Store } from './store.ts'
 import type { FolderPatch } from './store.ts'
 import { MemoryInputError, Memories } from './memory.ts'
 import { ToolCatalogCache } from './tools.ts'
 import { readModelConfig } from './model-config.ts'
 import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
 import { metaOf } from '../src/types.ts'
-import type { Conversation, ConversationStore, ServerConfig } from '../src/types.ts'
+import type { Conversation, ConversationStore, ImageUpload, ServerConfig } from '../src/types.ts'
+
+/** How much a message may carry: enough for a few photos, not a gallery. */
+const MAX_IMAGES_PER_MESSAGE = 6
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024
+const IMAGE_MIMES = new Set(Object.values(MIME_BY_EXT))
+
+/**
+ * The images on a /turns request, checked for shape, type, count and size
+ * before anything is decoded. Throws with the reason, for a 400.
+ */
+export function imageUploads(raw: unknown): ImageUpload[] {
+  if (raw == null) return []
+  if (!Array.isArray(raw)) throw new Error('images must be a list')
+  if (raw.length > MAX_IMAGES_PER_MESSAGE) throw new Error(`at most ${MAX_IMAGES_PER_MESSAGE} images per message`)
+  return raw.map((item, i): ImageUpload => {
+    const u = item as Partial<ImageUpload> | null
+    if (!u || typeof u.dataUrl !== 'string' || typeof u.mime !== 'string') throw new Error(`image ${i + 1} is malformed`)
+    if (!IMAGE_MIMES.has(u.mime)) throw new Error(`image ${i + 1}: ${u.mime} is not a supported type (PNG, JPEG, WebP, GIF)`)
+    // base64 is 4/3 the size of the bytes; the limit is on the bytes.
+    const comma = u.dataUrl.indexOf(',')
+    if (comma < 0 || (u.dataUrl.length - comma) * 3 / 4 > MAX_IMAGE_BYTES) throw new Error(`image ${i + 1} is larger than 8 MB`)
+    const name = typeof u.name === 'string' && u.name.trim() ? u.name.trim().slice(0, 120) : `image ${i + 1}`
+    return { name, mime: u.mime, dataUrl: u.dataUrl }
+  })
+}
 
 type Next = () => void
 type Middleware = (req: IncomingMessage, res: ServerResponse, next: Next) => void
@@ -301,6 +326,22 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       }
     }
 
+    // --- images ---------------------------------------------------------
+    // The bytes of an image sent with a message, for the thread to show.
+    // Immutable by id, so the browser can keep it for good.
+    const image = /^\/api\/images\/([a-z0-9-]+)$/.exec(url)
+    if (image && method === 'GET') {
+      const found = store.readImage(image[1]!)
+      if (!found) return json(res, 404, { error: 'no such image' })
+      res.writeHead(200, {
+        'Content-Type': found.mime,
+        'Content-Length': found.bytes.length,
+        'Cache-Control': 'private, max-age=31536000, immutable',
+      })
+      res.end(found.bytes)
+      return undefined
+    }
+
     // --- conversations --------------------------------------------------
     if (url === '/api/chats' && method === 'GET') {
       return bigJson(req, res, 200, listView(store.getConversations()))
@@ -384,11 +425,13 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       if (action === '/turns' && method === 'POST') {
         void readBody(req).then((body) => {
           const text = String((body as { text?: unknown }).text ?? '').trim()
-          if (!text) return json(res, 400, { error: 'text is required' })
+          const images = imageUploads((body as { images?: unknown }).images)
+          // An image alone is a message ("what is this?" goes without saying).
+          if (!text && !images.length) return json(res, 400, { error: 'text is required' })
           if (engine.isRunning(id)) return json(res, 409, { error: 'a reply is already in flight' })
           // Kick it off and answer at once: the turn outlives this request,
           // so a client that disappears no longer kills the generation.
-          void engine.runTurn(id, text).catch((err: Error) => {
+          void engine.runTurn(id, text, { images }).catch((err: Error) => {
             console.log(`[engine] turn failed: ${err.message}`)
           })
           return json(res, 202, { ok: true })

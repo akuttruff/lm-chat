@@ -8,7 +8,7 @@ import { Slots, parallelLimit } from './slots.ts'
 import { AUTO_LOADED, MEMORY_PLUGIN, Memories } from './memory.ts'
 import { metaOf } from '../src/types.ts'
 import { parseIntegrations } from '../src/lib/integrations.ts'
-import type { ChatEvent, ContextSummary, Message, ReplyStats, ServerConfig } from '../src/types.ts'
+import type { ChatEvent, ContextSummary, ImageUpload, Message, MessageImage, ReplyStats, ServerConfig } from '../src/types.ts'
 
 /**
  * Runs a turn against LM Studio, server-side.
@@ -108,7 +108,9 @@ function replayable(m: Message): boolean {
 }
 
 function transcriptLine(m: Message, maxOutput = Infinity): string {
-  if (m.role === 'user') return `User: ${(m.text || '').trim()}`
+  // An image is only sent on the turn it arrived with; later turns see that
+  // it was there, by name, where the text would be.
+  if (m.role === 'user') return `User: ${[...(m.images ?? []).map((i) => `[image: ${i.name}]`), (m.text || '').trim()].filter(Boolean).join(' ')}`
   if (m.role === 'assistant') return `Assistant: ${(m.text || '').trim()}`
   const label = m.failed ? `Tool ${m.name ?? 'tool'} failed` : `Tool ${m.name ?? 'tool'} returned`
   const output = (m.output || '').trim()
@@ -301,7 +303,19 @@ export function stampInput(text: string, now: Date = new Date()): string {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
   })
-  return `${text}\n\n[Sent ${when}]`
+  return text ? `${text}\n\n[Sent ${when}]` : `[Sent ${when}]`
+}
+
+/**
+ * Decode an upload from the browser. The browser sends a base64 data URL
+ * (what a canvas gives it); the data dir wants bytes. Checked here rather
+ * than trusted: the API accepts the shape, this is what makes it an image.
+ */
+export function decodeUpload(u: ImageUpload): { name: string; mime: string; bytes: Buffer } {
+  const m = /^data:([a-z]+\/[a-z0-9.+-]+);base64,(.+)$/i.exec(u.dataUrl)
+  if (!m) throw new Error('an image must be a base64 data URL')
+  if (m[1]!.toLowerCase() !== u.mime) throw new Error('an image\'s type must match its data')
+  return { name: u.name, mime: u.mime, bytes: Buffer.from(m[2]!, 'base64') }
 }
 
 // --- auto-titling -----------------------------------------------------------
@@ -491,6 +505,20 @@ export class Engine {
   }
 
   /** Generate the reply to the last message you sent again, discarding what followed it. */
+  /** The request's `input`: plain text, or text-and-image parts when the message has images. */
+  private inputFor(text: string, images: MessageImage[] | undefined): string | Record<string, string>[] {
+    const stamped = stampInput(text)
+    if (!images?.length) return stamped
+    const parts: Record<string, string>[] = [{ type: 'text', content: stamped }]
+    for (const img of images) {
+      const stored = this.store.readImage(img.id)
+      // Gone from disk (a backup restored elsewhere): the name still tells the model something was here.
+      if (!stored) { parts[0]!.content = `[image ${img.name} is no longer available]\n\n${stamped}`; continue }
+      parts.push({ type: 'image', data_url: `data:${stored.mime};base64,${stored.bytes.toString('base64')}` })
+    }
+    return parts
+  }
+
   async retryTurn(conversationId: string): Promise<void> {
     const conv = this.store.get(conversationId)
     if (!conv) throw new Error('no such conversation')
@@ -504,10 +532,16 @@ export class Engine {
    * finishes; callers may ignore the promise, since progress is published on
    * the bus and persisted as it goes.
    */
-  async runTurn(conversationId: string, text: string, { retry = false }: { retry?: boolean } = {}): Promise<void> {
+  async runTurn(
+    conversationId: string,
+    text: string,
+    { retry = false, images = [] }: { retry?: boolean; images?: ImageUpload[] } = {},
+  ): Promise<void> {
     const conv = this.store.get(conversationId)
     if (!conv) throw new Error('no such conversation')
     if (this.running.has(conversationId)) throw new Error('a reply is already in flight')
+    // Decoded before the turn is claimed: a bad upload is this call's error, not a stuck chat.
+    const uploads = images.map(decodeUpload)
     // Claimed before the first await, so a second send can't slip in meanwhile.
     const controller = new AbortController()
     const turn: TurnState = { controller, stalled: false }
@@ -547,7 +581,14 @@ export class Engine {
       this.publish(conversationId, '', statusText, null)
     }
 
-    if (!retry) history.push({ id: newId(), role: 'user', text })
+    if (!retry) {
+      const message: Message = { id: newId(), role: 'user', text }
+      // Saved first, so the message carries their ids and a retry can re-send them.
+      if (uploads.length) message.images = uploads.map((u) => this.store.saveImage(conversationId, u))
+      history.push(message)
+    }
+    // The message being sent -- on a retry, the one being sent again.
+    const sent = history[history.length - 1]!
     commit(history, { touch: true })
 
     if (!config.model) {
@@ -559,7 +600,10 @@ export class Engine {
     const startedAt = Date.now()
     this.publish(conversationId, 'pending', 'thinking...', startedAt)
 
-    const body: Record<string, unknown> = { model: config.model, input: stampInput(text), stream: true }
+    // With images, the input is parts: the text, then each image as a data
+    // URL (LM Studio's /api/v1/chat takes {type:'image', data_url}). Only
+    // this turn carries them; the transcript names them afterwards.
+    const body: Record<string, unknown> = { model: config.model, input: this.inputFor(text, sent.images), stream: true }
     const ctx = Number.parseInt(config.contextLength, 10)
     // Applied at load time: sending it every turn makes LM Studio JIT-load a new
     // model instance per message instead of reusing the loaded one.

@@ -2,7 +2,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { SQLInputValue, StatementSync } from 'node:sqlite'
-import type { Conversation, ConversationStore, Folder, Message, MessageRole, ReplyStats, ServerConfig } from '../src/types.ts'
+import type {
+  Conversation, ConversationStore, Folder, Message, MessageImage, MessageRole, ReplyStats, ServerConfig,
+} from '../src/types.ts'
 
 /**
  * Everything durable lives next to the app on disk, so conversations survive
@@ -66,6 +68,9 @@ function locate(dir?: string) {
   return {
     dataDir,
     sqlite: path.join(dataDir, 'lm-chat.sqlite'),
+    // Image bytes, one file per image, beside the database rather than in
+    // it: a photo is megabytes, and the message rows stay small and quick.
+    images: path.join(dataDir, 'images'),
     // Pre-SQLite storage, read only to migrate once.
     legacyConversations: path.join(dataDir, 'conversations.json'),
     legacyConfig: path.join(dataDir, 'config.json'),
@@ -121,6 +126,7 @@ CREATE TABLE IF NOT EXISTS messages (
   failed INTEGER,
   response_id TEXT,
   stats TEXT,
+  images TEXT,
   PRIMARY KEY (conversation_id, position)
 );
 CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY CHECK (id = 1), active_id TEXT);
@@ -231,6 +237,13 @@ function migrateSchema(db: DatabaseSync): void {
     if (!has('folders', 'memory_selection')) db.exec('ALTER TABLE folders ADD COLUMN memory_selection TEXT')
     db.exec('PRAGMA user_version = 9')
   }
+  if (version < 10) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    // Images sent with a message (their descriptions; the bytes are files).
+    if (!has('messages', 'images')) db.exec('ALTER TABLE messages ADD COLUMN images TEXT')
+    db.exec('PRAGMA user_version = 10')
+  }
 }
 
 interface ConversationRow {
@@ -284,6 +297,7 @@ interface MessageRow {
   failed: number | null
   response_id: string | null
   stats: string | null
+  images: string | null
 }
 
 interface ConfigRow {
@@ -374,8 +388,22 @@ function configParams(c: ServerConfig): SQLInputValue[] {
 }
 
 const MESSAGE_COLUMNS =
-  'conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id,stats'
-const MESSAGE_PLACEHOLDERS = Array(15).fill('?').join(',')
+  'conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id,stats,images'
+const MESSAGE_PLACEHOLDERS = Array(16).fill('?').join(',')
+
+/** Image descriptions stored as JSON; a corrupt value reads as none. */
+function parseImages(raw: string | null): MessageImage[] | undefined {
+  if (raw == null) return undefined
+  try {
+    const list = JSON.parse(raw) as unknown
+    if (!Array.isArray(list)) return undefined
+    const images = list.filter((i): i is MessageImage =>
+      typeof i === 'object' && i !== null && typeof (i as MessageImage).id === 'string' && typeof (i as MessageImage).mime === 'string')
+    return images.length ? images : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /** Stats stored as JSON; a hand-edited or corrupt value reads as none. */
 function parseStats(raw: string | null): ReplyStats | undefined {
@@ -405,6 +433,8 @@ function messageFromRow(row: MessageRow): Message {
   if (row.response_id != null) m.responseId = row.response_id
   const stats = parseStats(row.stats)
   if (stats) m.stats = stats
+  const images = parseImages(row.images)
+  if (images) m.images = images
   return m
 }
 
@@ -425,6 +455,7 @@ function messageParams(conversationId: string, position: number, m: Message): SQ
     m.failed == null ? null : (m.failed ? 1 : 0),
     m.responseId ?? null,
     m.stats ? JSON.stringify(m.stats) : null,
+    m.images?.length ? JSON.stringify(m.images) : null,
   ]
 }
 
@@ -539,6 +570,12 @@ export class Store {
   private config: ServerConfig
   /** Messages saved to disk per conversation id, for the shrink check. */
   private savedCounts: Map<string, number>
+  /**
+   * Image bytes for temporary chats, held in memory only -- the same
+   * promise their messages get. Flushed to files if the chat stops being
+   * temporary, dropped with the chat otherwise.
+   */
+  private pendingImages = new Map<string, { conversationId: string; mime: string; bytes: Buffer }>()
 
   constructor(options: StoreOptions = {}) {
     this.paths = locate(options.dir)
@@ -745,13 +782,26 @@ export class Store {
       // kept, so whatever was already saved for it goes now, not just what
       // comes next. The name goes too -- it's usually a snippet of the
       // first message, so it can say as much as the messages themselves.
+      // Its images come off disk into memory for the same reason.
       this.stmts.deleteMessagesFor.run(id)
       this.stmts.scrubConversationName.run(id)
       this.savedCounts.set(id, 0)
+      for (const img of imagesOf(conv)) {
+        const file = this.imageFile(img.id)
+        if (!file) continue
+        this.pendingImages.set(img.id, { conversationId: id, mime: img.mime, bytes: fs.readFileSync(file) })
+        fs.rmSync(file, { force: true })
+      }
     } else if (!conv.temporary && wasTemporary) {
       // Just turned off: everything held in memory while it was temporary
       // gets saved now, in one go, catching disk up to the live state.
       this.writeMessages(conv)
+      for (const img of imagesOf(conv)) {
+        const pending = this.pendingImages.get(img.id)
+        if (!pending) continue
+        this.writeImageFile(img.id, pending.mime, pending.bytes)
+        this.pendingImages.delete(img.id)
+      }
     } else {
       this.writeMeta(conv) // no-op on its own if conv.temporary is (still) true
     }
@@ -852,6 +902,49 @@ export class Store {
     return this.config
   }
 
+  // --- images --------------------------------------------------------------
+
+  /**
+   * Keep an image sent with a message and return its description for the
+   * message. Bytes go to a file (`.data/images/<id>.<ext>`), unless the chat
+   * is temporary, in which case they stay in memory like its messages.
+   */
+  saveImage(conversationId: string, image: { name: string; mime: string; bytes: Buffer }): MessageImage {
+    const id = newId()
+    const desc: MessageImage = { id, name: image.name, mime: image.mime, bytes: image.bytes.length }
+    if (this.get(conversationId)?.temporary) {
+      this.pendingImages.set(id, { conversationId, mime: image.mime, bytes: image.bytes })
+    } else {
+      this.writeImageFile(id, image.mime, image.bytes)
+    }
+    return desc
+  }
+
+  /** The bytes of a saved image, wherever they are; undefined when unknown. */
+  readImage(id: string): { mime: string; bytes: Buffer } | undefined {
+    const pending = this.pendingImages.get(id)
+    if (pending) return { mime: pending.mime, bytes: pending.bytes }
+    const file = this.imageFile(id)
+    if (!file) return undefined
+    return { mime: mimeOfExt(path.extname(file)), bytes: fs.readFileSync(file) }
+  }
+
+  private writeImageFile(id: string, mime: string, bytes: Buffer): void {
+    fs.mkdirSync(this.paths.images, { recursive: true })
+    fs.writeFileSync(path.join(this.paths.images, `${id}${extOfMime(mime)}`), bytes, { mode: 0o600 })
+  }
+
+  /** The file holding an image's bytes, found by id whatever its type turned out to be. */
+  private imageFile(id: string): string | undefined {
+    // Ids are the store's own (see newId), so this can't walk outside the images dir.
+    if (!/^[a-z0-9-]+$/.test(id)) return undefined
+    for (const ext of Object.keys(MIME_BY_EXT)) {
+      const file = path.join(this.paths.images, `${id}${ext}`)
+      if (fs.existsSync(file)) return file
+    }
+    return undefined
+  }
+
   // --- folders -------------------------------------------------------------
 
   listFolders(): Folder[] {
@@ -902,6 +995,14 @@ export class Store {
     return removed
   }
 }
+
+/** The image types the model is sent, by file extension; anything else is refused at the API. */
+export const MIME_BY_EXT: Record<string, string> = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
+}
+const extOfMime = (mime: string): string => Object.entries(MIME_BY_EXT).find(([, m]) => m === mime)?.[0] ?? '.bin'
+const mimeOfExt = (ext: string): string => MIME_BY_EXT[ext] ?? 'application/octet-stream'
+const imagesOf = (conv: Conversation): MessageImage[] => conv.messages.flatMap((m) => m.images ?? [])
 
 /** A memory selection from a client: a list of ids, or null for automatic. */
 const cleanSelection = (s: unknown): string[] | null =>

@@ -81,7 +81,7 @@ export default function App() {
           />
         )}
       <Composer
-        onSend={(text) => void send(text)}
+        onSend={(text, images) => void send(text, images)}
         disabled={busy}
         busy={busy}
         onStop={() => void stop()}

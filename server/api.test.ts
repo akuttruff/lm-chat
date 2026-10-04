@@ -356,6 +356,36 @@ describe('turns', () => {
     expect((await send(`/api/chats/${id}/turns`, 'POST', { text: '  ' })).status).toBe(400)
   })
 
+  it('takes images with a turn, keeps them, and serves them back by id for good', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => { /* pending */ })))
+    api.store.setConfig({ model: 'qwen' })
+    const id = api.store.getConversations().activeId!
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 9, 9])
+    const dataUrl = `data:image/png;base64,${bytes.toString('base64')}`
+    const res = await send(`/api/chats/${id}/turns`, 'POST', { text: '', images: [{ name: 'cat.png', mime: 'image/png', dataUrl }] })
+    expect(res.status).toBe(202)
+    const sent = api.store.get(id)!.messages.at(-1)!
+    expect(sent.images![0]).toMatchObject({ name: 'cat.png', mime: 'image/png', bytes: 6 })
+    const got = await get(`/api/images/${sent.images![0]!.id}`)
+    expect(got.status).toBe(200)
+    expect(got.headers.get('content-type')).toBe('image/png')
+    expect(got.headers.get('cache-control')).toContain('immutable')
+    expect(Buffer.from(await got.arrayBuffer())).toEqual(bytes)
+    expect((await get('/api/images/nope')).status).toBe(404)
+  })
+
+  it('refuses images of the wrong type, too many, or too large, before anything is kept', async () => {
+    const id = api.store.getConversations().activeId!
+    const png = 'data:image/png;base64,AAAA'
+    const bad = async (images: unknown): Promise<string> =>
+      ((await (await send(`/api/chats/${id}/turns`, 'POST', { text: 'x', images })).json()) as { error: string }).error
+    expect(await bad([{ name: 'a.svg', mime: 'image/svg+xml', dataUrl: 'data:image/svg+xml;base64,AAAA' }])).toMatch(/not a supported type/)
+    expect(await bad(Array(7).fill({ name: 'a.png', mime: 'image/png', dataUrl: png }))).toMatch(/at most 6/)
+    expect(await bad([{ name: 'big.png', mime: 'image/png', dataUrl: `data:image/png;base64,${'A'.repeat(11 * 1024 * 1024)}` }])).toMatch(/larger than 8 MB/)
+    expect(await bad('nope')).toMatch(/must be a list/)
+    expect(api.store.get(id)!.messages).toHaveLength(0)
+  })
+
   it('refuses a second turn while one is in flight', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => { /* pending */ })))
     api.store.setConfig({ model: 'qwen' })

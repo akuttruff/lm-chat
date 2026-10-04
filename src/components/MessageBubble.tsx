@@ -1,11 +1,13 @@
 import { Suspense, lazy, memo } from 'react'
-import type { MessageRole, ReplyStats } from '../types.ts'
+import type { MessageImage, MessageRole, ReplyStats } from '../types.ts'
 
 const MarkdownText = lazy(() => import('./MarkdownText'))
 
 interface MessageBubbleProps {
   role: MessageRole
   text?: string
+  /** User messages: the images sent with the text. */
+  images?: MessageImage[]
   model?: string
   /** The specific LM Studio instance that answered, preferred over `model`. */
   instance?: string
@@ -30,13 +32,24 @@ function statsLine(s: ReplyStats): string {
 }
 
 function MessageBubble({
-  role, text, model, instance, elapsed, streaming, stats,
+  role, text, images, model, instance, elapsed, streaming, stats,
 }: MessageBubbleProps) {
   const isError = role === 'error'
   const wrapClass = `msg ${isError ? 'error' : role}`
 
   return (
     <div className={wrapClass}>
+      {images && images.length > 0 && (
+        // Above the words, as they were attached; tap one for the full size.
+        <div className="bubble-images">
+          {images.map((img) => (
+            <a key={img.id} href={`/api/images/${img.id}`} target="_blank" rel="noreferrer" title={img.name}>
+              <img src={`/api/images/${img.id}`} alt={img.name} loading="lazy" />
+            </a>
+          ))}
+        </div>
+      )}
+      {(text || role !== 'user') && (
       <div className="bubble">
         {role === 'assistant' && !streaming ? (
           <div className="md">
@@ -55,6 +68,7 @@ function MessageBubble({
         )}
         {streaming && <span className="cursor" />}
       </div>
+      )}
       {role === 'assistant' && !streaming && model && (
         <div className="meta">
           {instance || model} &middot; {elapsed}s

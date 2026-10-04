@@ -67,6 +67,40 @@ describe('conversations', () => {
     expect(reopened.get(id)!.messages[0]!.text).toBe('remember me')
   })
 
+  it("keeps a message's images: the descriptions in the row, the bytes in a file, read back by id", () => {
+    const id = store.getConversations().activeId!
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3])
+    const img = store.saveImage(id, { name: 'cat.png', mime: 'image/png', bytes: png })
+    expect(img).toMatchObject({ name: 'cat.png', mime: 'image/png', bytes: 7 })
+    expect(fs.existsSync(path.join(dir, 'images', `${img.id}.png`))).toBe(true)
+    store.setMessages(id, [{ id: 'u', role: 'user', text: 'what is this', images: [img] }])
+    const reopened = new Store({ dir })
+    expect(reopened.get(id)!.messages[0]!.images).toEqual([img])
+    expect(reopened.readImage(img.id)).toEqual({ mime: 'image/png', bytes: png })
+    expect(reopened.readImage('nope')).toBeUndefined()
+    expect(reopened.readImage('../lm-chat.sqlite')).toBeUndefined() // never a path
+    const db = openRaw()
+    try { db.prepare("UPDATE messages SET images = '[1,2]' WHERE id = 'u'").run() } finally { db.close() }
+    expect(new Store({ dir }).get(id)!.messages[0]!.images).toBeUndefined()
+  })
+
+  it("keeps a temporary chat's images in memory only, and writes them out if it stops being temporary", () => {
+    const id = store.getConversations().activeId!
+    store.patch(id, { temporary: true })
+    const bytes = Buffer.from('jpegish')
+    const img = store.saveImage(id, { name: 'a.jpg', mime: 'image/jpeg', bytes })
+    store.setMessages(id, [{ id: 'u', role: 'user', text: '', images: [img] }])
+    expect(fs.existsSync(path.join(dir, 'images'))).toBe(false)
+    expect(store.readImage(img.id)).toEqual({ mime: 'image/jpeg', bytes }) // served while temporary
+    expect(new Store({ dir }).readImage(img.id)).toBeUndefined() // but nowhere on disk
+    store.patch(id, { temporary: false })
+    expect(new Store({ dir }).readImage(img.id)).toEqual({ mime: 'image/jpeg', bytes })
+    // And back on: the file goes, the bytes stay available to this process.
+    store.patch(id, { temporary: true })
+    expect(fs.existsSync(path.join(dir, 'images', `${img.id}.jpg`))).toBe(false)
+    expect(store.readImage(img.id)).toEqual({ mime: 'image/jpeg', bytes })
+  })
+
   it("keeps a reply's stats, and reads a corrupt stats value as none", () => {
     const id = store.getConversations().activeId!
     const stats = { inputTokens: 9003, outputTokens: 747, reasoningTokens: 497, tokensPerSecond: 19.6, firstTokenSeconds: 1.8 }

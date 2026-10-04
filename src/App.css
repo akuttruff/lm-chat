@@ -169,6 +169,40 @@ html, body, #root {
   border-bottom-right-radius: 3px;
 }
 
+/* Images sent with a message: thumbnails above its words, right-aligned like the bubble. */
+.bubble-images { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-bottom: 4px; max-width: 100%; }
+.bubble-images img {
+  display: block;
+  max-width: min(260px, 70vw);
+  max-height: 260px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  object-fit: cover;
+}
+
+/* The composer's pending images, before they're sent. */
+.composer-attachments { display: flex; flex-wrap: wrap; gap: 8px; }
+.composer-attachments:empty { display: none; }
+.attachment { position: relative; }
+.attachment img { display: block; width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.attachment .remove {
+  position: absolute; top: -6px; right: -6px;
+  width: 20px; height: 20px; padding: 0;
+  border-radius: 50%; border: 1px solid var(--line);
+  background: var(--ink); color: var(--paper);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.attach-btn {
+  flex: 0 0 auto;
+  width: 36px; height: 36px; padding: 0;
+  border-radius: 50%; border: 1px solid var(--line);
+  background: transparent; color: var(--paper-dim);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.attach-btn:disabled { opacity: 0.4; cursor: default; }
+
 .msg.assistant .bubble {
   background: var(--bg-raised);
   border: 1px solid var(--line);
