@@ -677,6 +677,35 @@ html, body, #root {
 
 .drawer-foot { text-align: center; margin: 0; }
 
+/* --- the chats drawer's select mode --- */
+.conv-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.conv-select-toggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: none; color: var(--moss);
+  font-size: 13px; cursor: pointer;
+}
+.conv-select-toggle[aria-pressed="true"] { border-color: var(--moss); }
+.conv-select-bar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin: -4px 0 8px; padding: 8px 6px; border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.conv-select-bar .link { background: none; border: none; padding: 0; color: var(--moss); font-size: inherit; text-decoration: underline; cursor: pointer; }
+.conv-select-bar .link:disabled { color: var(--paper-dim); text-decoration: none; cursor: default; }
+.conv-select-count { margin-left: auto; color: var(--paper-dim); font-variant-numeric: tabular-nums; }
+.conv-select-delete {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 10px; border-radius: 8px; border: none;
+  background: var(--rust); color: var(--paper); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.conv-select-delete:disabled { opacity: 0.4; cursor: default; }
+/* A select-mode row is a label: the whole row toggles its box. */
+.conv-select-row { border-bottom: 1px solid var(--line); touch-action: auto; }
+.conv-select-row input, .conv-section-select input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--moss); }
+.conv-select-row.checked { background: color-mix(in srgb, var(--moss) 12%, var(--bg-raised)); }
+.conv-section-select { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+
 /* --- reasoning --- */
 .msg.reasoning { margin: 2px 0 8px; }
 

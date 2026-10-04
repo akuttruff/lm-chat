@@ -228,6 +228,22 @@ describe('folders', () => {
     expect(api.store.get(id)!.folderId).toBe(folder.id)
   })
 
+  it('deletes several chats in one request, keeps each for Undo, and skips ids that are gone', async () => {
+    const one = await (await send('/api/chats', 'POST', {})).json() as { id: string }
+    api.store.setMessages(one.id, [{ id: 'u', role: 'user', text: 'first' }])
+    const two = await (await send('/api/chats', 'POST', {})).json() as { id: string }
+    api.store.setMessages(two.id, [{ id: 'u', role: 'user', text: 'second' }])
+    const res = await send('/api/chats/delete', 'POST', { ids: [one.id, two.id, 'no-such-chat'] })
+    expect(res.status).toBe(200)
+    expect((await res.json() as { deleted: string[] }).deleted).toEqual([one.id, two.id])
+    expect(api.store.get(one.id)).toBeUndefined()
+    expect(api.store.get(two.id)).toBeUndefined()
+    // Restorable from the server's own copy, messages and all.
+    await send('/api/chats/restore', 'POST', { id: one.id, messagesOmitted: true })
+    expect(api.store.get(one.id)!.messages[0]!.text).toBe('first')
+    expect((await send('/api/chats/delete', 'POST', { ids: 'nope' })).status).toBe(400)
+  })
+
   it('unfiles a chat when its folder is deleted, and the chat list reflects it without a reload', async () => {
     const id = api.store.getConversations().activeId!
     const folder = await (await send('/api/folders', 'POST', { name: 'Astrology' })).json() as { id: string }

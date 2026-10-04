@@ -226,4 +226,75 @@ describe('ConversationList', () => {
       expect(document.querySelectorAll('.conv-section-head')).toHaveLength(0)
     })
   })
+
+  describe('select mode', () => {
+    const many: Conversation[] = [
+      { id: 'a', name: 'Astrology forecast', createdAt: now, updatedAt: now - 1, messages: [], responseId: null, folderId: 'f1' },
+      { id: 'c', name: 'Transit check', createdAt: now, updatedAt: now - 2, messages: [], responseId: null, folderId: 'f1' },
+      { id: 'b', name: 'Grocery list', createdAt: now, updatedAt: now - 3, messages: [], responseId: null },
+    ]
+    const folders: Folder[] = [{ id: 'f1', name: 'Astrology', createdAt: 1 }]
+
+    it('turns rows into checkboxes, and tapping one selects it rather than opening it', async () => {
+      const user = userEvent.setup()
+      const props = setup({ conversations: many, folders, onDeleteMany: vi.fn().mockResolvedValue(undefined) })
+      await user.click(await screen.findByRole('button', { name: /Select/ }))
+      expect(screen.getByText('0 selected')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Delete/ })).toBeDisabled()
+      await user.click(screen.getByRole('checkbox', { name: 'Grocery list' }))
+      expect(props.onOpen).not.toHaveBeenCalled()
+      expect(screen.getByText('1 selected')).toBeInTheDocument()
+      // No per-row actions while selecting: the bar acts on the selection.
+      expect(screen.queryByRole('button', { name: /Rename/ })).not.toBeInTheDocument()
+    })
+
+    it("selects a whole folder from its header, and all or none from the bar", async () => {
+      const user = userEvent.setup()
+      setup({ conversations: many, folders, onDeleteMany: vi.fn().mockResolvedValue(undefined) })
+      await user.click(await screen.findByRole('button', { name: /Select/ }))
+      await user.click(screen.getByRole('checkbox', { name: 'Select every chat in Astrology' }))
+      expect(screen.getByRole('checkbox', { name: 'Astrology forecast' })).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: 'Transit check' })).toBeChecked()
+      expect(screen.getByRole('checkbox', { name: 'Grocery list' })).not.toBeChecked()
+      expect(screen.getByText('2 selected')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Select all' }))
+      expect(screen.getByText('3 selected')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Deselect all' }))
+      expect(screen.getByText('0 selected')).toBeInTheDocument()
+    })
+
+    it('deletes the selection in one go, and Undo restores every one of them', async () => {
+      const user = userEvent.setup()
+      const onDeleteMany = vi.fn().mockResolvedValue(undefined)
+      const onRestoreMany = vi.fn().mockResolvedValue(undefined)
+      setup({ conversations: many, folders, onDeleteMany, onRestoreMany })
+      render(<Toaster />)
+      await user.click(await screen.findByRole('button', { name: /Select/ }))
+      await user.click(screen.getByRole('checkbox', { name: 'Astrology forecast' }))
+      await user.click(screen.getByRole('checkbox', { name: 'Grocery list' }))
+      await user.click(screen.getByRole('button', { name: 'Delete 2' }))
+      expect(onDeleteMany).toHaveBeenCalledWith(['a', 'b'])
+      expect(await screen.findByText('2 chats deleted')).toBeInTheDocument()
+      const undo = (await screen.findAllByRole('button', { name: 'Undo' }))
+        .find((b) => b.closest('[data-sonner-toast]')?.getAttribute('data-index') === '0')!
+      fireEvent.click(undo)
+      // Oldest first, so the list rebuilds in its original order.
+      expect(onRestoreMany).toHaveBeenCalledWith([expect.objectContaining({ id: 'b' }), expect.objectContaining({ id: 'a' })])
+    })
+
+    it('leaves select mode with Done, back to the normal list', async () => {
+      const user = userEvent.setup()
+      setup({ conversations: many, folders, onDeleteMany: vi.fn() })
+      await user.click(await screen.findByRole('button', { name: /Select/ }))
+      await user.click(screen.getByRole('button', { name: 'Done' }))
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Rename Grocery list/ })).toBeInTheDocument()
+    })
+
+    it('offers no select mode where bulk delete is not wired up', async () => {
+      setup()
+      await screen.findByText('Astrology forecast')
+      expect(screen.queryByRole('button', { name: /Select/ })).not.toBeInTheDocument()
+    })
+  })
 })

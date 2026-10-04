@@ -34,6 +34,8 @@ export interface ServerState {
   newChat: (folderId?: string | null) => Promise<void>
   openChat: (id: string) => Promise<void>
   deleteChat: (id: string) => Promise<void>
+  /** Several at once (the drawer's select mode); each is kept for Undo like a single delete. */
+  deleteChats: (ids: string[]) => Promise<void>
   /** Put back a conversation just deleted. The server restores its own full copy when it has one. */
   restoreChat: (conversation: Conversation) => Promise<void>
   renameChat: (id: string, name: string) => Promise<void>
@@ -326,6 +328,11 @@ export default function useServerState(): ServerState {
     await post('/api/chats/restore', conversation)
   }, [])
 
+  const deleteChats = useCallback(async (ids: string[]) => {
+    const r = await post('/api/chats/delete', { ids })
+    if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? 'Could not delete those chats')
+  }, [])
+
   const patchChat = async (id: string, patch: Record<string, unknown>): Promise<void> => {
     await fetch(`/api/chats/${encodeURIComponent(id)}`, {
       method: 'PATCH',
@@ -399,6 +406,7 @@ export default function useServerState(): ServerState {
     newChat,
     openChat,
     deleteChat,
+    deleteChats,
     restoreChat,
     renameChat,
     setReasoning,

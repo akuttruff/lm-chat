@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Drawer } from 'vaul'
 import { motion } from 'motion/react'
-import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus } from 'lucide-react'
+import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus, CheckSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Conversation, Folder } from '../types.ts'
 import type { ChatStatus } from '../hooks/useServerState.ts'
@@ -30,6 +30,9 @@ interface ConversationListProps {
   onDelete: (id: string) => void
   /** Undo a deletion, from the copy the list still holds. */
   onRestore?: (conv: Conversation) => void
+  /** Select mode: delete the chosen chats in one go, and put them all back on Undo. */
+  onDeleteMany?: (ids: string[]) => Promise<void>
+  onRestoreMany?: (convs: Conversation[]) => Promise<void>
   onRename: (id: string, name: string) => void
   onStar?: (id: string, starred: boolean) => void
   onOpenFolderPicker?: (id: string) => void
@@ -184,6 +187,22 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename, on
   )
 }
 
+/**
+ * A row in select mode: the whole row toggles the chat's checkbox. No swipe
+ * and no row actions -- the bar at the top acts on the selection instead.
+ */
+function SelectRow({ conv, checked, onToggle }: { conv: Conversation; checked: boolean; onToggle: (id: string) => void }) {
+  const count = conv.messageCount ?? conv.messages.length
+  return (
+    <label className={`conv-row conv-select-row${checked ? ' checked' : ''}`}>
+      <input type="checkbox" checked={checked} onChange={() => onToggle(conv.id)} aria-label={conv.name || 'New chat'} />
+      <span className="conv-name">{conv.name || 'New chat'}</span>
+      {conv.starred && <Star size={12} className="conv-star" aria-hidden="true" fill="currentColor" />}
+      <span className="conv-time">{count > 0 ? `${count} msgs · ` : ''}{fullDateTime(conv.updatedAt)}</span>
+    </label>
+  )
+}
+
 interface Section {
   key: string
   /** Null for the flat, no-folders-in-use case: no header at all. */
@@ -223,23 +242,113 @@ function sectionsOf(conversations: Conversation[], folders: Folder[]): Section[]
 
 export default function ConversationList({
   open, conversations, activeId, folders, working = {}, onOpen, onDelete, onRestore = () => {}, onRename,
-  onStar = () => {}, onOpenFolderPicker = () => {}, onNewChat, onClose,
+  onStar = () => {}, onOpenFolderPicker = () => {}, onNewChat, onDeleteMany, onRestoreMany, onClose,
 }: ConversationListProps) {
+  // Select mode: null when off, else the chosen chat ids.
+  const [selected, setSelected] = useState<Set<string> | null>(null)
+  const selecting = selected !== null
+  // Closing the drawer leaves select mode, so it opens to the normal list next time.
+  useEffect(() => { if (!open) setSelected(null) }, [open])
+  // Chats deleted elsewhere (another tab, or this very delete) drop out of the selection.
+  const live = new Set(conversations.map((c) => c.id))
+  const chosen = selected ? [...selected].filter((id) => live.has(id)) : []
+
+  const toggle = (id: string): void =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  /** Every chat in a group on, or -- when they're all on already -- off. */
+  const toggleGroup = (ids: string[]): void =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      const allOn = ids.every((id) => next.has(id))
+      for (const id of ids) {
+        if (allOn) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+
+  const deleteChosen = async (): Promise<void> => {
+    if (!onDeleteMany || !chosen.length) return
+    // Kept in list order, so Undo restores them oldest-first and the list rebuilds as it was.
+    const snapshots = conversations.filter((c) => chosen.includes(c.id)).reverse()
+    try {
+      await onDeleteMany(chosen)
+      setSelected(null)
+      const n = snapshots.length
+      toast(`${n} ${n === 1 ? 'chat' : 'chats'} deleted`, {
+        action: { label: 'Undo', onClick: () => { void onRestoreMany?.(snapshots) } },
+        duration: 10_000,
+      })
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
+
   return (
     <Drawer.Root open={open} onOpenChange={(v) => !v && onClose()}>
       <Drawer.Portal>
         <Drawer.Overlay className="drawer-overlay" />
         <Drawer.Content className="drawer-content" aria-describedby={undefined}>
           <div className="drawer-handle" />
-          <Drawer.Title className="drawer-title">Chats</Drawer.Title>
+          <div className="conv-title-row">
+            <Drawer.Title className="drawer-title">Chats</Drawer.Title>
+            {onDeleteMany && conversations.length > 0 && (
+              <button
+                type="button"
+                className="conv-select-toggle"
+                onClick={() => setSelected(selecting ? null : new Set())}
+                aria-pressed={selecting}
+              >
+                {selecting ? 'Done' : <><CheckSquare size={14} aria-hidden="true" /> Select</>}
+              </button>
+            )}
+          </div>
+          {selecting && (
+            <div className="conv-select-bar" role="toolbar" aria-label="Selected chats">
+              <button type="button" className="link" onClick={() => setSelected(new Set(conversations.map((c) => c.id)))}>Select all</button>
+              <button type="button" className="link" onClick={() => setSelected(new Set())} disabled={!chosen.length}>Deselect all</button>
+              <span className="conv-select-count">{chosen.length} selected</span>
+              <button
+                type="button"
+                className="conv-select-delete"
+                onClick={() => void deleteChosen()}
+                disabled={!chosen.length}
+              >
+                <Trash2 size={14} aria-hidden="true" /> Delete{chosen.length ? ` ${chosen.length}` : ''}
+              </button>
+            </div>
+          )}
           <div className="conv-list drawer-scroll" data-vaul-no-drag>
             {sectionsOf(conversations, folders).map((section) => (
               <div key={section.key}>
                 {section.label && (
                   <div className="conv-section-head">
-                    <span>{section.label}</span>
+                    {selecting ? (
+                      <label className="conv-section-select">
+                        <input
+                          type="checkbox"
+                          checked={section.chats.every((c) => selected!.has(c.id))}
+                          ref={(el) => {
+                            if (el) {
+                              const n = section.chats.filter((c) => selected!.has(c.id)).length
+                              el.indeterminate = n > 0 && n < section.chats.length
+                            }
+                          }}
+                          onChange={() => toggleGroup(section.chats.map((c) => c.id))}
+                          aria-label={`Select every chat in ${section.label}`}
+                        />
+                        <span>{section.label}</span>
+                      </label>
+                    ) : (
+                      <span>{section.label}</span>
+                    )}
                     {/* Start a chat already filed here, so the folder's reasoning and tools apply from the first message. */}
-                    {section.folderId && onNewChat && (
+                    {section.folderId && onNewChat && !selecting && (
                       <button
                         type="button"
                         className="conv-section-add"
@@ -252,7 +361,9 @@ export default function ConversationList({
                     )}
                   </div>
                 )}
-                {section.chats.map((c) => (
+                {section.chats.map((c) => (selecting ? (
+                  <SelectRow key={c.id} conv={c} checked={selected!.has(c.id)} onToggle={toggle} />
+                ) : (
                   <Row
                     key={c.id}
                     conv={c}
@@ -265,14 +376,20 @@ export default function ConversationList({
                     onStar={onStar}
                     onOpenFolderPicker={onOpenFolderPicker}
                   />
-                ))}
+                )))}
               </div>
             ))}
           </div>
           <div className="drawer-actions">
             <div className="hint drawer-foot">
-              <span className="touch-only">Swipe a row left to star, move, rename or delete.</span>
-              <span className="pointer-only">Hover a row to star, move, rename or delete; Delete removes the focused chat.</span>
+              {selecting ? (
+                <span>Tap chats to select them, or a folder&apos;s box for all of its chats.</span>
+              ) : (
+                <>
+                  <span className="touch-only">Swipe a row left to star, move, rename or delete.</span>
+                  <span className="pointer-only">Hover a row to star, move, rename or delete; Delete removes the focused chat.</span>
+                </>
+              )}
             </div>
           </div>
         </Drawer.Content>

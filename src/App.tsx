@@ -19,7 +19,7 @@ export default function App() {
   const server = useServerState();
   const {
     conversations, activeId, active, loadingActive, config, status, startedAt, busy, working,
-    send, stop, retry, newChat, openChat, deleteChat, restoreChat, renameChat, setReasoning, setMemory,
+    send, stop, retry, newChat, openChat, deleteChat, deleteChats, restoreChat, renameChat, setReasoning, setMemory,
     setMemorySelection, setStarred, setFolder, setTemporary, setTools, folders, createFolder, updateFolder, deleteFolder,
     saveConfig,
   } = server;
@@ -114,6 +114,9 @@ export default function App() {
         onOpen={(id) => void openChat(id)}
         onDelete={(id) => void deleteChat(id)}
         onRestore={(conv) => void restoreChat(conv)}
+        onDeleteMany={deleteChats}
+        // One at a time, oldest-first, so the list rebuilds in its original order.
+        onRestoreMany={async (convs) => { for (const c of convs) await restoreChat(c) }}
         onRename={(id, name) => void renameChat(id, name)}
         onStar={(id, starred) => void setStarred(id, starred)}
         onOpenFolderPicker={(id) => setFolderPickerFor(id)}

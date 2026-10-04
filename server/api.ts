@@ -107,9 +107,9 @@ export function listView(s: ConversationStore): ConversationStore {
   }
 }
 
-/** How long, and how many, deleted chats the server keeps for Undo. */
+/** How long, and how many, deleted chats the server keeps for Undo -- enough for a whole selection deleted at once. */
 const UNDO_MS = 30 * 60_000
-const UNDO_MAX = 20
+const UNDO_MAX = 300
 
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -363,6 +363,30 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     // Titles land as patch events. `curl -X POST localhost:8010/api/chats/retitle`.
     if (url === '/api/chats/retitle' && method === 'POST') {
       return json(res, 202, engine.retitleAll())
+    }
+    // Several chats at once, from the drawer's select mode. Each is kept for
+    // Undo exactly as a single delete keeps it; ids that no longer exist are
+    // skipped rather than failing the batch.
+    if (url === '/api/chats/delete' && method === 'POST') {
+      void readBody(req).then((body) => {
+        const raw = (body as { ids?: unknown } | null)?.ids
+        if (!Array.isArray(raw) || !raw.every((x) => typeof x === 'string')) {
+          return json(res, 400, { error: 'ids must be a list of chat ids' })
+        }
+        const ids = [...new Set(raw as string[])].filter((id) => store.get(id))
+        if (ids.length > UNDO_MAX) return json(res, 400, { error: `at most ${UNDO_MAX} chats at once` })
+        for (const id of ids) {
+          const before = new Set(store.getConversations().items.map((c) => c.id))
+          remember(structuredClone(store.get(id)!))
+          store.remove(id)
+          const after = store.getConversations()
+          // Deleting the last thread leaves a fresh blank one in its place.
+          const replacement = after.items.find((c) => !before.has(c.id))
+          bus.send({ type: 'removed', payload: { conversationId: id, activeId: after.activeId, replacement } })
+        }
+        return json(res, 200, { ok: true, deleted: ids, activeId: store.getConversations().activeId })
+      }).catch((err: Error) => json(res, 400, { error: err.message }))
+      return undefined
     }
     if (url === '/api/chats/restore' && method === 'POST') {
       void readBody(req).then((body) => {
