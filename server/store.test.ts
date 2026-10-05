@@ -618,6 +618,23 @@ describe('temporary chats', () => {
     expect(new Store({ dir }).get(id)!.messages.map((m) => m.text)).toEqual(['kept only in memory for now'])
   })
 
+  it('adds the voice settings to a database made before them, defaulting to Heart at normal speed', () => {
+    const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-old-'))
+    try {
+      new Store({ dir: oldDir }).setConfig({ model: 'qwen' })
+      // Back to how a version-10 database looked: no voice columns.
+      const db = new DatabaseSync(path.join(oldDir, 'lm-chat.sqlite'))
+      db.exec('ALTER TABLE config DROP COLUMN speech_voice; ALTER TABLE config DROP COLUMN speech_speed; PRAGMA user_version = 10;')
+      db.close()
+      const upgraded = new Store({ dir: oldDir })
+      expect(upgraded.getConfig()).toMatchObject({ model: 'qwen', speechVoice: 'af_heart', speechSpeed: '1' })
+      upgraded.setConfig({ speechVoice: 'bf_emma', speechSpeed: '1.2' })
+      expect(new Store({ dir: oldDir }).getConfig()).toMatchObject({ speechVoice: 'bf_emma', speechSpeed: '1.2' })
+    } finally {
+      fs.rmSync(oldDir, { recursive: true, force: true })
+    }
+  })
+
   it('adds the temporary column to a database made before it existed, keeping its chats', () => {
     const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-old-'))
     try {

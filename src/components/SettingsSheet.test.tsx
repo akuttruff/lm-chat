@@ -19,6 +19,8 @@ const base: PublicConfig = {
   backgroundModel: '',
   maxOutputTokens: '',
   autoTitle: 'on',
+  speechVoice: 'af_heart',
+  speechSpeed: '1',
   hasToken: false,
 }
 
@@ -133,6 +135,20 @@ describe('settings', () => {
   it('describes the address as the server-to-LM-Studio hop', async () => {
     setup()
     expect(await screen.findByText(/this app's server/i)).toBeInTheDocument()
+  })
+
+  it('picks the voice and speed replies are read in, starting from the saved ones', async () => {
+    const user = userEvent.setup()
+    const props = setup({ config: { speechVoice: 'am_michael', speechSpeed: '1.1' } })
+    const voice = screen.getByLabelText('Read replies aloud in')
+    await waitFor(() => expect(voice).toHaveValue('am_michael'))
+    expect(screen.getByRole('option', { name: 'Emma' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hear this voice' })).toBeInTheDocument()
+    await user.selectOptions(voice, 'bf_emma')
+    await user.selectOptions(screen.getByLabelText('Speed'), '1.2')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+    await waitFor(() => expect(props.onSave).toHaveBeenCalled())
+    expect(props.onSave.mock.calls.at(-1)![0]).toMatchObject({ speechVoice: 'bf_emma', speechSpeed: '1.2' })
   })
 
   it('saves and closes', async () => {

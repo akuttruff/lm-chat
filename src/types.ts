@@ -200,6 +200,10 @@ export interface ServerConfig {
    * A title you typed yourself is never overwritten.
    */
   autoTitle: 'on' | 'off'
+  /** The voice replies are read aloud in: a Kokoro voice id (see src/lib/speech.ts). */
+  speechVoice: string
+  /** How fast it reads, 1 being normal. */
+  speechSpeed: string
 }
 
 /** One saved memory, as the memory MCP server stores it (see server/memory.ts). */

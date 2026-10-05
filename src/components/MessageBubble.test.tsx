@@ -79,4 +79,13 @@ describe('MessageBubble', () => {
     const { container } = render(<MessageBubble role="error" text="bad" />)
     expect(container.querySelector('.msg.error')).toBeInTheDocument()
   })
+
+  it('offers to read a finished reply aloud, but not one still being written, nor your own message', () => {
+    const { rerender } = render(<MessageBubble id="m1" role="assistant" text="Hello there." model="m" elapsed="1" />)
+    expect(screen.getByRole('button', { name: 'Read aloud' })).toBeInTheDocument()
+    rerender(<MessageBubble id="m1" role="assistant" text="Hello th" streaming />)
+    expect(screen.queryByRole('button', { name: 'Read aloud' })).not.toBeInTheDocument()
+    rerender(<MessageBubble id="u1" role="user" text="Hi" />)
+    expect(screen.queryByRole('button', { name: 'Read aloud' })).not.toBeInTheDocument()
+  })
 })

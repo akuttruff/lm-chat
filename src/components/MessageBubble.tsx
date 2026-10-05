@@ -1,9 +1,12 @@
 import { Suspense, lazy, memo } from 'react'
 import type { MessageImage, MessageRole, ReplyStats } from '../types.ts'
+import SpeakButton from './SpeakButton'
 
 const MarkdownText = lazy(() => import('./MarkdownText'))
 
 interface MessageBubbleProps {
+  /** The message's id: with it, a finished reply gets a button to read it aloud. */
+  id?: string
   role: MessageRole
   text?: string
   /** User messages: the images sent with the text. */
@@ -32,7 +35,7 @@ function statsLine(s: ReplyStats): string {
 }
 
 function MessageBubble({
-  role, text, images, model, instance, elapsed, streaming, stats,
+  id, role, text, images, model, instance, elapsed, streaming, stats,
 }: MessageBubbleProps) {
   const isError = role === 'error'
   const wrapClass = `msg ${isError ? 'error' : role}`
@@ -69,11 +72,16 @@ function MessageBubble({
         {streaming && <span className="cursor" />}
       </div>
       )}
-      {role === 'assistant' && !streaming && model && (
-        <div className="meta">
-          {instance || model} &middot; {elapsed}s
-          {stats && <span className="meta-stats"> &middot; {statsLine(stats)}</span>}
-          {stats?.capped && <span className="meta-capped"> &middot; cut off at the reply length cap</span>}
+      {role === 'assistant' && !streaming && (model || (id && text)) && (
+        <div className="msg-foot">
+          {id && text && <SpeakButton id={id} text={text} />}
+          {model && (
+            <div className="meta">
+              {instance || model} &middot; {elapsed}s
+              {stats && <span className="meta-stats"> &middot; {statsLine(stats)}</span>}
+              {stats?.capped && <span className="meta-capped"> &middot; cut off at the reply length cap</span>}
+            </div>
+          )}
         </div>
       )}
     </div>

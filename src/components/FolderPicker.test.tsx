@@ -36,7 +36,7 @@ beforeEach(() => {
 const config: PublicConfig = {
   lmStudioUrl: '', model: 'qwen', systemPrompt: '', mcpTools: 'mcp/astrology-v2, mcp/deep-research', contextLength: '',
   reasoning: 'low', stallSeconds: '180', historyChars: '24000', parallel: '4', memoryDefault: 'off',
-  backgroundModel: '', maxOutputTokens: '', autoTitle: 'on', hasToken: false,
+  backgroundModel: '', maxOutputTokens: '', autoTitle: 'on', speechVoice: 'af_heart', speechSpeed: '1', hasToken: false,
 }
 
 function setup(overrides: Partial<Parameters<typeof FolderPicker>[0]> = {}) {

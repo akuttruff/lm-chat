@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 import { Drawer } from 'vaul';
-import { Eye, EyeOff, Check, CircleAlert } from 'lucide-react';
+import { Eye, EyeOff, Check, CircleAlert, Square, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { levelsFor } from './ReasoningPicker';
 import { DEFAULT_REPLY_STYLE, REPLY_FONTS, REPLY_SIZES } from '../lib/replyStyle';
 import type { ReplyFont, ReplySize, ReplyStyle } from '../lib/replyStyle';
 import type { ModelConfig, PublicConfig } from '../types.ts';
+import { DEFAULT_SPEED, DEFAULT_VOICE, SPEEDS, VOICES } from '../lib/speech';
+import { speaker } from './SpeakButton';
 
 interface SettingsSheetProps {
   open: boolean;
@@ -33,6 +35,10 @@ interface ModelList {
   error: string | null;
 }
 
+/** The preview's id in the speaker, apart from any reply's. */
+const PREVIEW_ID = 'settings-voice-preview';
+const VOICE_SAMPLE = "Here's how replies will sound. If this voice suits you, save, and tap the speaker under any reply.";
+
 /**
  * Settings live on the server now, so this edits server state rather than
  * this device's. The API token is write-only: the server reports whether one
@@ -56,6 +62,10 @@ export default function SettingsSheet({
   const [backgroundModel, setBackgroundModel] = useState('');
   const [maxOutputTokens, setMaxOutputTokens] = useState('');
   const [autoTitle, setAutoTitle] = useState<'on' | 'off'>('on');
+  const [speechVoice, setSpeechVoice] = useState(DEFAULT_VOICE);
+  const [speechSpeed, setSpeechSpeed] = useState(DEFAULT_SPEED);
+  const voicePlayer = useSyncExternalStore(speaker.subscribe, speaker.getState);
+  const previewing = voicePlayer.id === PREVIEW_ID && voicePlayer.status !== 'idle';
   const [models, setModels] = useState<string[]>([]);
   /** Of `models`, the ones LM Studio has loaded right now. */
   const [loaded, setLoaded] = useState<string[]>([]);
@@ -80,10 +90,14 @@ export default function SettingsSheet({
     setBackgroundModel(config.backgroundModel ?? '');
     setMaxOutputTokens(config.maxOutputTokens ?? '');
     setAutoTitle(config.autoTitle === 'off' ? 'off' : 'on');
+    setSpeechVoice(config.speechVoice || DEFAULT_VOICE);
+    setSpeechSpeed(config.speechSpeed || DEFAULT_SPEED);
     setApiToken('');
   }, [open, config]);
 
   useEffect(() => { if (!open) initialised.current = false; }, [open]);
+  // A preview doesn't outlive the sheet.
+  useEffect(() => { if (!open && speaker.getState().id === PREVIEW_ID) speaker.stop(); }, [open]);
 
   /** The server asks LM Studio, with the token it holds; the browser never sees that. */
   const fetchModels = useCallback(async (): Promise<ModelList> => {
@@ -157,6 +171,8 @@ export default function SettingsSheet({
       backgroundModel: backgroundModel.trim(),
       maxOutputTokens: maxOutputTokens.trim(),
       autoTitle,
+      speechVoice,
+      speechSpeed,
       ...(apiToken ? { apiToken: apiToken.trim() } : {}),
     });
     setApiToken('');
@@ -304,6 +320,39 @@ export default function SettingsSheet({
             <div className="hint">
               Applies at once and is kept on this device only, unlike the settings below. Thinking blocks and
               tool cards keep their own fonts.
+            </div>
+          </div>
+
+          <h3 className="sheet-h">Voice</h3>
+          <div className="field">
+            <label htmlFor="cfg-voice">Read replies aloud in</label>
+            <div className="voice-row">
+              <select id="cfg-voice" value={speechVoice} onChange={(e) => setSpeechVoice(e.target.value)}>
+                {[...new Set(VOICES.map((v) => v.group))].map((group) => (
+                  <optgroup key={group} label={group}>
+                    {VOICES.filter((v) => v.group === group).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="voice-preview"
+                aria-label={previewing ? 'Stop the preview' : 'Hear this voice'}
+                onClick={() => speaker.toggle(PREVIEW_ID, VOICE_SAMPLE, { voice: speechVoice, speed: speechSpeed })}
+              >
+                {previewing ? <Square size={12} fill="currentColor" aria-hidden="true" /> : <Volume2 size={15} aria-hidden="true" />}
+                {previewing ? 'Stop' : 'Hear it'}
+              </button>
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="cfg-voice-speed">Speed</label>
+            <select id="cfg-voice-speed" value={speechSpeed} onChange={(e) => setSpeechSpeed(e.target.value)}>
+              {SPEEDS.map((v) => <option key={v} value={v}>{v === '1' ? 'Normal' : `${v}×`}</option>)}
+            </select>
+            <div className="hint">
+              The speaker under each reply reads it aloud. The voice is Kokoro, running on the Mac, so nothing leaves it;
+              code blocks are mentioned rather than read out.
             </div>
           </div>
 

@@ -1,0 +1,33 @@
+#!/bin/sh
+# The voice lm-chat reads replies aloud in: mlx-audio's speech server running
+# Kokoro on 127.0.0.1:8020. Run by launchd (com.amie.lm-speech), always on;
+# it holds under 1 GB.
+#
+# Set up once, outside the repo:
+#   uv venv --python 3.12 ~/.local/share/lm-speech
+#   VIRTUAL_ENV=~/.local/share/lm-speech uv pip install --python ~/.local/share/lm-speech/bin/python \
+#     "mlx-audio[server]==0.4.8" "misaki[en]"
+# The model (~330 MB) and the English pronunciation model download on first use.
+#
+# The first request after a start loads the model, which takes several
+# seconds; this sends one word once the server is up, so a tap in lm-chat
+# never waits for that.
+ENV_DIR="${LM_SPEECH_ENV:-$HOME/.local/share/lm-speech}"
+PORT="${LM_SPEECH_PORT:-8020}"
+MODEL="${LM_SPEECH_MODEL:-mlx-community/Kokoro-82M-bf16}"
+
+export VIRTUAL_ENV="$ENV_DIR" # spaCy installs its English model with uv, which needs to know where
+export PATH="$ENV_DIR/bin:$PATH"
+mkdir -p "$ENV_DIR/logs"
+cd "$ENV_DIR" || exit 1
+
+(
+  for _ in $(seq 1 60); do
+    curl -s -o /dev/null -m 2 "http://127.0.0.1:$PORT/v1/models" && break
+    sleep 1
+  done
+  curl -s -o /dev/null -m 120 "http://127.0.0.1:$PORT/v1/audio/speech" -H 'Content-Type: application/json' \
+    -d "{\"model\":\"$MODEL\",\"input\":\"Ready.\",\"voice\":\"af_heart\",\"response_format\":\"wav\"}"
+) &
+
+exec "$ENV_DIR/bin/mlx_audio.server" --host 127.0.0.1 --port "$PORT" --log-dir "$ENV_DIR/logs"

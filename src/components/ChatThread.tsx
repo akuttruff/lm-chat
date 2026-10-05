@@ -5,6 +5,7 @@ import MessageBubble from './MessageBubble'
 import ToolCard from './ToolCard'
 import ReasoningBlock from './ReasoningBlock'
 import SummaryNote from './SummaryNote'
+import { speaker } from './SpeakButton'
 import { computeInitialScrollState, findAnchor, saveScrollAnchor } from '../lib/scrollMemory.ts'
 import type { ContextSummary, Message } from '../types.ts'
 
@@ -93,6 +94,7 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry }: { message: Messa
             </button>
           )}
         <MessageBubble
+          id={String(message.id)}
           role={message.role}
           text={message.text}
           images={message.images}
@@ -122,6 +124,8 @@ export default function ChatThread({ messages, summary, conversationId = 'defaul
       if (messages[i]!.role === 'user') { lastUserId = messages[i]!.id; break }
     }
   }
+  // Each chat has its own thread (remounted per chat), so leaving one stops its voice.
+  useEffect(() => () => speaker.stop(), [])
   const threadRef = useRef<HTMLDivElement>(null)
   // Read once on mount: where a previous visit to this conversation left
   // off, if it left off somewhere other than the bottom. `restore` is

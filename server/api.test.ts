@@ -75,6 +75,62 @@ describe('config', () => {
   })
 })
 
+describe('speech', () => {
+  /** Stand in for the speech server: answer with fake audio, or fail as asked. */
+  function stubVoice(answer: () => Promise<Response> = async () => new Response(Buffer.alloc(2000, 7))) {
+    const calls: { url: string; body: Record<string, unknown> }[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init?.body)) as Record<string, unknown> })
+      return answer()
+    }))
+    return calls
+  }
+
+  it('reads a piece aloud in the voice chosen in Settings, and returns it as WAV', async () => {
+    api.store.setConfig({ speechVoice: 'bf_emma', speechSpeed: '1.1' })
+    const calls = stubVoice()
+    const res = await send('/api/speech', 'POST', { text: 'Hello there.' })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('audio/wav')
+    expect((await res.arrayBuffer()).byteLength).toBe(2000)
+    expect(calls[0]!.url).toBe('http://127.0.0.1:8020/v1/audio/speech')
+    expect(calls[0]!.body).toMatchObject({ input: 'Hello there.', voice: 'bf_emma', speed: 1.1, lang_code: 'b', response_format: 'wav' })
+  })
+
+  it('takes a voice from the request instead, for a preview, but only a real one', async () => {
+    const calls = stubVoice()
+    await send('/api/speech', 'POST', { text: 'Hi.', voice: 'am_michael' })
+    await send('/api/speech', 'POST', { text: 'Hi.', voice: 'not-a-voice' })
+    expect(calls.map((c) => c.body.voice)).toEqual(['am_michael', 'af_heart'])
+  })
+
+  it('refuses empty or oversized text without bothering the voice', async () => {
+    const calls = stubVoice()
+    expect((await send('/api/speech', 'POST', { text: '  ' })).status).toBe(400)
+    expect((await send('/api/speech', 'POST', { text: 'x'.repeat(1501) })).status).toBe(400)
+    expect(calls).toHaveLength(0)
+  })
+
+  it("says the voice isn't running when the speech server can't be reached", async () => {
+    stubVoice(() => Promise.reject(new TypeError('fetch failed')))
+    const res = await send('/api/speech', 'POST', { text: 'Hello.' })
+    expect(res.status).toBe(503)
+    expect((await res.json() as { error: string }).error).toMatch(/isn't running/)
+  })
+
+  it('treats an answer with no audio as a failure, since the speech server says 200 regardless', async () => {
+    stubVoice(async () => new Response(''))
+    expect((await send('/api/speech', 'POST', { text: 'Hello.' })).status).toBe(502)
+  })
+
+  it('stores a chosen voice and speed, but not an unknown voice or a silly speed', async () => {
+    await send('/api/config', 'PUT', { speechVoice: 'bm_george', speechSpeed: '1.2' })
+    expect(api.store.getConfig()).toMatchObject({ speechVoice: 'bm_george', speechSpeed: '1.2' })
+    await send('/api/config', 'PUT', { speechVoice: 'nobody', speechSpeed: '40' })
+    expect(api.store.getConfig()).toMatchObject({ speechVoice: 'bm_george', speechSpeed: '1' })
+  })
+})
+
 describe('conversations', () => {
   it('returns the store', async () => {
     const body = await (await get('/api/chats')).json() as ConversationStore

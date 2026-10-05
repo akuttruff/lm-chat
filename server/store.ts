@@ -5,6 +5,7 @@ import type { SQLInputValue, StatementSync } from 'node:sqlite'
 import type {
   Conversation, ConversationStore, Folder, Message, MessageImage, MessageRole, ReplyStats, ServerConfig,
 } from '../src/types.ts'
+import { DEFAULT_SPEED, DEFAULT_VOICE, isVoice } from '../src/lib/speech.ts'
 
 /**
  * Everything durable lives next to the app on disk, so conversations survive
@@ -29,6 +30,8 @@ const DEFAULT_CONFIG: ServerConfig = {
   backgroundModel: '',
   maxOutputTokens: '',
   autoTitle: 'on',
+  speechVoice: DEFAULT_VOICE,
+  speechSpeed: DEFAULT_SPEED,
 }
 
 const MAX_CONVERSATIONS = 60
@@ -145,7 +148,9 @@ CREATE TABLE IF NOT EXISTS config (
   memory_default TEXT NOT NULL DEFAULT 'off',
   background_model TEXT NOT NULL DEFAULT '',
   max_output_tokens TEXT NOT NULL DEFAULT '',
-  auto_title TEXT NOT NULL DEFAULT 'on'
+  auto_title TEXT NOT NULL DEFAULT 'on',
+  speech_voice TEXT NOT NULL DEFAULT 'af_heart',
+  speech_speed TEXT NOT NULL DEFAULT '1'
 );
 `
 
@@ -244,6 +249,14 @@ function migrateSchema(db: DatabaseSync): void {
     if (!has('messages', 'images')) db.exec('ALTER TABLE messages ADD COLUMN images TEXT')
     db.exec('PRAGMA user_version = 10')
   }
+  if (version < 11) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    // The voice replies are read aloud in, and how fast.
+    if (!has('config', 'speech_voice')) db.exec(`ALTER TABLE config ADD COLUMN speech_voice TEXT NOT NULL DEFAULT '${DEFAULT_VOICE}'`)
+    if (!has('config', 'speech_speed')) db.exec(`ALTER TABLE config ADD COLUMN speech_speed TEXT NOT NULL DEFAULT '${DEFAULT_SPEED}'`)
+    db.exec('PRAGMA user_version = 11')
+  }
 }
 
 interface ConversationRow {
@@ -315,6 +328,8 @@ interface ConfigRow {
   background_model: string
   max_output_tokens: string
   auto_title: string
+  speech_voice: string
+  speech_speed: string
 }
 
 /** A row surviving corruption or a hand-edited value reads as "automatic" rather than throwing. */
@@ -375,15 +390,15 @@ function convMetaParams(c: Conversation): SQLInputValue[] {
 
 const CONFIG_COLUMNS =
   'lm_studio_url, api_token, model, system_prompt, mcp_tools, context_length, reasoning, stall_seconds, history_chars, parallel, memory_default, ' +
-  'background_model, max_output_tokens, auto_title'
-const CONFIG_PLACEHOLDERS = Array(14).fill('?').join(',')
+  'background_model, max_output_tokens, auto_title, speech_voice, speech_speed'
+const CONFIG_PLACEHOLDERS = Array(16).fill('?').join(',')
 
 /** In CONFIG_COLUMNS order. */
 function configParams(c: ServerConfig): SQLInputValue[] {
   return [
     c.lmStudioUrl, c.apiToken, c.model, c.systemPrompt, c.mcpTools, c.contextLength,
     c.reasoning, c.stallSeconds, c.historyChars, c.parallel, c.memoryDefault,
-    c.backgroundModel, c.maxOutputTokens, c.autoTitle,
+    c.backgroundModel, c.maxOutputTokens, c.autoTitle, c.speechVoice, c.speechSpeed,
   ]
 }
 
@@ -475,6 +490,8 @@ function configFromRow(row: ConfigRow): ServerConfig {
     backgroundModel: row.background_model ?? '',
     maxOutputTokens: row.max_output_tokens ?? '',
     autoTitle: row.auto_title === 'off' ? 'off' : 'on',
+    speechVoice: isVoice(row.speech_voice) ? row.speech_voice : DEFAULT_VOICE,
+    speechSpeed: row.speech_speed || DEFAULT_SPEED,
   }
 }
 
@@ -612,7 +629,7 @@ export class Store {
         `INSERT INTO config (id, ${CONFIG_COLUMNS}) VALUES (1,${CONFIG_PLACEHOLDERS})`,
       ),
       updateConfig: this.db.prepare(
-        `UPDATE config SET lm_studio_url=?, api_token=?, model=?, system_prompt=?, mcp_tools=?, context_length=?, reasoning=?, stall_seconds=?, history_chars=?, parallel=?, memory_default=?, background_model=?, max_output_tokens=?, auto_title=? WHERE id=1`,
+        `UPDATE config SET lm_studio_url=?, api_token=?, model=?, system_prompt=?, mcp_tools=?, context_length=?, reasoning=?, stall_seconds=?, history_chars=?, parallel=?, memory_default=?, background_model=?, max_output_tokens=?, auto_title=?, speech_voice=?, speech_speed=? WHERE id=1`,
       ),
       selectFolders: this.db.prepare('SELECT * FROM folders ORDER BY name COLLATE NOCASE'),
       selectFolderById: this.db.prepare('SELECT * FROM folders WHERE id = ?'),

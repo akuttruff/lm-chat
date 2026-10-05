@@ -11,6 +11,8 @@ import { MemoryInputError, Memories } from './memory.ts'
 import { ToolCatalogCache } from './tools.ts'
 import { readModelConfig } from './model-config.ts'
 import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
+import { SpeechError, readSpeakRequest, synthesize } from './speech.ts'
+import { isVoice, speedOf } from '../src/lib/speech.ts'
 import { metaOf } from '../src/types.ts'
 import type { Conversation, ConversationStore, ImageUpload, ServerConfig } from '../src/types.ts'
 
@@ -190,9 +192,29 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         const patch = body as Partial<ServerConfig>
         // An absent token means "leave it alone"; '' means "clear it".
         if (patch.apiToken === undefined) delete patch.apiToken
+        // An unknown voice or a silly speed is dropped, not stored.
+        if (patch.speechVoice !== undefined && !isVoice(patch.speechVoice)) delete patch.speechVoice
+        if (patch.speechSpeed !== undefined) patch.speechSpeed = String(speedOf(patch.speechSpeed))
         store.setConfig(patch)
         json(res, 200, store.getPublicConfig())
       }).catch((err: Error) => json(res, 400, { error: err.message }))
+      return undefined
+    }
+
+    // --- speech -------------------------------------------------------------
+    // One piece of a reply, read aloud. The page splits a reply into pieces
+    // (src/lib/speech.ts) and asks for the next while the last one plays.
+    if (url === '/api/speech' && method === 'POST') {
+      void readBody(req).then(async (body) => {
+        const config = store.getPublicConfig()
+        const { text, voice, speed } = readSpeakRequest((body ?? {}) as { text: unknown }, { voice: config.speechVoice, speed: config.speechSpeed })
+        const audio = await synthesize(text, voice, speed)
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'audio/wav')
+        res.setHeader('Content-Length', String(audio.length))
+        res.setHeader('Cache-Control', 'no-store')
+        res.end(audio)
+      }).catch((err: Error) => json(res, err instanceof SpeechError ? err.status : 400, { error: err.message }))
       return undefined
     }
 
