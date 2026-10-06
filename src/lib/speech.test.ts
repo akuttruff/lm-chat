@@ -83,3 +83,50 @@ describe('voices and speed', () => {
     expect(speedOf('fast')).toBe(1)
   })
 })
+
+describe('astrology, said aloud', () => {
+  // Hints are checked on their own below; here, just the words.
+  const say = (md: string) => speechText(md).replace(/\[([^\]]+)\]\(\/[^/]+\/\)/g, '$1')
+
+  it('reads a transit table row as one sentence: who, where, which house, doing what to which of yours', () => {
+    expect(say("| Jupiter ☐ square Sun | 20°36' Leo ☐ 20°38' Taurus | 9th → 6th | Vision vs. daily action; \"am I overthinking?\" |"))
+      .toBe('Jupiter in Leo, your 9th house, is squaring your Sun in Taurus, in your 6th house. Vision vs. daily action; "am I overthinking?"')
+    expect(say("| Moon △ trine Mercury | 27°30' Leo △ 27°30' Aries | 9th → 5th | A window for creativity |"))
+      .toBe('The Moon in Leo, your 9th house, is trining your Mercury in Aries, in your 5th house. A window for creativity.')
+  })
+
+  it('says each aspect once, by name, never as its symbol', () => {
+    expect(say('**Jupiter ☐ (square) your Sun — exact at 4:36 PM**')).toBe('Jupiter is squaring your Sun — exact at 4:36 PM')
+    expect(say('Sun ☐ Jupiter was exact yesterday.')).toBe('Sun square Jupiter was exact yesterday.')
+    expect(say('Pluto ✶ sextile Asc, Neptune △ trine Asc, Venus ☌ Mars, Mars ☍ Saturn.'))
+      .toBe('Pluto sextile Ascendant, Neptune trine Ascendant, Venus conjunct Mars, Mars opposite Saturn.')
+  })
+
+  it('places a body by its sign, and a bare position in degrees', () => {
+    expect(say('Transiting Sun 13°00′ Libra ☐ square natal Jupiter 12°46′ Capricorn (2nd house)'))
+      .toBe('Transiting Sun in Libra is squaring your Jupiter in Capricorn (2nd house)')
+    expect(say('The Moon (27°30\' Leo △ 27°30\' Aries, house 5)')).toMatch(/27 degrees Leo trine 27 degrees Aries/)
+  })
+
+  it('names glyphs, drops one that only repeats a name, and skips emoji', () => {
+    expect(say('Venus ♀ in ♉, Mars ℞ ✅')).toBe('Venus in Taurus, Mars retrograde')
+    expect(say('# ☽ Daily Forecast')).toBe('Daily Forecast.')
+    expect(say('## 🌙 The Moon\'s Day (in Leo → Virgo)')).toBe("The Moon's Day (in Leo, moving into Virgo).")
+  })
+
+  it('reads arrows, dates and comparisons as words', () => {
+    expect(say('**10-13 → 2027-02-08**')).toBe('October 13 to February 8, 2027')
+    expect(say('- **Now → Feb 2027:** Sabbatical.')).toBe('Now to Feb 2027: Sabbatical.')
+    expect(say('- **Runway ≥ 18 mo →** I can be patient.')).toBe('Runway at least 18 months: I can be patient.')
+  })
+})
+
+describe('pronunciation hints', () => {
+  it('tells the voice how to say the names it gets wrong, in its own phoneme spelling', () => {
+    expect(speechText('Chiron meets Makemake.')).toBe('[Chiron](/kˈIɹɑn/) meets [Makemake](/mˌɑkAmˈɑkA/).')
+  })
+
+  it("leaves possessives, other words and anything already marked alone", () => {
+    expect(speechText("Chiron's wound, Uranian, Jupiter.")).toBe("Chiron's wound, Uranian, Jupiter.")
+  })
+})

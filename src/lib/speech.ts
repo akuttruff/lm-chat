@@ -1,3 +1,5 @@
+import { astroSpeech, withPronunciations } from './speechAstro.ts'
+
 /**
  * Reading a reply aloud: what to say, and in what pieces.
  *
@@ -57,20 +59,26 @@ export function speechText(markdown: string): string {
   s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '') // images
   s = s.replace(/\[([^\]]+)\]\((?:[^)(]|\([^)]*\))*\)/g, '$1') // links: their text
   s = s.replace(/\bhttps?:\/\/\S+/g, 'a link')
+  // Emphasis goes before anything reads the words, so "**Jupiter ☐ Sun**" is just the words.
+  s = s.replace(/(\*\*|__)(.+?)\1/g, '$2').replace(/(\*|_)(\S(?:.*?\S)?)\1/g, '$2') // bold, italic
+  s = s.replace(/~~(.+?)~~/g, '$1')
+  s = astroSpeech(s) // symbols, degrees, houses and arrows, as words (see speechAstro.ts)
   // Tables: drop the |---| rule, read the cells of each row as a list.
   s = s.replace(/^(?=[^\n]*\|)(?=[^\n]*-)[ \t|:-]+(?:\n|$)/gm, '')
-  s = s.replace(/^[ \t]*\|(.*)\|[ \t]*$/gm, (_, row: string) => `${row.split('|').map((c) => c.trim()).filter(Boolean).join(', ')}.`)
+  s = s.replace(/^[ \t]*\|(.*)\|[ \t]*$/gm, (_, row: string) => {
+    const line = row.split('|').map((c) => c.trim()).filter(Boolean).join(', ')
+    return /[.!?…]["'”’)]*$/.test(line) ? line : `${line}.`
+  })
   s = s.replace(/^[ \t]{0,3}#{1,6}[ \t]+(.*?)[ \t]*#*[ \t]*$/gm, '$1.') // headings: a sentence of their own
   s = s.replace(/^[ \t]*>[ \t]?/gm, '') // quotes
   s = s.replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+(\[[ xX]\][ \t]+)?/gm, '') // list markers and task boxes
   s = s.replace(/^[ \t]*([-*_])[ \t]*(?:\1[ \t]*){2,}$/gm, '') // horizontal rules
   s = s.replace(/`([^`\n]+)`/g, '$1') // inline code: just the words
-  s = s.replace(/(\*\*|__)(.+?)\1/g, '$2').replace(/(\*|_)(\S(?:.*?\S)?)\1/g, '$2') // bold, italic
-  s = s.replace(/~~(.+?)~~/g, '$1')
   s = s.replace(/\.{2,}(?=\.)/g, '') // "heading:." from the heading rule above
   s = s.replace(/([:;!?])\./g, '$1')
   s = s.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n')
-  return s.trim()
+  // Last: how to say the names the voice gets wrong (see PRONUNCIATIONS). Only the voice sees these.
+  return withPronunciations(s.trim())
 }
 
 /** Split text at sentence ends, keeping the punctuation with its sentence. */
