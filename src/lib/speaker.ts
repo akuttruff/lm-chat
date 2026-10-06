@@ -11,7 +11,7 @@ import { speechChunks, speechText } from './speech.ts'
  * allowed, so the tap starts it on a moment of silence first.
  */
 
-export type SpeakerState = { id: string | null; status: 'idle' | 'loading' | 'playing' }
+export type SpeakerState = { id: string | null; status: 'idle' | 'loading' | 'playing' | 'paused' }
 
 /** A tenth of a second of silence: 44-byte WAV header, 8 kHz, 800 zero samples. */
 const SILENCE = (() => {
@@ -42,6 +42,8 @@ export class Speaker {
   private run = 0
   private urls: string[] = []
   private aborter: AbortController | null = null
+  /** Set while paused. A piece that arrives during a pause waits on this before it plays. */
+  private paused: { resume: Promise<void>; release: () => void } | null = null
 
   constructor(
     private readonly fetchImpl: typeof fetch = (...a) => fetch(...a),
@@ -63,6 +65,8 @@ export class Speaker {
   /** Stop whatever is playing or loading. */
   stop = (): void => {
     this.run++
+    this.paused?.release()
+    this.paused = null
     this.aborter?.abort()
     this.aborter = null
     if (this.audio) {
@@ -75,9 +79,37 @@ export class Speaker {
     if (this.state.status !== 'idle') this.set({ id: null, status: 'idle' })
   }
 
-  /** Tap on a reply's speaker: start it, or stop it if it's the one already going. */
+  /** Hold the voice where it is; resume() carries on from the same word. */
+  pause = (): void => {
+    if (this.state.status !== 'playing' || this.paused) return
+    let release = (): void => {}
+    const resume = new Promise<void>((r) => { release = r })
+    this.paused = { resume, release }
+    this.audio?.pause()
+    this.set({ id: this.state.id, status: 'paused' })
+  }
+
+  /** Carry on after pause(). Call it from a tap, like speak(): iPhone Safari wants one. */
+  resume = (): void => {
+    if (this.state.status !== 'paused' || !this.paused) return
+    const { release } = this.paused
+    this.paused = null
+    // Mid-piece: pick up where it stopped. Between pieces, the waiting piece starts itself.
+    if (this.audio?.src && !this.audio.ended) this.audio.play()?.catch(() => { /* reported by the run */ })
+    this.set({ id: this.state.id, status: 'playing' })
+    release()
+  }
+
+  /**
+   * Tap on a reply's speaker: start it; on the one already going, pause it
+   * or resume it. While it's still fetching the first piece, the tap stops it.
+   */
   toggle = (id: string, markdown: string, options: SpeakOptions = {}): void => {
-    if (this.state.id === id && this.state.status !== 'idle') { this.stop(); return }
+    if (this.state.id === id) {
+      if (this.state.status === 'playing') { this.pause(); return }
+      if (this.state.status === 'paused') { this.resume(); return }
+      if (this.state.status === 'loading') { this.stop(); return }
+    }
     void this.speak(id, markdown, options)
   }
 
@@ -116,13 +148,16 @@ export class Speaker {
       for (let i = 0; i < chunks.length; i++) {
         const url = await next
         if (run !== this.run) return
+        // Paused between pieces: hold the next one until resumed (or stopped).
+        while (this.paused) await this.paused.resume
+        if (run !== this.run) return
         // Ask for the following piece now, so it's ready when this one ends.
         if (i + 1 < chunks.length) next = fetchPiece(chunks[i + 1]!)
         await new Promise<void>((resolve, reject) => {
           audio.onended = () => resolve()
           audio.onerror = () => reject(new Error("This device couldn't play the voice."))
           audio.src = url
-          audio.play().then(() => { if (run === this.run) this.set({ id, status: 'playing' }) }, reject)
+          audio.play().then(() => { if (run === this.run && !this.paused) this.set({ id, status: 'playing' }) }, reject)
         })
         if (run !== this.run) return
         URL.revokeObjectURL(url)

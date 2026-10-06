@@ -338,7 +338,7 @@ export default function SettingsSheet({
                 type="button"
                 className="voice-preview"
                 aria-label={previewing ? 'Stop the preview' : 'Hear this voice'}
-                onClick={() => speaker.toggle(PREVIEW_ID, VOICE_SAMPLE, { voice: speechVoice, speed: speechSpeed })}
+                onClick={() => (previewing ? speaker.stop() : void speaker.speak(PREVIEW_ID, VOICE_SAMPLE, { voice: speechVoice, speed: speechSpeed }))}
               >
                 {previewing ? <Square size={12} fill="currentColor" aria-hidden="true" /> : <Volume2 size={15} aria-hidden="true" />}
                 {previewing ? 'Stop' : 'Hear it'}
