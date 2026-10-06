@@ -3,8 +3,9 @@
        away transparency, so no self-rounded corners and no alpha. -->
   <rect width="512" height="512" fill="#1B1D1A"/>
 
-  <!-- Speech bubble + tail as one path, in the app's paper tone. -->
-  <path fill="#EDE8DC" d="
+  <!-- Speech bubble + tail as one path, in the app's paper tone. Shifted so
+       the bubble's body is centred: equal margins left and right. -->
+  <path transform="translate(-16 0)" fill="#EDE8DC" d="
     M152 116
     H392
     a56 56 0 0 1 56 56
@@ -21,7 +22,7 @@
     Z"/>
 
   <!-- Three dots: the last one moss, echoing the live-status indicator. -->
-  <circle cx="212" cy="224" r="25" fill="#1B1D1A"/>
-  <circle cx="284" cy="224" r="25" fill="#1B1D1A"/>
-  <circle cx="356" cy="224" r="25" fill="#8FA382"/>
+  <circle cx="184" cy="224" r="25" fill="#1B1D1A"/>
+  <circle cx="256" cy="224" r="25" fill="#1B1D1A"/>
+  <circle cx="328" cy="224" r="25" fill="#8FA382"/>
 </svg>
