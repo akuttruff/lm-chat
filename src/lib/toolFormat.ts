@@ -21,3 +21,15 @@ export function prettyOutput(text: string): string {
     return text
   }
 }
+
+/** One parameter's value for display: text as it is, anything else as compact JSON. */
+export function argValue(v: unknown): string {
+  if (typeof v === 'string') return v
+  if (v === undefined) return ''
+  return JSON.stringify(v)
+}
+
+/** "city: Culver City · state: CA" -- a tool call's parameters on one line. */
+export function argsSummary(args: Record<string, unknown>): string {
+  return Object.entries(args).map(([k, v]) => `${k}: ${argValue(v).replace(/\s+/g, ' ')}`).join(' · ')
+}

@@ -49,6 +49,21 @@ export function formatToolOutput(raw: unknown): string {
  * a normal result ever meets.
  */
 const MAX_TOOL_OUTPUT = 50000
+/** Parameters longer than this, as JSON, are kept cut down: they're for reading, not replaying. */
+const MAX_TOOL_ARGS = 8000
+
+/** A tool call's parameters from an LM Studio event: an object, within MAX_TOOL_ARGS, or nothing. */
+export function toolArgs(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const json = JSON.stringify(raw)
+  if (json.length <= MAX_TOOL_ARGS) return raw as Record<string, unknown>
+  // Each value cut down in turn, so every name still shows.
+  const share = Math.max(80, Math.floor(MAX_TOOL_ARGS / Math.max(1, Object.keys(raw).length)))
+  return Object.fromEntries(Object.entries(raw).map(([k, v]) => {
+    const text = typeof v === 'string' ? v : JSON.stringify(v)
+    return [k, text.length > share ? `${text.slice(0, share)}… (${text.length} characters)` : v]
+  }))
+}
 
 /**
  * Replay the conversation to the model as a system prompt.
@@ -900,6 +915,8 @@ export class Engine {
                 lastTool.name = name
                 const plugin = evt.provider_info?.plugin_id
                 if (plugin) lastTool.plugin = plugin
+                const args = toolArgs(evt.arguments)
+                if (args) lastTool.args = args
               }
               this.publish(conversationId, 'pending', `using ${name}...`, startedAt)
               snapshot()
@@ -909,6 +926,8 @@ export class Engine {
               const lastTool = [...produced].reverse().find((m) => m.role === 'tool' && m.plugin !== AUTO_LOADED)
               if (lastTool) {
                 lastTool.output = formatToolOutput(evt.output).slice(0, MAX_TOOL_OUTPUT)
+                const args = toolArgs(evt.arguments)
+                if (args) lastTool.args = args
                 // Last chance to learn the name, if neither earlier event did.
                 if (!lastTool.name && (evt.tool_name || evt.tool)) {
                   lastTool.name = evt.tool_name || evt.tool
@@ -922,6 +941,8 @@ export class Engine {
               if (lastTool) {
                 lastTool.failed = true
                 lastTool.output = evt.reason || 'Tool call failed'
+                const args = toolArgs(evt.arguments)
+                if (args) lastTool.args = args
               } else {
                 produced.push({
                   id: newId(), role: 'tool',

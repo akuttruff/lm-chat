@@ -1,12 +1,14 @@
 import { useMemo, useState, memo } from 'react'
 import { motion } from 'motion/react'
 import { Wrench, ChevronRight, TriangleAlert } from 'lucide-react'
-import { prettyOutput, sizeLabel, toolLabel } from '../lib/toolFormat.ts'
+import { argValue, argsSummary, prettyOutput, sizeLabel, toolLabel } from '../lib/toolFormat.ts'
 
 interface ToolCardProps {
   name?: string
   /** The MCP server that provided the tool, e.g. "mcp/astrology-v2". */
   plugin?: string
+  /** The parameters it was called with. */
+  args?: Record<string, unknown>
   output?: string
   failed?: boolean
 }
@@ -16,14 +18,16 @@ const SHORT = 120
 
 /**
  * One tool call. Collapsed, it's a single row -- what ran, from where, how
- * much it returned -- with one line of the result; expanded, the whole
- * result in its own scrolling panel, JSON indented.
+ * much it returned -- with its parameters on one line and one line of the
+ * result; expanded, each parameter in full, then the whole result in its
+ * own scrolling panel, JSON indented.
  */
-function ToolCard({ name, plugin, output, failed }: ToolCardProps) {
+function ToolCard({ name, plugin, args, output, failed }: ToolCardProps) {
   const [open, setOpen] = useState(false)
   const text = output ?? ''
   const short = text.length > 0 && text.length <= SHORT
-  const expandable = text.length > SHORT
+  const params = args && Object.keys(args).length ? Object.entries(args) : []
+  const expandable = text.length > SHORT || params.length > 0
   // Only format what's being shown: results run to tens of kilobytes.
   const full = useMemo(() => (open ? prettyOutput(text) : ''), [open, text])
   const source = plugin?.replace(/^mcp\//, '')
@@ -54,9 +58,20 @@ function ToolCard({ name, plugin, output, failed }: ToolCardProps) {
             </motion.span>
           )}
         </button>
+        {params.length > 0 && !open && <div className="tc-args" title={argsSummary(args!)}>{argsSummary(args!)}</div>}
+        {params.length > 0 && open && (
+          <dl className="tc-params" aria-label="Parameters">
+            {params.map(([k, v]) => (
+              <div key={k} className="tc-param">
+                <dt>{k}</dt>
+                <dd>{argValue(v)}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
         {short && <div className="tc-short">{text}</div>}
-        {expandable && !open && <div className="tc-preview">{text.replace(/\s+/g, ' ').slice(0, 300)}</div>}
-        {expandable && open && <pre className="tc-output">{full}</pre>}
+        {text.length > SHORT && !open && <div className="tc-preview">{text.replace(/\s+/g, ' ').slice(0, 300)}</div>}
+        {text.length > SHORT && open && <pre className="tc-output">{full}</pre>}
       </div>
     </div>
   )

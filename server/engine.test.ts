@@ -5,7 +5,7 @@ import path from 'node:path'
 import { Bus } from './bus.ts'
 import {
   Engine, formatToolOutput, parseIntegrations, buildHistoryPrompt, planCompaction, summarizerInput,
-  summaryTokenCap, newEngineState, cleanTitle, DATE_NOTE,
+  summaryTokenCap, newEngineState, cleanTitle, DATE_NOTE, toolArgs,
 } from './engine.ts'
 import { Store } from './store.ts'
 import { Memories } from './memory.ts'
@@ -630,6 +630,21 @@ describe('tool naming, as LM Studio actually emits it', () => {
     const tool = messages().find((m) => m.role === 'tool')!
     expect(tool.name).toBe('create_transit_chart')
     expect(tool.plugin).toBe('mcp/astrology-v2')
+  })
+
+  it('keeps the parameters the tool was called with, and survives a reload', async () => {
+    vi.stubGlobal('fetch', streams(REAL_SEQUENCE))
+    await engine.runTurn(convId, 'my chart?')
+    expect(messages().find((m) => m.role === 'tool')!.args).toEqual({ date_time: '2000-01-01 12:00' })
+  })
+
+  it('cuts down parameters too long to read, keeping every name', () => {
+    const args = toolArgs({ query: 'q', notes: 'n'.repeat(20000) })!
+    expect(args.query).toBe('q')
+    expect(String(args.notes)).toMatch(/^n+… \(20000 characters\)$/)
+    expect(JSON.stringify(args).length).toBeLessThan(10000)
+    expect(toolArgs('not an object')).toBeUndefined()
+    expect(toolArgs([1, 2])).toBeUndefined()
   })
 
   it('records which MCP server provided it', async () => {

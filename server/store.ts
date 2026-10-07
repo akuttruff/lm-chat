@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS messages (
   response_id TEXT,
   stats TEXT,
   images TEXT,
+  args TEXT,
   PRIMARY KEY (conversation_id, position)
 );
 CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY CHECK (id = 1), active_id TEXT);
@@ -257,6 +258,13 @@ function migrateSchema(db: DatabaseSync): void {
     if (!has('config', 'speech_speed')) db.exec(`ALTER TABLE config ADD COLUMN speech_speed TEXT NOT NULL DEFAULT '${DEFAULT_SPEED}'`)
     db.exec('PRAGMA user_version = 11')
   }
+  if (version < 12) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    // A tool call's parameters, as JSON.
+    if (!has('messages', 'args')) db.exec('ALTER TABLE messages ADD COLUMN args TEXT')
+    db.exec('PRAGMA user_version = 12')
+  }
 }
 
 interface ConversationRow {
@@ -311,6 +319,7 @@ interface MessageRow {
   response_id: string | null
   stats: string | null
   images: string | null
+  args: string | null
 }
 
 interface ConfigRow {
@@ -403,8 +412,19 @@ function configParams(c: ServerConfig): SQLInputValue[] {
 }
 
 const MESSAGE_COLUMNS =
-  'conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id,stats,images'
-const MESSAGE_PLACEHOLDERS = Array(16).fill('?').join(',')
+  'conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id,stats,images,args'
+const MESSAGE_PLACEHOLDERS = Array(17).fill('?').join(',')
+
+/** A tool call's parameters, stored as JSON; a corrupt value, or anything but an object, reads as none. */
+function parseArgs(raw: string | null): Record<string, unknown> | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /** Image descriptions stored as JSON; a corrupt value reads as none. */
 function parseImages(raw: string | null): MessageImage[] | undefined {
@@ -450,6 +470,8 @@ function messageFromRow(row: MessageRow): Message {
   if (stats) m.stats = stats
   const images = parseImages(row.images)
   if (images) m.images = images
+  const args = parseArgs(row.args)
+  if (args) m.args = args
   return m
 }
 
@@ -471,6 +493,7 @@ function messageParams(conversationId: string, position: number, m: Message): SQ
     m.responseId ?? null,
     m.stats ? JSON.stringify(m.stats) : null,
     m.images?.length ? JSON.stringify(m.images) : null,
+    m.args ? JSON.stringify(m.args) : null,
   ]
 }
 

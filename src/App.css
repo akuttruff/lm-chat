@@ -801,6 +801,20 @@ html, body, #root {
   opacity: 0.7;
 }
 .tc-short { margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* What the tool was called with: one line collapsed, a name / value list expanded. */
+.tc-args {
+  margin-top: 6px;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 11.5px; line-height: 1.5;
+  color: var(--paper-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tc-params {
+  margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--bg);
+  display: grid; gap: 4px;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.45;
+}
+.tc-param { display: grid; grid-template-columns: minmax(70px, max-content) 1fr; gap: 10px; }
+.tc-param dt { color: var(--paper-dim); }
+.tc-param dd { margin: 0; color: var(--paper); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tc-output {
   margin: 10px 0 0;
   padding: 10px;

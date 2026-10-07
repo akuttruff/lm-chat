@@ -53,6 +53,8 @@ function sameMessage(a: Message, b: Message): boolean {
     && a.output === b.output
     && a.name === b.name
     && a.plugin === b.plugin
+    // Parameters arrive once, mid-call; compared by content, as the object is new on every push.
+    && (a.args === b.args || JSON.stringify(a.args) === JSON.stringify(b.args))
     && a.failed === b.failed
     && a.streaming === b.streaming
     && a.model === b.model
@@ -77,6 +79,7 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry }: { message: Messa
         <ToolCard
           name={message.name}
           plugin={message.plugin}
+          args={message.args}
           output={message.output}
           failed={message.failed}
         />

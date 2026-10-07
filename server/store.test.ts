@@ -618,6 +618,23 @@ describe('temporary chats', () => {
     expect(new Store({ dir }).get(id)!.messages.map((m) => m.text)).toEqual(['kept only in memory for now'])
   })
 
+  it("keeps a tool call's parameters, and adds their column to an older database", () => {
+    const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-old-'))
+    try {
+      const first = new Store({ dir: oldDir })
+      const id = first.getConversations().activeId!
+      // Back to how a version-11 database looked: no args column.
+      const db = new DatabaseSync(path.join(oldDir, 'lm-chat.sqlite'))
+      db.exec('ALTER TABLE messages DROP COLUMN args; PRAGMA user_version = 11;')
+      db.close()
+      const upgraded = new Store({ dir: oldDir })
+      upgraded.setMessages(id, [{ id: 't1', role: 'tool', name: 'create_natal_chart', args: { city: 'Culver City', year: 1984 }, output: 'ok' }])
+      expect(new Store({ dir: oldDir }).get(id)!.messages[0]!.args).toEqual({ city: 'Culver City', year: 1984 })
+    } finally {
+      fs.rmSync(oldDir, { recursive: true, force: true })
+    }
+  })
+
   it('adds the voice settings to a database made before them, defaulting to Heart at normal speed', () => {
     const oldDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-old-'))
     try {

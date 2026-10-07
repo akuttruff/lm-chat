@@ -47,6 +47,30 @@ describe('ToolCard', () => {
     expect(container.querySelector('.tc-output')!.textContent).toContain('\n  "chart_type": "progressed"')
   })
 
+  it('shows the parameters on one line, then each in full when expanded', async () => {
+    const user = userEvent.setup()
+    const args = { date_time: '1984-05-10 20:44', city: 'Culver City', house_system: 'whole_sign', objects: ['Sun', 'Moon'] }
+    const { container } = render(<ToolCard name="create_natal_chart" args={args} output="short result" />)
+    expect(container.querySelector('.tc-args')!.textContent)
+      .toBe('date_time: 1984-05-10 20:44 · city: Culver City · house_system: whole_sign · objects: ["Sun","Moon"]')
+    expect(screen.getByText('short result')).toBeInTheDocument()
+    // Short output alone isn't expandable; parameters make it so.
+    await user.click(screen.getByRole('button', { expanded: false }))
+    const list = container.querySelector('dl.tc-params')!
+    expect(list).toHaveAttribute('aria-label', 'Parameters')
+    expect([...list.querySelectorAll('.tc-param')].map((p) => p.textContent)).toEqual([
+      'date_time1984-05-10 20:44', 'cityCulver City', 'house_systemwhole_sign', 'objects["Sun","Moon"]',
+    ])
+    expect(container.querySelector('.tc-args')).toBeNull()
+    expect(screen.getByText('short result')).toBeInTheDocument()
+  })
+
+  it('has nothing to expand for a call with no parameters and a short result', () => {
+    const { container } = render(<ToolCard name="t" args={{}} output="ok" />)
+    expect(container.querySelector('.tc-args')).toBeNull()
+    expect(screen.getByRole('button')).toBeDisabled()
+  })
+
   it('flags a failed call', () => {
     const { container } = render(<ToolCard name="t" output="timed out" failed />)
     expect(container.querySelector('.tool-card.failed')).toBeInTheDocument()

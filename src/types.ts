@@ -40,6 +40,8 @@ export interface Message {
   name?: string
   /** Which MCP server provided the tool, e.g. "mcp/astrology-v2". */
   plugin?: string
+  /** Tool messages: the parameters the model called the tool with, as LM Studio reported them. */
+  args?: Record<string, unknown>
   output?: string
   failed?: boolean
   /**
@@ -292,6 +294,8 @@ export interface ChatEvent {
   /** tool_call.name carries the name here, not in `tool`. */
   tool_name?: string
   provider_info?: { type?: string; plugin_id?: string }
+  /** tool_call.arguments / success / failure: the parameters the tool was called with. */
+  arguments?: unknown
   output?: unknown
   reason?: string
   progress?: number
