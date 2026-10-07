@@ -280,6 +280,9 @@ html, body, #root {
 /* Chips first, then the box: the box keeps the full width however many chips there are. */
 .composer-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .composer-chips:empty { display: none; }
+/* Delete sits apart at the end of the row: a quiet icon until pressed. */
+.delete-chat-chip { margin-left: auto; color: var(--paper-dim); }
+.delete-chat-chip:hover, .delete-chat-chip:focus-visible { color: var(--danger); border-color: var(--danger); }
 .composer-row { display: flex; align-items: flex-end; gap: 8px; }
 
 .composer-input {

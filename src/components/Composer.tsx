@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { ArrowUp, Brain, Folder, Gauge, Ghost, ImagePlus, ListChecks, Square, Wrench, X } from 'lucide-react'
+import { ArrowUp, Brain, Folder, Gauge, Ghost, ImagePlus, ListChecks, Square, Trash2, Wrench, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { ACCEPTED, hasImage, imageFiles, prepareImage } from '../lib/images'
 import type { ImageUpload } from '../types.ts'
@@ -25,6 +25,8 @@ interface ComposerProps {
   /** Pick which tools this chat offers the model; `toolsCustomized` when it has a list of its own. */
   onOpenTools?: () => void
   toolsCustomized?: boolean
+  /** Delete the chat that's open, without going to the drawer. Absent when there's no chat to delete. */
+  onDeleteChat?: () => void
 }
 
 /** As many as the server takes per message (see api.ts). */
@@ -32,7 +34,7 @@ const MAX_ATTACHMENTS = 6
 
 export default function Composer({
   onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning, temporaryOn = false, onToggleTemporary,
-  memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false,
+  memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false, onDeleteChat,
 }: ComposerProps) {
   const [text, setText] = useState('')
   // Images waiting to go with the next message: picked, pasted or dropped,
@@ -206,6 +208,18 @@ export default function Composer({
           title="Choose which memories this chat uses"
         >
           <ListChecks size={14} aria-hidden="true" />
+        </button>
+      )}
+      {onDeleteChat && (
+        // At the far end of the row, away from the rest, and nowhere near New chat up top.
+        <button
+          type="button"
+          className="reasoning-chip delete-chat-chip"
+          onClick={onDeleteChat}
+          aria-label="Delete this chat"
+          title="Delete this chat (Undo is offered)"
+        >
+          <Trash2 size={14} aria-hidden="true" />
         </button>
       )}
       </div>

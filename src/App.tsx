@@ -67,12 +67,6 @@ export default function App() {
         onNewChat={() => void newChat()}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenChats={() => setChatsOpen(true)}
-        // The same as deleting it from the drawer: gone at once, with Undo in the toast.
-        onDeleteChat={active ? () => {
-          const snapshot = active;
-          void deleteChat(snapshot.id);
-          toast('Chat deleted', { action: { label: 'Undo', onClick: () => void restoreChat(snapshot) } });
-        } : undefined}
       />
       {/* Keyed by thread: switching mounts a fresh one, rather than animating
           one thread's messages out while the other's animate in. */}
@@ -102,6 +96,12 @@ export default function App() {
         memoryOn={memoryOn}
         onToggleMemory={active ? () => void setMemory(!memoryOn) : undefined}
         onPickMemories={active ? () => setMemoriesOpen('select') : undefined}
+        // The same as deleting it from the drawer: gone at once, with Undo in the toast.
+        onDeleteChat={active ? () => {
+          const snapshot = active;
+          void deleteChat(snapshot.id);
+          toast('Chat deleted', { action: { label: 'Undo', onClick: () => void restoreChat(snapshot) } });
+        } : undefined}
       />
       <ReasoningPicker
         open={reasoningOpen}

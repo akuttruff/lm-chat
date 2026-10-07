@@ -140,14 +140,18 @@ describe('App', () => {
     await waitFor(() => expect(calls.some((c) => c.url === '/api/chats/c1/stop')).toBe(true))
   })
 
-  it('deletes the open chat from the header, with Undo putting it back', async () => {
+  it('deletes the open chat from the bar by the message box, with Undo putting it back', async () => {
     const user = userEvent.setup()
     const calls = stubApi()
     render(<App />)
     await ready()
     const open = conv({ id: 'c1', name: 'Transit questions', messages: [{ id: '1', role: 'user', text: 'hi' }] })
     emit([open, conv({ id: 'c2', name: 'Other' })])
-    await user.click(screen.getByRole('button', { name: 'Delete this chat' }))
+    // Down in the bar by the message box, not up by New chat.
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Delete this chat' })).not.toBeInTheDocument()
+    const del = screen.getByRole('button', { name: 'Delete this chat' })
+    expect(del.closest('.composer-chips')).not.toBeNull()
+    await user.click(del)
     await waitFor(() => expect(calls.some((c) => c.url === '/api/chats/c1' && c.init?.method === 'DELETE')).toBe(true))
     await user.click(await screen.findByRole('button', { name: 'Undo' }))
     await waitFor(() => expect(calls.some((c) => c.url === '/api/chats/restore')).toBe(true))
