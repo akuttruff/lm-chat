@@ -208,6 +208,17 @@ export interface ServerConfig {
   speechSpeed: string
 }
 
+/** One chat the drawer's search found, and where in it (see Store.search). */
+export interface SearchHit {
+  id: string
+  name: string
+  updatedAt: number
+  folderId: string | null
+  inName: boolean
+  count: number
+  match: { messageId: string; role: 'user' | 'assistant'; excerpt: string } | null
+}
+
 /** One saved memory, as the memory MCP server stores it (see server/memory.ts). */
 export interface Memory {
   id: string

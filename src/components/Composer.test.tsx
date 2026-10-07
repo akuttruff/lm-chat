@@ -167,3 +167,20 @@ describe('folder chip', () => {
     expect(screen.queryByRole('button', { name: /^Folder:/ })).not.toBeInTheDocument()
   })
 })
+
+describe('exporting the chat', () => {
+  it('offers copy and save from one chip, next to delete', async () => {
+    const user = userEvent.setup()
+    const onCopyChat = vi.fn()
+    const onDownloadChat = vi.fn()
+    render(<Composer onSend={vi.fn()} onCopyChat={onCopyChat} onDownloadChat={onDownloadChat} onDeleteChat={vi.fn()} />)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Export this chat' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Copy as Markdown' }))
+    expect(onCopyChat).toHaveBeenCalled()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Export this chat' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Save as .md file' }))
+    expect(onDownloadChat).toHaveBeenCalled()
+  })
+})

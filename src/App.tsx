@@ -10,6 +10,7 @@ import FolderPicker from './components/FolderPicker';
 import ToolPicker from './components/ToolPicker';
 import ReasoningPicker, { labelFor } from './components/ReasoningPicker';
 import useServerState from './hooks/useServerState';
+import { chatMarkdown, downloadText, exportFileName } from './lib/export';
 import useModelConfig from './hooks/useModelConfig';
 import useReplyStyle from './hooks/useReplyStyle';
 import useWakeLock from './hooks/useWakeLock';
@@ -19,7 +20,7 @@ export default function App() {
   const server = useServerState();
   const {
     conversations, activeId, active, loadingActive, config, status, startedAt, busy, working,
-    send, stop, retry, newChat, openChat, deleteChat, deleteChats, restoreChat, renameChat, setReasoning, setMemory,
+    send, stop, retry, branch, search, newChat, openChat, deleteChat, deleteChats, restoreChat, renameChat, setReasoning, setMemory,
     setMemorySelection, setStarred, setFolder, setTemporary, setTools, folders, createFolder, updateFolder, deleteFolder,
     saveConfig,
   } = server;
@@ -39,6 +40,8 @@ export default function App() {
   // The chat a folder is being picked for; null when the picker is closed.
   const [folderPickerFor, setFolderPickerFor] = useState<string | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
+  // A search hit being opened: which chat, and the message to scroll to.
+  const [jump, setJump] = useState<{ id: string; messageId: string } | null>(null);
   const activeFolder = active ? folders.find((f) => f.id === active.folderId) : undefined;
   // This chat's own setting, else the folder's, else the Settings default.
   const memoryOn = active?.memory ?? activeFolder?.memory ?? config?.memoryDefault === 'on';
@@ -78,6 +81,8 @@ export default function App() {
           <ChatThread
             key={activeId ?? 'none'} messages={messages} summary={active?.summary} conversationId={activeId ?? 'none'}
             onRetry={busy ? undefined : () => void retry()}
+            onEdit={(messageId, text) => branch(messageId, text).catch((err: Error) => { toast.error(err.message); })}
+            focusMessageId={jump && jump.id === activeId ? jump.messageId : null}
           />
         )}
       <Composer
@@ -96,6 +101,13 @@ export default function App() {
         memoryOn={memoryOn}
         onToggleMemory={active ? () => void setMemory(!memoryOn) : undefined}
         onPickMemories={active ? () => setMemoriesOpen('select') : undefined}
+        onCopyChat={active ? () => {
+          navigator.clipboard.writeText(chatMarkdown(active)).then(
+            () => toast.success('Chat copied as Markdown'),
+            () => toast.error("Couldn't copy the chat"),
+          );
+        } : undefined}
+        onDownloadChat={active ? () => downloadText(exportFileName(active.name), chatMarkdown(active)) : undefined}
         // The same as deleting it from the drawer: gone at once, with Undo in the toast.
         onDeleteChat={active ? () => {
           const snapshot = active;
@@ -118,6 +130,8 @@ export default function App() {
         folders={folders}
         working={working}
         onOpen={(id) => void openChat(id)}
+        onSearch={search}
+        onOpenAt={(id, messageId) => { void openChat(id); setJump(messageId ? { id, messageId } : null); }}
         onDelete={(id) => void deleteChat(id)}
         onRestore={(conv) => void restoreChat(conv)}
         onDeleteMany={deleteChats}

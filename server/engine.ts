@@ -550,7 +550,7 @@ export class Engine {
   async runTurn(
     conversationId: string,
     text: string,
-    { retry = false, images = [] }: { retry?: boolean; images?: ImageUpload[] } = {},
+    { retry = false, images = [], attachments = [] }: { retry?: boolean; images?: ImageUpload[]; attachments?: MessageImage[] } = {},
   ): Promise<void> {
     const conv = this.store.get(conversationId)
     if (!conv) throw new Error('no such conversation')
@@ -600,6 +600,8 @@ export class Engine {
       const message: Message = { id: newId(), role: 'user', text }
       // Saved first, so the message carries their ids and a retry can re-send them.
       if (uploads.length) message.images = uploads.map((u) => this.store.saveImage(conversationId, u))
+      // Images already stored (a branch sending an edited message again, with the original's pictures).
+      else if (attachments.length) message.images = attachments
       history.push(message)
     }
     // The message being sent -- on a retry, the one being sent again.

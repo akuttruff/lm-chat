@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import MessageBubble from './MessageBubble'
 
@@ -109,5 +109,15 @@ describe('MessageBubble', () => {
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Stop reading aloud' })) })
     expect(screen.getByRole('button', { name: 'Read aloud' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Stop reading aloud' })).not.toBeInTheDocument()
+  })
+
+  it('copies a reply as Markdown, and says so for a moment', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.assign(navigator, { clipboard: { writeText } })
+    render(<MessageBubble id="m1" role="assistant" text={'**bold** reply'} model="m" elapsed="1" />)
+    const { fireEvent, act } = await import('@testing-library/react')
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy reply' })) })
+    expect(writeText).toHaveBeenCalledWith('**bold** reply')
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument()
   })
 })

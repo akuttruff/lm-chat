@@ -435,6 +435,12 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       return undefined
     }
 
+    // The drawer's search box: chats containing the words, best first.
+    if (url === '/api/search' && method === 'GET') {
+      const q = new URLSearchParams(query).get('q') ?? ''
+      return json(res, 200, { hits: store.search(q) })
+    }
+
     const chat = /^\/api\/chats\/([^/]+)(\/[a-z]+)?$/.exec(url)
     if (chat) {
       const id = decodeURIComponent(chat[1]!)
@@ -484,6 +490,26 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         }).catch((err: Error) => json(res, 400, { error: err.message }))
         return undefined
       }
+      // Edit a message you sent and carry on from there in a new chat, the
+      // original left as it was: both versions of the conversation stay.
+      if (action === '/branch' && method === 'POST') {
+        void readBody(req).then((body) => {
+          const { messageId, text: rawText } = (body ?? {}) as { messageId?: unknown; text?: unknown }
+          const text = String(rawText ?? '').trim()
+          if (typeof messageId !== 'string') return json(res, 400, { error: 'messageId is required' })
+          const source = store.get(id)!
+          const original = source.messages.find((m) => String(m.id) === messageId)
+          if (!original || original.role !== 'user') return json(res, 400, { error: 'only a message you sent can be edited' })
+          if (!text && !original.images?.length) return json(res, 400, { error: 'text is required' })
+          const conv = store.branch(id, messageId)
+          bus.send({ type: 'created', payload: { conversation: conv, activeId: store.getConversations().activeId } })
+          void engine.runTurn(conv.id, text, { attachments: original.images ?? [] }).catch((err: Error) => {
+            console.log(`[engine] branch turn failed: ${err.message}`)
+          })
+          return json(res, 202, { ok: true, id: conv.id })
+        }).catch((err: Error) => json(res, 400, { error: err.message }))
+        return undefined
+      }
       if (action === '/retry' && method === 'POST') {
         if (engine.isRunning(id)) return json(res, 409, { error: 'a reply is already in flight' })
         if (!store.get(id)!.messages.some((m) => m.role === 'user')) return json(res, 400, { error: 'nothing to retry' })
@@ -497,7 +523,6 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       }
     }
 
-    void query
     return json(res, 404, { error: 'no such endpoint' })
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Toaster } from 'sonner'
 import ConversationList, { fullDateTime } from './ConversationList.tsx'
@@ -296,5 +296,40 @@ describe('ConversationList', () => {
       await screen.findByText('Astrology forecast')
       expect(screen.queryByRole('button', { name: /Select/ })).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('search', () => {
+  it('shows the chats that mention the words in place of the list, and opens one at its message', async () => {
+    const user = userEvent.setup()
+    const onSearch = vi.fn(async () => [
+      { id: 'b', name: 'Saturn return', updatedAt: now, folderId: null, inName: true, count: 2, match: { messageId: 'm7', role: 'assistant' as const, excerpt: 'Saturn asks for structure.' } },
+      { id: 'a', name: 'Dinner', updatedAt: now, folderId: null, inName: false, count: 1, match: { messageId: 'm1', role: 'user' as const, excerpt: 'lentils with saturn' } },
+    ])
+    const onOpenAt = vi.fn()
+    const props = setup({ onSearch, onOpenAt })
+    await user.type(screen.getByRole('searchbox', { name: 'Search chats' }), 'saturn')
+    await waitFor(() => expect(onSearch).toHaveBeenCalledWith('saturn'))
+    const hits = await screen.findAllByRole('button', { name: /saturn/i })
+    expect(hits).toHaveLength(2)
+    expect(hits[0]).toHaveTextContent('Saturn return')
+    expect(hits[0]).toHaveTextContent('Reply: Saturn asks for structure.')
+    expect(hits[0]).toHaveTextContent('2 messages')
+    expect(hits[0]!.querySelectorAll('mark')).toHaveLength(2) // in the name and in the excerpt
+    // The ordinary list is out of the way meanwhile.
+    expect(screen.getByText(convs[0]!.name)).not.toBeVisible()
+    await user.click(hits[0]!)
+    expect(onOpenAt).toHaveBeenCalledWith('b', 'm7')
+    expect(props.onClose).toHaveBeenCalled()
+  })
+
+  it('says when nothing matches, and clears back to the list', async () => {
+    const user = userEvent.setup()
+    setup({ onSearch: vi.fn(async () => []) })
+    await user.type(screen.getByRole('searchbox', { name: 'Search chats' }), 'zzz')
+    expect(await screen.findByText(/No chats mention/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(screen.getByRole('searchbox', { name: 'Search chats' })).toHaveValue('')
+    expect(screen.getByText(convs[0]!.name)).toBeVisible()
   })
 })

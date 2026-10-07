@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowDown, MessagesSquare, RotateCcw } from 'lucide-react'
+import { ArrowDown, MessagesSquare, Pencil, RotateCcw } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 import ToolCard from './ToolCard'
 import ReasoningBlock from './ReasoningBlock'
@@ -22,6 +22,58 @@ interface ChatThreadProps {
   conversationId?: string
   /** Re-run the last message you sent. Absent while a reply is in flight. */
   onRetry?: () => void
+  /**
+   * Send a changed version of a message you sent. The conversation carries
+   * on from there in a new chat; this one keeps the original and its reply.
+   */
+  onEdit?: (messageId: string, text: string) => Promise<void> | void
+  /** Scroll to this message and mark it for a moment: a search hit being opened. */
+  focusMessageId?: string | null
+}
+
+/** What a row needs to offer editing: a way to start, and the editor's own two actions once started. */
+interface EditControls {
+  start: () => void
+  editing: boolean
+  submit: (text: string) => void
+  cancel: () => void
+}
+
+/**
+ * Your message, open for editing in place: the text as sent, to change and
+ * send again. Sending starts a new branch of the chat from this point.
+ */
+function MessageEditor({ initial, onSubmit, onCancel }: { initial: string; onSubmit: (text: string) => void; onCancel: () => void }) {
+  const [text, setText] = useState(initial)
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.focus()
+    el.setSelectionRange(el.value.length, el.value.length)
+    el.style.height = `${Math.min(el.scrollHeight, 320)}px`
+  }, [])
+  const changed = text.trim() !== initial.trim() && text.trim().length > 0
+  return (
+    <div className="msg user editing">
+      <textarea
+        ref={ref}
+        className="edit-input"
+        value={text}
+        aria-label="Edit your message"
+        onChange={(e) => { setText(e.target.value); e.target.style.height = 'auto'; e.target.style.height = `${Math.min(e.target.scrollHeight, 320)}px` }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onCancel()
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && changed) onSubmit(text.trim())
+        }}
+      />
+      <div className="edit-actions">
+        <span className="edit-note">Sends in a new branch of this chat; this one keeps the original.</span>
+        <button type="button" className="link-btn" onClick={onCancel}>Cancel</button>
+        <button type="button" className="edit-send" onClick={() => onSubmit(text.trim())} disabled={!changed}>Send as new branch</button>
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -66,7 +118,7 @@ function sameMessage(a: Message, b: Message): boolean {
     && a.stats?.outputTokens === b.stats?.outputTokens
 }
 
-const ThreadRow = memo(function ThreadRow({ message, onRetry }: { message: Message; onRetry?: () => void }) {
+const ThreadRow = memo(function ThreadRow({ message, onRetry, edit }: { message: Message; onRetry?: () => void; edit?: EditControls }) {
   return (
     <motion.div
       className={`msg-row ${message.role}`}
@@ -89,8 +141,15 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry }: { message: Messa
           streaming={message.streaming}
           elapsed={message.elapsed}
         />
+      ) : edit?.editing ? (
+        <MessageEditor initial={message.text ?? ''} onSubmit={edit.submit} onCancel={edit.cancel} />
       ) : (
         <>
+          {edit && (
+            <button type="button" className="retry-btn edit-btn" aria-label="Edit this message" title="Edit and send as a new branch" onClick={edit.start}>
+              <Pencil size={14} aria-hidden="true" />
+            </button>
+          )}
           {onRetry && (
             <button type="button" className="retry-btn" aria-label="Retry this message" title="Retry" onClick={onRetry}>
               <RotateCcw size={14} aria-hidden="true" />
@@ -111,7 +170,8 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry }: { message: Messa
       )}
     </motion.div>
   )
-}, (prev, next) => sameMessage(prev.message, next.message) && Boolean(prev.onRetry) === Boolean(next.onRetry))
+}, (prev, next) => sameMessage(prev.message, next.message) && Boolean(prev.onRetry) === Boolean(next.onRetry)
+  && Boolean(prev.edit) === Boolean(next.edit) && prev.edit?.editing === next.edit?.editing)
 // Compared field by field, not by reference: the server pushes the whole
 // conversation on every token, so every message object is new even when
 // nothing about it changed.
@@ -119,7 +179,19 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry }: { message: Messa
 /** How long a scroll must sit still before the reading position is saved. */
 const SAVE_SCROLL_DELAY_MS = 400
 
-export default function ChatThread({ messages, summary, conversationId = 'default', onRetry }: ChatThreadProps) {
+export default function ChatThread({ messages, summary, conversationId = 'default', onRetry, onEdit, focusMessageId }: ChatThreadProps) {
+  // The message open for editing, if any: one at a time.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editFor = (msg: Message): EditControls | undefined => {
+    if (!onEdit || msg.role !== 'user') return undefined
+    const id = String(msg.id)
+    return {
+      start: () => setEditingId(id),
+      editing: editingId === id,
+      submit: (text) => { setEditingId(null); void onEdit(id, text) },
+      cancel: () => setEditingId(null),
+    }
+  }
   // Only the last message you sent can be retried: what came after it is what gets replaced.
   let lastUserId: Message['id'] | undefined
   if (onRetry) {
@@ -156,6 +228,21 @@ export default function ChatThread({ messages, summary, conversationId = 'defaul
     heightBefore.current = threadRef.current?.scrollHeight ?? null
     setShown((n) => n + INITIAL_WINDOW * 2)
   }
+
+  // A search hit: bring the message into view, revealing earlier history if
+  // it's beyond what's drawn, and mark it for a moment.
+  useEffect(() => {
+    if (!focusMessageId) return undefined
+    const index = messages.findIndex((m) => String(m.id) === focusMessageId)
+    if (index === -1) return undefined
+    if (index < hidden) { setShown(messages.length - index + 1); return undefined }
+    const row = threadRef.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(focusMessageId)}"]`)
+    if (!row) return undefined
+    row.scrollIntoView({ block: 'center' })
+    row.classList.add('found')
+    const t = setTimeout(() => row.classList.remove('found'), 2000)
+    return () => clearTimeout(t)
+  }, [focusMessageId, hidden, messages])
 
   // Once, after the first commit -- which already shows enough of the
   // thread's history to contain the target, per computeInitialScrollState.
@@ -269,7 +356,7 @@ export default function ChatThread({ messages, summary, conversationId = 'defaul
         )}
         <AnimatePresence initial={false}>
           {visible.flatMap((msg) => {
-            const row = <ThreadRow key={msg.id} message={msg} onRetry={msg.id === lastUserId ? onRetry : undefined} />
+            const row = <ThreadRow key={msg.id} message={msg} onRetry={msg.id === lastUserId ? onRetry : undefined} edit={editFor(msg)} />
             if (!summary?.text || msg.id !== summary.through) return [row]
             return [row, (
               <motion.div

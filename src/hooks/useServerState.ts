@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type {
-  Conversation, ConversationMeta, ConversationStore, Folder, FolderUpdate, ImageUpload, Message, PublicConfig, Status,
+  Conversation, ConversationMeta, ConversationStore, Folder, FolderUpdate, ImageUpload, Message, PublicConfig, Status, SearchHit,
 } from '../types.ts'
 
 /**
@@ -30,6 +30,10 @@ export interface ServerState {
   stop: () => Promise<void>
   /** Re-run the last message you sent, replacing the reply that followed it. */
   retry: () => Promise<void>
+  /** Send a changed version of a message you sent, in a new chat that picks up from there; this one stays as it is. */
+  branch: (messageId: string, text: string) => Promise<void>
+  /** Chats containing the words, best first. */
+  search: (query: string) => Promise<SearchHit[]>
   /** A fresh chat; filed into `folderId` from the start when given, so that folder's defaults apply. */
   newChat: (folderId?: string | null) => Promise<void>
   openChat: (id: string) => Promise<void>
@@ -304,6 +308,19 @@ export default function useServerState(): ServerState {
     await post(`/api/chats/${encodeURIComponent(id)}/retry`)
   }, [])
 
+  const branch = useCallback(async (messageId: string, text: string) => {
+    const id = activeIdRef.current
+    if (!id) return
+    const r = await post(`/api/chats/${encodeURIComponent(id)}/branch`, { messageId, text })
+    if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? 'Could not start the branch')
+  }, [])
+
+  const search = useCallback(async (query: string): Promise<SearchHit[]> => {
+    const r = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
+    if (!r.ok) return []
+    return ((await r.json()) as { hits?: SearchHit[] }).hits ?? []
+  }, [])
+
   const stop = useCallback(async () => {
     const id = activeIdRef.current
     if (id) await post(`/api/chats/${encodeURIComponent(id)}/stop`)
@@ -403,6 +420,8 @@ export default function useServerState(): ServerState {
     send,
     stop,
     retry,
+    branch,
+    search,
     newChat,
     openChat,
     deleteChat,

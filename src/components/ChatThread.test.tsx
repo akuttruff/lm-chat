@@ -362,3 +362,47 @@ describe('remembering where you left off', () => {
     Object.defineProperty(document, 'hidden', { value: false, configurable: true })
   })
 })
+
+describe('editing a message you sent', () => {
+  it('offers edit on your messages, opens the text in place, and sends the change as a new branch', async () => {
+    const onEdit = vi.fn()
+    render(<ChatThread messages={HISTORY} onEdit={onEdit} />)
+    expect(screen.getAllByRole('button', { name: 'Edit this message' })).toHaveLength(1) // yours, not the reply
+    fireEvent.click(screen.getByRole('button', { name: 'Edit this message' }))
+    const box = screen.getByRole('textbox', { name: 'Edit your message' })
+    expect(box).toHaveValue('my question')
+    const sendBtn = screen.getByRole('button', { name: 'Send as new branch' })
+    expect(sendBtn).toBeDisabled() // nothing changed yet
+    fireEvent.change(box, { target: { value: 'my better question' } })
+    expect(sendBtn).toBeEnabled()
+    fireEvent.click(sendBtn)
+    expect(onEdit).toHaveBeenCalledWith('1', 'my better question')
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('cancels back to the message as it was', () => {
+    render(<ChatThread messages={HISTORY} onEdit={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit this message' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.getByText('my question')).toBeInTheDocument()
+  })
+
+  it('has no edit buttons when editing is not offered', () => {
+    render(<ChatThread messages={HISTORY} />)
+    expect(screen.queryByRole('button', { name: 'Edit this message' })).not.toBeInTheDocument()
+  })
+})
+
+describe('opening a search hit', () => {
+  it('scrolls the message into view and marks it, revealing earlier history if it has to', () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    const many: Message[] = Array.from({ length: 60 }, (_, i) => msg(String(i), i % 2 ? 'assistant' : 'user', `message ${i}`))
+    render(<ChatThread messages={many} focusMessageId="3" />)
+    const row = document.querySelector('[data-msg-id="3"]')!
+    expect(row).not.toBeNull() // beyond the first 40 drawn, so earlier history was revealed
+    expect(scrollIntoView).toHaveBeenCalled()
+    expect(row.classList.contains('found')).toBe(true)
+  })
+})

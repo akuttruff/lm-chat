@@ -1,9 +1,10 @@
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { Drawer } from 'vaul'
 import { motion } from 'motion/react'
-import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus, CheckSquare } from 'lucide-react'
+import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus, CheckSquare, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
-import type { Conversation, Folder } from '../types.ts'
+import type { Conversation, Folder, SearchHit } from '../types.ts'
 import type { ChatStatus } from '../hooks/useServerState.ts'
 
 interface RowProps {
@@ -32,6 +33,10 @@ interface ConversationListProps {
   onRestore?: (conv: Conversation) => void
   /** Select mode: delete the chosen chats in one go, and put them all back on Undo. */
   onDeleteMany?: (ids: string[]) => Promise<void>
+  /** The search box: chats containing the words, best first. */
+  onSearch?: (query: string) => Promise<SearchHit[]>
+  /** Open a chat at one of its messages (a search hit); `messageId` is null for a hit on the name alone. */
+  onOpenAt?: (id: string, messageId: string | null) => void
   onRestoreMany?: (convs: Conversation[]) => Promise<void>
   onRename: (id: string, name: string) => void
   onStar?: (id: string, starred: boolean) => void
@@ -240,10 +245,36 @@ function sectionsOf(conversations: Conversation[], folders: Folder[]): Section[]
   return sections
 }
 
+/** The query's occurrences in `text` marked, case-insensitively. */
+function highlight(text: string, query: string): ReactNode {
+  const q = query.trim()
+  if (!q) return text
+  const parts = text.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'))
+  return parts.map((part, i) => (part.toLowerCase() === q.toLowerCase() ? <mark key={i}>{part}</mark> : part))
+}
+
 export default function ConversationList({
   open, conversations, activeId, folders, working = {}, onOpen, onDelete, onRestore = () => {}, onRename,
-  onStar = () => {}, onOpenFolderPicker = () => {}, onNewChat, onDeleteMany, onRestoreMany, onClose,
+  onStar = () => {}, onOpenFolderPicker = () => {}, onNewChat, onDeleteMany, onRestoreMany, onClose, onSearch, onOpenAt,
 }: ConversationListProps) {
+  // The search box: results replace the list while there's a query.
+  const [query, setQuery] = useState('')
+  const [hits, setHits] = useState<SearchHit[] | null>(null)
+  const searching = query.trim().length > 0
+  useEffect(() => {
+    if (!onSearch || !searching) { setHits(null); return undefined }
+    let live = true
+    const t = setTimeout(() => {
+      onSearch(query.trim()).then((found) => { if (live) setHits(found) }).catch(() => { if (live) setHits([]) })
+    }, 150)
+    return () => { live = false; clearTimeout(t) }
+  }, [query, searching, onSearch])
+  useEffect(() => { if (!open) setQuery('') }, [open])
+  const openHit = (hit: SearchHit): void => {
+    if (onOpenAt) onOpenAt(hit.id, hit.match?.messageId ?? null)
+    else onOpen(hit.id)
+    onClose()
+  }
   // Select mode: null when off, else the chosen chat ids.
   const [selected, setSelected] = useState<Set<string> | null>(null)
   const selecting = selected !== null
@@ -323,7 +354,44 @@ export default function ConversationList({
               </button>
             </div>
           )}
-          <div className="conv-list drawer-scroll" data-vaul-no-drag>
+          {onSearch && (
+            <div className="conv-search">
+              <Search size={15} aria-hidden="true" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search chats"
+                aria-label="Search chats"
+                autoComplete="off"
+                autoCorrect="off"
+                enterKeyHint="search"
+              />
+              {query && (
+                <button type="button" className="conv-search-clear" aria-label="Clear search" onClick={() => setQuery('')}>
+                  <X size={14} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          )}
+          {searching && (
+            <div className="conv-list drawer-scroll" data-vaul-no-drag aria-live="polite">
+              {hits === null && <div className="conv-empty">Searching…</div>}
+              {hits?.length === 0 && <div className="conv-empty">No chats mention &ldquo;{query.trim()}&rdquo;.</div>}
+              {hits?.map((hit) => (
+                <button key={hit.id} type="button" className={`conv-hit${hit.id === activeId ? ' active' : ''}`} onClick={() => openHit(hit)}>
+                  <span className="conv-hit-name">{highlight(hit.name || 'New chat', query)}</span>
+                  {hit.match && (
+                    <span className="conv-hit-excerpt">
+                      <span className="conv-hit-role">{hit.match.role === 'user' ? 'You' : 'Reply'}:</span> {highlight(hit.match.excerpt, query)}
+                    </span>
+                  )}
+                  {hit.count > 1 && <span className="conv-hit-count">{hit.count} messages</span>}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="conv-list drawer-scroll" data-vaul-no-drag hidden={searching}>
             {sectionsOf(conversations, folders).map((section) => (
               <div key={section.key}>
                 {section.label && (

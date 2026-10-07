@@ -679,3 +679,69 @@ describe('temporary chats', () => {
     }
   })
 })
+
+describe('branching', () => {
+  it('starts a new chat from the middle of another, carrying its settings, and leaves the original alone', () => {
+    const src = store.getConversations().activeId!
+    store.patch(src, { name: 'Transit questions', reasoning: 'high', memory: true, tools: 'astrology' })
+    store.setMessages(src, [
+      { id: 'u1', role: 'user', text: 'first question' }, { id: 'a1', role: 'assistant', text: 'first answer' },
+      { id: 'u2', role: 'user', text: 'second question' }, { id: 'a2', role: 'assistant', text: 'second answer' },
+    ])
+    const branch = store.branch(src, 'u2')
+    expect(branch.id).not.toBe(src)
+    expect(branch.messages.map((m) => m.id)).toEqual(['u1', 'a1']) // up to, not including, the edited message
+    expect(branch).toMatchObject({ name: 'Transit questions (branch)', reasoning: 'high', memory: true, tools: 'astrology' })
+    expect(store.getConversations().activeId).toBe(branch.id)
+    expect(store.get(src)!.messages).toHaveLength(4)
+    expect(store.get(src)!.name).toBe('Transit questions')
+    // A branch of a branch is still one "(branch)".
+    expect(store.branch(branch.id, 'u1').name).toBe('Transit questions (branch)')
+  })
+
+  it('keeps a summary only when every message it covers was copied', () => {
+    const src = store.getConversations().activeId!
+    store.setMessages(src, [
+      { id: 'u1', role: 'user', text: 'one' }, { id: 'a1', role: 'assistant', text: 'two' },
+      { id: 'u2', role: 'user', text: 'three' }, { id: 'a2', role: 'assistant', text: 'four' }, { id: 'u3', role: 'user', text: 'five' },
+    ])
+    store.patch(src, { summary: { text: 'the gist', through: 'a2' } })
+    expect(store.branch(src, 'u3').summary).toEqual({ text: 'the gist', through: 'a2' })
+    expect(store.branch(src, 'u2').summary).toBeNull()
+  })
+
+  it('refuses a message that is not yours, or not there', () => {
+    const src = store.getConversations().activeId!
+    store.setMessages(src, [{ id: 'u1', role: 'user', text: 'q' }, { id: 'a1', role: 'assistant', text: 'a' }])
+    expect(() => store.branch(src, 'a1')).toThrow(/only a message you sent/)
+    expect(() => store.branch(src, 'nope')).toThrow(/no such message/)
+  })
+})
+
+describe('search', () => {
+  it('finds chats by name or by what was said, best first, with where it was found', () => {
+    const a = store.getConversations().activeId!
+    store.patch(a, { name: 'Saturn return' })
+    store.setMessages(a, [{ id: 'u1', role: 'user', text: 'what does my saturn return mean?' }, { id: 'a1', role: 'assistant', text: 'A reckoning. Saturn asks for structure.' }])
+    const b = store.create().id
+    store.patch(b, { name: 'Dinner ideas' })
+    store.setMessages(b, [{ id: 'u1', role: 'user', text: 'something with lentils' }, { id: 'a1', role: 'assistant', text: 'Lentils with saturn... no, with cumin.' }])
+    const c = store.create().id
+    store.setMessages(c, [{ id: 'u1', role: 'user', text: 'nothing relevant' }])
+    const hits = store.search('SATURN')
+    expect(hits.map((h) => h.id)).toEqual([a, b]) // the name match first; c not at all
+    expect(hits[0]).toMatchObject({ inName: true, count: 2, match: { messageId: 'u1', role: 'user' } })
+    expect(hits[0]!.match!.excerpt).toBe('what does my saturn return mean?')
+    expect(hits[1]).toMatchObject({ inName: false, count: 1, match: { messageId: 'a1', role: 'assistant' } })
+    expect(store.search('   ')).toEqual([])
+  })
+
+  it('shows enough text around a match to recognise it, from a long reply', () => {
+    const a = store.getConversations().activeId!
+    const long = `${'before '.repeat(40)}the needle ${'after '.repeat(40)}`
+    store.setMessages(a, [{ id: 'a1', role: 'assistant', text: long }])
+    const { excerpt } = store.search('needle')[0]!.match!
+    expect(excerpt).toMatch(/^…before .*needle.* after…$/)
+    expect(excerpt.length).toBeLessThan(150)
+  })
+})

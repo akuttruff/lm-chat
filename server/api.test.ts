@@ -38,6 +38,16 @@ afterEach(async () => {
 })
 
 const get = (p: string) => realFetch(`${base}${p}`)
+/** Poll until `check` passes, for work the API kicks off and answers before finishing. */
+async function waitFor(check: () => void, ms = 3000): Promise<void> {
+  const until = Date.now() + ms
+  for (;;) {
+    try { check(); return } catch (err) {
+      if (Date.now() > until) throw err
+      await new Promise((r) => setTimeout(r, 20))
+    }
+  }
+}
 const send = (p: string, method: string, body?: unknown) =>
   realFetch(`${base}${p}`, {
     method,
@@ -128,6 +138,48 @@ describe('speech', () => {
     expect(api.store.getConfig()).toMatchObject({ speechVoice: 'bm_george', speechSpeed: '1.2' })
     await send('/api/config', 'PUT', { speechVoice: 'nobody', speechSpeed: '40' })
     expect(api.store.getConfig()).toMatchObject({ speechVoice: 'bm_george', speechSpeed: '1' })
+  })
+})
+
+describe('branching and search', () => {
+  it('starts a branch from an edited message, sending it with the original pictures, and leaves the source as it was', async () => {
+    const src = api.store.getConversations().activeId!
+    api.store.setMessages(src, [
+      { id: 'u1', role: 'user', text: 'first', images: [{ id: 'img1', name: 'chart.png', mime: 'image/png', bytes: 10 }] },
+      { id: 'a1', role: 'assistant', text: 'reply one' },
+      { id: 'u2', role: 'user', text: 'second', images: [{ id: 'img2', name: 'sky.png', mime: 'image/png', bytes: 10 }] },
+      { id: 'a2', role: 'assistant', text: 'reply two' },
+    ])
+    api.store.setConfig({ model: 'qwen' })
+    let sentBody: Record<string, unknown> | null = null
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      sentBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return new Response('data: {"type":"chat.end","result":{}}\n\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+    }))
+    const res = await send(`/api/chats/${src}/branch`, 'POST', { messageId: 'u2', text: 'second, but different' })
+    expect(res.status).toBe(202)
+    const { id } = await res.json() as { id: string }
+    await waitFor(() => expect(sentBody).not.toBeNull())
+    const branch = api.store.get(id)!
+    expect(branch.messages.map((m) => m.text)).toEqual(['first', 'reply one', 'second, but different'])
+    expect(branch.messages[2]!.images).toEqual([{ id: 'img2', name: 'sky.png', mime: 'image/png', bytes: 10 }])
+    expect(api.store.get(src)!.messages.map((m) => m.text)).toEqual(['first', 'reply one', 'second', 'reply two'])
+  })
+
+  it('refuses to branch from a reply, or with nothing to send', async () => {
+    const src = api.store.getConversations().activeId!
+    api.store.setMessages(src, [{ id: 'u1', role: 'user', text: 'q' }, { id: 'a1', role: 'assistant', text: 'a' }])
+    expect((await send(`/api/chats/${src}/branch`, 'POST', { messageId: 'a1', text: 'x' })).status).toBe(400)
+    expect((await send(`/api/chats/${src}/branch`, 'POST', { messageId: 'u1', text: '  ' })).status).toBe(400)
+  })
+
+  it('searches every chat', async () => {
+    const a = api.store.getConversations().activeId!
+    api.store.setMessages(a, [{ id: 'u1', role: 'user', text: 'tell me about chiron' }])
+    const body = await (await get('/api/search?q=chiron')).json() as { hits: { id: string; match: { excerpt: string } }[] }
+    expect(body.hits).toHaveLength(1)
+    expect(body.hits[0]).toMatchObject({ id: a, match: { excerpt: 'tell me about chiron' } })
+    expect((await (await get('/api/search?q=')).json() as { hits: unknown[] }).hits).toEqual([])
   })
 })
 

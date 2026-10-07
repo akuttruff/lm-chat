@@ -282,6 +282,21 @@ html, body, #root {
 .composer-chips:empty { display: none; }
 /* Delete sits apart at the end of the row: a quiet icon until pressed. */
 .delete-chat-chip { margin-left: auto; color: var(--paper-dim); }
+.delete-chat-chip.beside { margin-left: 0; }
+/* Export: a quiet icon at the end of the row with a two-item menu above it. */
+.export-wrap { position: relative; margin-left: auto; display: inline-flex; }
+.export-chip { color: var(--paper-dim); }
+.export-menu {
+  position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 5; min-width: 170px;
+  display: flex; flex-direction: column; padding: 4px; border-radius: 10px;
+  background: var(--bg-raised); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+.export-menu button { text-align: left; padding: 9px 12px; border: none; border-radius: 7px; background: none; color: var(--paper); font: inherit; font-size: 14px; }
+.export-menu button:hover, .export-menu button:focus-visible { background: var(--bg); }
+/* Copy, beside the speaker under a reply; "Copied" shows for a moment in its place. */
+.copy-btn { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; background: none; border: none; border-radius: 50%; color: var(--paper-dim); opacity: 0.7; cursor: pointer; }
+.copy-btn:hover, .copy-btn:focus-visible { opacity: 1; background: var(--bg-raised); color: var(--paper); }
+.copy-btn.done { color: var(--moss); opacity: 1; }
 .delete-chat-chip:hover, .delete-chat-chip:focus-visible { color: var(--danger); border-color: var(--danger); }
 .composer-row { display: flex; align-items: flex-end; gap: 8px; }
 
@@ -682,6 +697,31 @@ html, body, #root {
 
 /* --- the chats drawer's select mode --- */
 .conv-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+/* The drawer's search box, and its results in place of the list. */
+.conv-search { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--paper-dim); }
+.conv-search input { flex: 1; min-width: 0; padding: 9px 0; border: none; background: none; color: var(--paper); font: inherit; font-size: 15px; outline: none; }
+.conv-search input::-webkit-search-cancel-button { display: none; }
+.conv-search-clear { display: grid; place-items: center; width: 26px; height: 26px; border: none; border-radius: 50%; background: none; color: var(--paper-dim); }
+.conv-empty { padding: 18px 6px; color: var(--paper-dim); font-size: 14px; }
+.conv-hit { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 10px 8px; border: none; border-radius: 10px; background: none; color: var(--paper); text-align: left; font: inherit; }
+.conv-hit:hover, .conv-hit:focus-visible { background: var(--bg-raised); }
+.conv-hit.active { box-shadow: inset 2px 0 0 var(--moss); }
+.conv-hit-name { font-size: 15px; font-weight: 500; }
+.conv-hit-excerpt { font-size: 13px; color: var(--paper-dim); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.conv-hit-role { color: var(--paper); opacity: 0.7; }
+.conv-hit-count { font-family: var(--mono, ui-monospace, monospace); font-size: 11px; color: var(--paper-dim); }
+.conv-hit mark { background: rgba(217, 178, 106, 0.35); color: inherit; border-radius: 3px; padding: 0 1px; }
+.conv-list[hidden] { display: none; }
+/* A search hit brought into view. */
+.msg-row.found .bubble { box-shadow: 0 0 0 2px var(--moss); transition: box-shadow 0.3s; }
+/* Editing your message in place. */
+.msg.user.editing { width: min(100%, 680px); }
+.edit-input { width: 100%; min-height: 72px; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--moss); background: var(--bg-raised); color: var(--paper); font: inherit; font-size: 16px; line-height: 1.45; resize: none; outline: none; }
+.edit-actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.edit-note { flex: 1 1 100%; font-size: 12px; color: var(--paper-dim); }
+.edit-actions .link-btn { margin-left: auto; background: none; border: none; color: var(--paper-dim); font: inherit; font-size: 14px; padding: 8px 6px; }
+.edit-send { padding: 8px 14px; border-radius: 10px; border: none; background: var(--moss); color: var(--bg); font: inherit; font-size: 14px; font-weight: 600; }
+.edit-send:disabled { opacity: 0.45; }
 .conv-select-toggle {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 5px 10px; border-radius: 999px;

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { ArrowUp, Brain, Folder, Gauge, Ghost, ImagePlus, ListChecks, Square, Trash2, Wrench, X } from 'lucide-react'
+import { ArrowUp, Brain, Download, Folder, Gauge, Ghost, ImagePlus, ListChecks, Square, Trash2, Wrench, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { ACCEPTED, hasImage, imageFiles, prepareImage } from '../lib/images'
 import type { ImageUpload } from '../types.ts'
@@ -27,6 +27,9 @@ interface ComposerProps {
   toolsCustomized?: boolean
   /** Delete the chat that's open, without going to the drawer. Absent when there's no chat to delete. */
   onDeleteChat?: () => void
+  /** The whole chat as Markdown: to the clipboard, or saved as a file. */
+  onCopyChat?: () => void
+  onDownloadChat?: () => void
 }
 
 /** As many as the server takes per message (see api.ts). */
@@ -34,8 +37,9 @@ const MAX_ATTACHMENTS = 6
 
 export default function Composer({
   onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning, temporaryOn = false, onToggleTemporary,
-  memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false, onDeleteChat,
+  memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false, onDeleteChat, onCopyChat, onDownloadChat,
 }: ComposerProps) {
+  const [exportOpen, setExportOpen] = useState(false)
   const [text, setText] = useState('')
   // Images waiting to go with the next message: picked, pasted or dropped,
   // already scaled down (see prepareImage), shown as thumbnails until sent.
@@ -210,11 +214,36 @@ export default function Composer({
           <ListChecks size={14} aria-hidden="true" />
         </button>
       )}
+      {(onCopyChat || onDownloadChat) && (
+        <span className={`export-wrap${onDeleteChat ? '' : ' at-end'}`}>
+          <button
+            type="button"
+            className="reasoning-chip export-chip"
+            onClick={() => setExportOpen((v) => !v)}
+            aria-expanded={exportOpen}
+            aria-haspopup="menu"
+            aria-label="Export this chat"
+            title="Copy or save this chat as Markdown"
+          >
+            <Download size={14} aria-hidden="true" />
+          </button>
+          {exportOpen && (
+            <div className="export-menu" role="menu" aria-label="Export this chat">
+              {onCopyChat && (
+                <button type="button" role="menuitem" onClick={() => { setExportOpen(false); onCopyChat() }}>Copy as Markdown</button>
+              )}
+              {onDownloadChat && (
+                <button type="button" role="menuitem" onClick={() => { setExportOpen(false); onDownloadChat() }}>Save as .md file</button>
+              )}
+            </div>
+          )}
+        </span>
+      )}
       {onDeleteChat && (
         // At the far end of the row, away from the rest, and nowhere near New chat up top.
         <button
           type="button"
-          className="reasoning-chip delete-chat-chip"
+          className={`reasoning-chip delete-chat-chip${onCopyChat || onDownloadChat ? ' beside' : ''}`}
           onClick={onDeleteChat}
           aria-label="Delete this chat"
           title="Delete this chat (Undo is offered)"

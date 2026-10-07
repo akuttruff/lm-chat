@@ -785,6 +785,68 @@ export class Store {
     return fresh
   }
 
+  /**
+   * A new chat that picks up from the middle of another: everything before
+   * `messageId` copied over, with the chat's settings (folder, reasoning,
+   * memory, tools), ready for a changed message to be sent in place of the
+   * original one. The source is left exactly as it was -- that's the point:
+   * both versions of the conversation stay. Named after the source, so the
+   * two sit together in the list; the copied images are shared, not
+   * duplicated (image files are never deleted with a chat).
+   */
+  branch(sourceId: string, messageId: string): Conversation {
+    const source = this.get(sourceId)
+    if (!source) throw new Error('no such conversation')
+    const at = source.messages.findIndex((m) => String(m.id) === messageId)
+    if (at === -1) throw new Error('no such message')
+    if (source.messages[at]!.role !== 'user') throw new Error('only a message you sent can be edited')
+    const conv = this.create()
+    const name = source.name ? `${source.name.replace(/ \(branch\)$/, '')} (branch)` : ''
+    this.patch(conv.id, {
+      name, folderId: source.folderId ?? null, reasoning: source.reasoning ?? null,
+      memory: source.memory ?? null, memorySelection: source.memorySelection ?? null,
+      tools: source.tools ?? null, temporary: source.temporary === true,
+    }, { touch: false })
+    const kept = source.messages.slice(0, at).map((m) => ({ ...m }))
+    // A summary that only covers copied messages still stands; one reaching past the cut doesn't.
+    const summary = source.summary && kept.some((m) => m.id === source.summary!.through) ? source.summary : null
+    this.patch(conv.id, { summary }, { touch: false })
+    this.setMessages(conv.id, kept, { touch: true })
+    return this.get(conv.id)!
+  }
+
+  /**
+   * Chats whose name or messages contain `query`, case-insensitively: best
+   * first (a name match, then the most hits), each with where it was first
+   * found, for the drawer's search. Over what's in memory, so temporary
+   * chats are searched too.
+   */
+  search(query: string, limit = 50): SearchHit[] {
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    const hits: SearchHit[] = []
+    for (const c of this.conversations.items) {
+      const inName = c.name.toLowerCase().includes(q)
+      let count = 0
+      let first: SearchHit['match'] | null = null
+      for (const m of c.messages) {
+        if (m.role !== 'user' && m.role !== 'assistant') continue
+        const text = m.text || ''
+        const i = text.toLowerCase().indexOf(q)
+        if (i === -1) continue
+        count++
+        if (!first) first = { messageId: String(m.id), role: m.role, excerpt: excerptAround(text, i, q.length) }
+      }
+      if (!inName && !count) continue
+      hits.push({
+        id: c.id, name: c.name, updatedAt: c.updatedAt, folderId: c.folderId ?? null, inName, count,
+        match: first,
+      })
+    }
+    hits.sort((a, b) => Number(b.inName) - Number(a.inName) || b.count - a.count || b.updatedAt - a.updatedAt)
+    return hits.slice(0, limit)
+  }
+
   setActive(id: string): void {
     if (!this.get(id)) return
     this.conversations.activeId = id
@@ -1069,6 +1131,30 @@ function cleanFolderDefault(value: unknown, what: 'reasoning' | 'tools', max: nu
 }
 
 /** Name a thread from its opening message, the way LM Studio titles a chat. */
+/** One chat the search found, and where in it. */
+export interface SearchHit {
+  id: string
+  name: string
+  updatedAt: number
+  folderId: string | null
+  /** The chat's name contains the query. */
+  inName: boolean
+  /** Messages containing it. */
+  count: number
+  /** The first of those: enough text around the match to recognise it. */
+  match: { messageId: string; role: 'user' | 'assistant'; excerpt: string } | null
+}
+
+/** About 140 characters around a match, on one line, with ellipses where it was cut. */
+export function excerptAround(text: string, at: number, length: number, width = 140): string {
+  const flat = text.replace(/\s+/g, ' ')
+  // The match moved with the whitespace collapse: find it again from the same proportional spot.
+  const i = flat.toLowerCase().indexOf(text.slice(at, at + length).toLowerCase().replace(/\s+/g, ' '))
+  const start = Math.max(0, (i === -1 ? 0 : i) - Math.floor((width - length) / 2))
+  const end = Math.min(flat.length, start + width)
+  return `${start > 0 ? '…' : ''}${flat.slice(start, end).trim()}${end < flat.length ? '…' : ''}`
+}
+
 export function deriveName(messages: Message[]): string {
   const first = messages.find((m) => m.role === 'user')
   if (!first) return ''

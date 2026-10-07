@@ -1,6 +1,7 @@
 import { Suspense, lazy, memo } from 'react'
 import type { MessageImage, MessageRole, ReplyStats } from '../types.ts'
 import SpeakButton from './SpeakButton'
+import CopyButton from './CopyButton'
 
 const MarkdownText = lazy(() => import('./MarkdownText'))
 
@@ -75,6 +76,7 @@ function MessageBubble({
       {role === 'assistant' && !streaming && (model || (id && text)) && (
         <div className="msg-foot">
           {id && text && <SpeakButton id={id} text={text} />}
+          {text && <CopyButton text={text} label="Copy reply" />}
           {model && (
             <div className="meta">
               {instance || model} &middot; {elapsed}s
