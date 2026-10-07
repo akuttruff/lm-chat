@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import Header from './components/Header';
 import ChatThread from './components/ChatThread';
 import Composer from './components/Composer';
@@ -67,6 +67,12 @@ export default function App() {
         onNewChat={() => void newChat()}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenChats={() => setChatsOpen(true)}
+        // The same as deleting it from the drawer: gone at once, with Undo in the toast.
+        onDeleteChat={active ? () => {
+          const snapshot = active;
+          void deleteChat(snapshot.id);
+          toast('Chat deleted', { action: { label: 'Undo', onClick: () => void restoreChat(snapshot) } });
+        } : undefined}
       />
       {/* Keyed by thread: switching mounts a fresh one, rather than animating
           one thread's messages out while the other's animate in. */}

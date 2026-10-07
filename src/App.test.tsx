@@ -140,6 +140,29 @@ describe('App', () => {
     await waitFor(() => expect(calls.some((c) => c.url === '/api/chats/c1/stop')).toBe(true))
   })
 
+  it('deletes the open chat from the header, with Undo putting it back', async () => {
+    const user = userEvent.setup()
+    const calls = stubApi()
+    render(<App />)
+    await ready()
+    const open = conv({ id: 'c1', name: 'Transit questions', messages: [{ id: '1', role: 'user', text: 'hi' }] })
+    emit([open, conv({ id: 'c2', name: 'Other' })])
+    await user.click(screen.getByRole('button', { name: 'Delete this chat' }))
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/chats/c1' && c.init?.method === 'DELETE')).toBe(true))
+    await user.click(await screen.findByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/chats/restore')).toBe(true))
+    const restored = JSON.parse(String(calls.find((c) => c.url === '/api/chats/restore')!.init!.body)) as Conversation
+    expect(restored.id).toBe('c1')
+  })
+
+  it('has no delete button with no chat open', async () => {
+    stubApi()
+    render(<App />)
+    await ready()
+    emit([], null)
+    expect(screen.queryByRole('button', { name: 'Delete this chat' })).not.toBeInTheDocument()
+  })
+
   it('lists conversations from the server', async () => {
     const user = userEvent.setup()
     stubApi()

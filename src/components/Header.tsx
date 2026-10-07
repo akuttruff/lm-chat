@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Menu, Plus, Settings } from 'lucide-react'
+import { Menu, Plus, Settings, Trash2 } from 'lucide-react'
 import type { Status } from '../types.ts'
 
 interface HeaderProps {
@@ -9,10 +9,12 @@ interface HeaderProps {
   onNewChat: () => void
   onOpenSettings: () => void
   onOpenChats: () => void
+  /** Delete the chat that's open, without going to the drawer. Absent when there's no chat to delete. */
+  onDeleteChat?: () => void
 }
 
 export default function Header({
-  status, startedAt, onNewChat, onOpenSettings, onOpenChats,
+  status, startedAt, onNewChat, onOpenSettings, onOpenChats, onDeleteChat,
 }: HeaderProps) {
   const dotClass = `dot${status.state ? ` ${status.state}` : ''}`
   const [elapsed, setElapsed] = useState(0)
@@ -39,6 +41,11 @@ export default function Header({
         </div>
       </div>
       <div className="header-actions">
+        {onDeleteChat && (
+          <button className="icon-btn" onClick={onDeleteChat} aria-label="Delete this chat" title="Delete this chat">
+            <Trash2 size={17} aria-hidden="true" />
+          </button>
+        )}
         <button className="icon-btn" onClick={onNewChat} aria-label="New chat">
           <Plus size={18} aria-hidden="true" />
         </button>
