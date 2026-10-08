@@ -561,7 +561,28 @@ export class Engine {
     const controller = new AbortController()
     const turn: TurnState = { controller, stalled: false }
     this.running.set(conversationId, turn)
+    try {
+      await this.runClaimed(conversationId, text, { retry, uploads, attachments }, turn)
+    } catch (err) {
+      // Anything that threw before the turn's own handling took over (a
+      // full disk, a locked memory database) must not leave the chat
+      // claimed, or every later send is refused as "already in flight".
+      if (this.running.get(conversationId) === turn) {
+        this.running.delete(conversationId)
+        this.publish(conversationId, '', 'failed', null)
+      }
+      throw err
+    }
+  }
 
+  private async runClaimed(
+    conversationId: string,
+    text: string,
+    { retry, uploads, attachments }: { retry: boolean; uploads: ReturnType<typeof decodeUpload>[]; attachments: MessageImage[] },
+    turn: TurnState,
+  ): Promise<void> {
+    const conv = this.store.get(conversationId)!
+    const { controller } = turn
     const config = this.store.getConfig()
     // The chat's folder, whose defaults sit between the chat's own settings
     // and the global ones.
@@ -997,7 +1018,7 @@ export class Engine {
         finalize()
         commit([...history, ...produced, { id: newId(), role: 'error', text: 'Stopped.' }])
         this.publish(conversationId, '', 'stopped', null)
-      } else if (produced.length) {
+      } else if (produced.some((m) => m.role !== 'tool' || m.plugin !== AUTO_LOADED)) {
         finalize()
         commit([...history, ...produced, {
           id: newId(), role: 'error',

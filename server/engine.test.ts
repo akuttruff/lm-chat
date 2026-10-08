@@ -1549,3 +1549,20 @@ describe('summarizing on a budget', () => {
     expect(tight).not.toMatch(/\n0:xxx|: 0:xxx/) // the oldest went
   })
 })
+
+describe('review fixes', () => {
+  it('releases the chat when something throws before the request is even made', async () => {
+    configure({ model: 'm' })
+    const conv = store.create()
+    const real = store.getConfig.bind(store)
+    const spy = vi.spyOn(store, 'getConfig').mockImplementationOnce(() => { throw new Error('boom') }).mockImplementation(real)
+    await expect(engine.runTurn(conv.id, 'hi')).rejects.toThrow('boom')
+    spy.mockRestore()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('down'))))
+    // Not "a reply is already in flight": the turn runs and reports the real problem.
+    await expect(engine.runTurn(conv.id, 'hi again')).resolves.toBeUndefined()
+    const last = store.get(conv.id)!.messages.at(-1)!
+    expect(last.role).toBe('error')
+    expect(last.text).toMatch(/Couldn't reach LM Studio/)
+  })
+})

@@ -745,3 +745,80 @@ describe('search', () => {
     expect(excerpt.length).toBeLessThan(150)
   })
 })
+
+describe('review fixes', () => {
+  let dir: string
+  let store: Store
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-store-')); store = new Store({ dir }) })
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+
+  it('refuses a setting that is not text, and keeps memory and disk in step', () => {
+    const before = store.getConfig().lmStudioUrl
+    expect(() => store.setConfig({ lmStudioUrl: null as unknown as string })).toThrow('lmStudioUrl must be text')
+    expect(() => store.setConfig({ bogus: 'x' } as unknown as Partial<import('../src/types.ts').ServerConfig>)).toThrow('unknown setting')
+    expect(store.getConfig().lmStudioUrl).toBe(before)
+    expect(new Store({ dir }).getConfig().lmStudioUrl).toBe(before)
+  })
+
+  it('leaves the store untouched when a restored copy cannot be written', () => {
+    const blank = store.create()
+    const bad = { ...blank, id: 'ghost', messages: [{ id: 'm', role: 'system' } as unknown as Message] }
+    expect(() => store.restore(bad)).toThrow()
+    expect(store.get('ghost')).toBeUndefined()
+    expect(store.getConversations().items.map((c) => c.id)).toEqual([blank.id])
+    expect(store.getConversations().activeId).toBe(blank.id)
+  })
+
+  it('keeps a restored temporary chat in memory only', () => {
+    store.create()
+    const temp = { ...store.create(), id: 'temp1', temporary: true, messages: [{ id: 'a', role: 'user' as const, text: 'secret' }] }
+    store.restore(temp)
+    expect(store.get('temp1')?.messages[0]?.text).toBe('secret')
+    const db = new DatabaseSync(path.join(dir, 'lm-chat.sqlite'))
+    expect(db.prepare("SELECT count(*) AS n FROM conversations WHERE id = 'temp1'").get()).toEqual({ n: 0 })
+    db.close()
+  })
+
+  it('evicts the least recently updated unstarred chat past the cap, never the active or a starred one', () => {
+    const ids: string[] = []
+    for (let i = 0; i < 60; i++) {
+      const c = store.create()
+      store.setMessages(c.id, [{ id: `m${i}`, role: 'user', text: `hi ${i}` }])
+      ids.push(c.id)
+    }
+    const oldest = ids[0]!
+    store.patch(oldest, { starred: true })
+    const secondOldest = ids[1]!
+    const fresh = store.create()
+    const kept = store.getConversations().items.map((c) => c.id)
+    expect(kept).toHaveLength(60)
+    expect(kept).toContain(fresh.id)
+    expect(kept).toContain(oldest)
+    expect(kept).not.toContain(secondOldest)
+  })
+
+  it('branching never takes over the blank chat that is open', () => {
+    const source = store.create()
+    store.setMessages(source.id, [{ id: 'u1', role: 'user', text: 'first' }, { id: 'a1', role: 'assistant', text: 'reply' }])
+    const blank = store.create()
+    const branch = store.branch(source.id, 'u1')
+    expect(branch.id).not.toBe(blank.id)
+    expect(store.get(blank.id)?.messages).toEqual([])
+  })
+
+  it('rewrites only the tail of a thread when told where the change starts', () => {
+    const c = store.create()
+    const head: Message[] = [{ id: 'u1', role: 'user', text: 'one' }, { id: 'a1', role: 'assistant', text: 'two' }]
+    store.setMessages(c.id, head)
+    // Tamper with the head on disk: a tail-only write must not touch it.
+    const db = new DatabaseSync(path.join(dir, 'lm-chat.sqlite'))
+    db.prepare("UPDATE messages SET text = 'marker' WHERE id = 'u1'").run()
+    db.close()
+    store.setMessages(c.id, [...head, { id: 'a2', role: 'assistant', text: 'three' }], { from: 2 })
+    const reopened = new Store({ dir }).get(c.id)!
+    expect(reopened.messages.map((m) => m.text)).toEqual(['marker', 'two', 'three'])
+    // Without `from`, the whole thread is written again.
+    store.setMessages(c.id, [...head, { id: 'a2', role: 'assistant', text: 'three' }])
+    expect(new Store({ dir }).get(c.id)!.messages.map((m) => m.text)).toEqual(['one', 'two', 'three'])
+  })
+})
