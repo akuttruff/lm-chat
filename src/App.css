@@ -316,6 +316,9 @@ html, body, #root {
   border-top: 1px solid var(--line);
   background: var(--bg);
 }
+/* While typing, the keyboard covers the home indicator's zone, so that inset
+   is dead space between the field and the keys: keep only a little. */
+.composer:focus-within { padding-bottom: 8px; }
 /* An image is being dragged over the window: the box is where it will land. */
 .composer.dragging { background: color-mix(in srgb, var(--moss) 14%, var(--bg)); border-top-color: var(--moss); }
 .composer.dragging .composer-input { border-color: var(--moss); border-style: dashed; }
