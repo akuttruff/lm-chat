@@ -116,31 +116,14 @@ describe('following the newest message', () => {
   })
 })
 
-describe('jump to latest', () => {
-  it('is hidden while following', () => {
-    render(<ChatThread messages={HISTORY} />)
-    measure(thread(), BOTTOM)
-    expect(screen.queryByRole('button', { name: /jump to latest/i })).not.toBeInTheDocument()
-  })
-
-  it('appears once you scroll away', () => {
-    render(<ChatThread messages={HISTORY} />)
-    const el = thread()
-    measure(el, BOTTOM)
-    scrollTo(el, 100)
-    expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
-  })
-
-  it('returns you to the bottom and resumes following', () => {
+describe('scrolling back to the bottom', () => {
+  it('resumes following new content, with no button needed', () => {
     const { rerender } = render(<ChatThread messages={HISTORY} />)
     const el = thread()
     measure(el, BOTTOM)
     scrollTo(el, 100)
-
-    fireEvent.click(screen.getByRole('button', { name: /jump to latest/i }))
-    expect(el.scrollTop).toBe(CONTENT)
-
-    // And new content follows again.
+    expect(screen.queryByRole('button', { name: /jump to latest/i })).not.toBeInTheDocument()
+    scrollTo(el, CONTENT)
     measure(el, BOTTOM)
     rerender(<ChatThread messages={[...HISTORY, msg('3')]} />)
     expect(el.scrollTop).toBe(CONTENT)

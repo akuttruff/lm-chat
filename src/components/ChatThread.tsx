@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowDown, MessagesSquare, Pencil, RotateCcw } from 'lucide-react'
+import { MessagesSquare, Pencil, RotateCcw } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 import ToolCard from './ToolCard'
 import ReasoningBlock from './ReasoningBlock'
@@ -331,13 +331,6 @@ export default function ChatThread({ messages, summary, conversationId = 'defaul
     }
   }
 
-  const jumpToLatest = (): void => {
-    const el = threadRef.current
-    if (!el) return
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-    setFollowing(true)
-  }
-
   if (messages.length === 0) {
     return (
       <div className="thread" ref={threadRef}>
@@ -375,13 +368,6 @@ export default function ChatThread({ messages, summary, conversationId = 'defaul
           })}
         </AnimatePresence>
       </div>
-
-      {!following && (
-        <button type="button" className="jump-latest" onClick={jumpToLatest}>
-          <ArrowDown size={15} aria-hidden="true" />
-          Jump to latest
-        </button>
-      )}
     </div>
   )
 }

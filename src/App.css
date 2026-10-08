@@ -1311,7 +1311,7 @@ html, body, #root {
 }
 
 
-/* The thread scrolls inside this; the jump button floats over it. */
+/* The thread scrolls inside this. */
 .thread-wrap {
   position: relative;
   flex: 1 1 0;
@@ -1320,26 +1320,6 @@ html, body, #root {
   flex-direction: column;
 }
 
-.jump-latest {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 18px;
-  border: 1px solid var(--line);
-  background: var(--bg-raised);
-  color: var(--paper);
-  font-size: 13px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  cursor: pointer;
-  z-index: 5;
-}
-
-.jump-latest:active { background: var(--bg); }
 
 /* --- long threads --- */
 .show-earlier {
