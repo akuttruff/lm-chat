@@ -782,18 +782,34 @@ export class Store {
       this.writeMeta(current)
       return current
     }
+    return this.newConversation()
+  }
+
+  /** A fresh chat, inserted and made active -- never a reused blank one. */
+  private newConversation(): Conversation {
     const fresh = blankConversation()
-    const combined = [fresh, ...this.conversations.items]
-    const kept = combined.slice(0, MAX_CONVERSATIONS)
-    const dropped = combined.slice(MAX_CONVERSATIONS)
-    this.conversations = { activeId: fresh.id, items: kept }
     this.insertConversation(fresh)
+    this.conversations = { activeId: fresh.id, items: this.capped([fresh, ...this.conversations.items], fresh.id) }
     this.stmts.setActiveId.run(fresh.id)
-    for (const d of dropped) {
-      this.stmts.deleteConversation.run(d.id)
-      this.savedCounts.delete(d.id)
-    }
     return fresh
+  }
+
+  /**
+   * At most MAX_CONVERSATIONS: beyond that the least recently updated chats
+   * go first, never a starred one and never `keep` (the one just made or
+   * brought back). Dropped chats are removed from disk here too.
+   */
+  private capped(items: Conversation[], keep: string): Conversation[] {
+    if (items.length <= MAX_CONVERSATIONS) return items
+    const candidates = items
+      .filter((c) => c.id !== keep && !c.starred)
+      .sort((a, b) => a.updatedAt - b.updatedAt)
+    const drop = new Set(candidates.slice(0, items.length - MAX_CONVERSATIONS).map((c) => c.id))
+    for (const id of drop) {
+      this.stmts.deleteConversation.run(id)
+      this.savedCounts.delete(id)
+    }
+    return items.filter((c) => !drop.has(c.id))
   }
 
   /**
@@ -811,7 +827,9 @@ export class Store {
     const at = source.messages.findIndex((m) => String(m.id) === messageId)
     if (at === -1) throw new Error('no such message')
     if (source.messages[at]!.role !== 'user') throw new Error('only a message you sent can be edited')
-    const conv = this.create()
+    // Always a new chat: create() would otherwise take over whatever blank
+    // chat happens to be open, maybe on another device.
+    const conv = this.newConversation()
     const name = source.name ? `${source.name.replace(/ \(branch\)$/, '')} (branch)` : ''
     this.patch(conv.id, {
       name, folderId: source.folderId ?? null, reasoning: source.reasoning ?? null,
@@ -976,6 +994,9 @@ export class Store {
       ...input,
       name: typeof input.name === 'string' ? input.name : '',
     }
+    // On disk first: if the copy is unusable the store is left as it was.
+    // A temporary chat is not written, the same as everywhere else.
+    if (!conv.temporary) this.insertConversation(conv)
     let items = this.conversations.items
     let activeId = this.conversations.activeId
     const placeholder = items.length === 1 && items[0]!.messages.length === 0 ? items[0]! : null
@@ -985,15 +1006,7 @@ export class Store {
       this.stmts.deleteConversation.run(placeholder.id)
       this.savedCounts.delete(placeholder.id)
     }
-    const combined = [...items, conv]
-    const kept = combined.slice(-MAX_CONVERSATIONS)
-    const dropped = combined.slice(0, combined.length - kept.length)
-    this.conversations = { items: kept, activeId }
-    this.insertConversation(conv)
-    for (const d of dropped) {
-      this.stmts.deleteConversation.run(d.id)
-      this.savedCounts.delete(d.id)
-    }
+    this.conversations = { items: this.capped([...items, conv], conv.id), activeId }
     this.stmts.setActiveId.run(activeId)
     return conv
   }
@@ -1009,10 +1022,18 @@ export class Store {
   }
 
   setConfig(patch: Partial<ServerConfig>): ServerConfig {
-    this.config = { ...this.config, ...patch }
+    // Every setting is text; anything else would be written as NULL, or
+    // crash the code that reads it later. The in-memory copy changes only
+    // once the row has, so a rejected write leaves both as they were.
+    for (const [key, value] of Object.entries(patch)) {
+      if (!(key in this.config)) throw new Error(`unknown setting: ${key}`)
+      if (typeof value !== 'string') throw new Error(`${key} must be text`)
+    }
+    const next = { ...this.config, ...patch }
     this.stmts.updateConfig.run(
-      ...configParams(this.config))
-    return this.config
+      ...configParams(next))
+    this.config = next
+    return next
   }
 
   // --- images --------------------------------------------------------------
