@@ -149,9 +149,10 @@ describe('App', () => {
     emit([open, conv({ id: 'c2', name: 'Other' })])
     // Down in the bar by the message box, not up by New chat.
     expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Delete this chat' })).not.toBeInTheDocument()
-    const del = screen.getByRole('button', { name: 'Delete this chat' })
-    expect(del.closest('.composer-chips')).not.toBeNull()
-    await user.click(del)
+    const more = screen.getByRole('button', { name: 'More actions' })
+    expect(more.closest('.composer-chips')).not.toBeNull()
+    await user.click(more)
+    await user.click(screen.getByRole('menuitem', { name: 'Delete this chat' }))
     await waitFor(() => expect(calls.some((c) => c.url === '/api/chats/c1' && c.init?.method === 'DELETE')).toBe(true))
     await user.click(await screen.findByRole('button', { name: 'Undo' }))
     await waitFor(() => expect(calls.some((c) => c.url === '/api/chats/restore')).toBe(true))
@@ -164,7 +165,7 @@ describe('App', () => {
     render(<App />)
     await ready()
     emit([], null)
-    expect(screen.queryByRole('button', { name: 'Delete this chat' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'More actions' })).not.toBeInTheDocument()
   })
 
   it('lists conversations from the server', async () => {
@@ -229,8 +230,8 @@ describe('App', () => {
       render(<App />)
       await ready()
       emit([conv({ id: 'c1', temporary: false })])
-      const chip = await screen.findByRole('button', { name: /save this chat normally/i })
-      await user.click(chip)
+      await user.click(await screen.findByRole('button', { name: 'More actions' }))
+      await user.click(screen.getByRole('menuitemcheckbox', { name: /temporary chat/i }))
       const patch = calls.find((c) => c.url === '/api/chats/c1' && String(c.init?.body).includes('temporary'))
       expect(JSON.parse(String(patch!.init?.body))).toEqual({ temporary: true })
 

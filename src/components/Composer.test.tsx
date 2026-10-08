@@ -103,20 +103,6 @@ describe('memory chip', () => {
 })
 
 describe('memory picker chip', () => {
-  it('appears only while memory is on for this chat, and opens the picker', async () => {
-    const user = userEvent.setup()
-    const onPickMemories = vi.fn()
-    const { rerender } = render(
-      <Composer onSend={vi.fn()} memoryOn={false} onToggleMemory={vi.fn()} onPickMemories={onPickMemories} />,
-    )
-    expect(screen.queryByRole('button', { name: /choose which memories/i })).not.toBeInTheDocument()
-
-    rerender(<Composer onSend={vi.fn()} memoryOn onToggleMemory={vi.fn()} onPickMemories={onPickMemories} />)
-    const chip = screen.getByRole('button', { name: /choose which memories/i })
-    await user.click(chip)
-    expect(onPickMemories).toHaveBeenCalledTimes(1)
-  })
-
   it('stays absent with memory on if nothing wired it up', () => {
     render(<Composer onSend={vi.fn()} memoryOn onToggleMemory={vi.fn()} />)
     expect(screen.queryByRole('button', { name: /choose which memories/i })).not.toBeInTheDocument()
@@ -128,17 +114,25 @@ describe('temporary chip', () => {
     const user = userEvent.setup()
     const onToggleTemporary = vi.fn()
     const { rerender } = render(<Composer onSend={vi.fn()} temporaryOn={false} onToggleTemporary={onToggleTemporary} />)
-    const chip = screen.getByRole('button', { name: /save this chat normally/i })
-    expect(chip).toHaveAttribute('aria-pressed', 'false')
-    await user.click(chip)
+    // Off: nothing in the row; the switch is in the More menu.
+    expect(screen.queryByRole('button', { name: /nothing is being saved/i })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    const item = screen.getByRole('menuitemcheckbox', { name: /temporary chat/i })
+    expect(item).toHaveAttribute('aria-checked', 'false')
+    await user.click(item)
     expect(onToggleTemporary).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    // On: a chip in the row says so, and tapping it turns it back off.
     rerender(<Composer onSend={vi.fn()} temporaryOn onToggleTemporary={onToggleTemporary} />)
-    expect(screen.getByRole('button', { name: /nothing is being saved/i })).toHaveAttribute('aria-pressed', 'true')
+    const chip = screen.getByRole('button', { name: /nothing is being saved/i })
+    expect(chip).toHaveAttribute('aria-pressed', 'true')
+    await user.click(chip)
+    expect(onToggleTemporary).toHaveBeenCalledTimes(2)
   })
 
-  it('fills the ghost icon on, outlines it off, so on/off is not just a color', () => {
+  it('shows the filled ghost only while on, so a chat that is not being saved is always flagged', () => {
     const { container, rerender } = render(<Composer onSend={vi.fn()} temporaryOn={false} onToggleTemporary={vi.fn()} />)
-    expect(container.querySelector('.temporary-chip svg')).toHaveAttribute('fill', 'none')
+    expect(container.querySelector('.temporary-chip')).toBeNull()
     rerender(<Composer onSend={vi.fn()} temporaryOn onToggleTemporary={vi.fn()} />)
     expect(container.querySelector('.temporary-chip svg')).toHaveAttribute('fill', 'currentColor')
   })
@@ -168,19 +162,50 @@ describe('folder chip', () => {
   })
 })
 
-describe('exporting the chat', () => {
-  it('offers copy and save from one chip, next to delete', async () => {
+describe('the More menu', () => {
+  it('holds copy, save and delete, each closing the menu when chosen', async () => {
     const user = userEvent.setup()
     const onCopyChat = vi.fn()
     const onDownloadChat = vi.fn()
-    render(<Composer onSend={vi.fn()} onCopyChat={onCopyChat} onDownloadChat={onDownloadChat} onDeleteChat={vi.fn()} />)
+    const onDeleteChat = vi.fn()
+    render(<Composer onSend={vi.fn()} onCopyChat={onCopyChat} onDownloadChat={onDownloadChat} onDeleteChat={onDeleteChat} />)
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Export this chat' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Copy as Markdown' }))
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Copy chat as Markdown' }))
     expect(onCopyChat).toHaveBeenCalled()
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Export this chat' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Save as .md file' }))
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Save chat as .md file' }))
     expect(onDownloadChat).toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Delete this chat' }))
+    expect(onDeleteChat).toHaveBeenCalled()
+  })
+
+  it('closes on Escape and on a tap outside, and is absent when there is nothing to put in it', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<Composer onSend={vi.fn()} onDeleteChat={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(document.body)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    rerender(<Composer onSend={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'More actions' })).not.toBeInTheDocument()
+  })
+
+  it('offers the memory picker only while memory is on', async () => {
+    const user = userEvent.setup()
+    const onPickMemories = vi.fn()
+    const { rerender } = render(<Composer onSend={vi.fn()} memoryOn={false} onToggleMemory={vi.fn()} onPickMemories={onPickMemories} />)
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    expect(screen.queryByRole('menuitem', { name: /choose memories/i })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    rerender(<Composer onSend={vi.fn()} memoryOn onToggleMemory={vi.fn()} onPickMemories={onPickMemories} />)
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(screen.getByRole('menuitem', { name: /choose memories/i }))
+    expect(onPickMemories).toHaveBeenCalled()
   })
 })

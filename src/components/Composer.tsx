@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { ArrowUp, Brain, Download, Folder, Gauge, Ghost, ImagePlus, ListChecks, Square, Trash2, Wrench, X } from 'lucide-react'
+import { ArrowUp, Brain, Copy, Download, Ellipsis, Folder, Gauge, Ghost, ImagePlus, ListChecks, Square, Trash2, Wrench, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { ACCEPTED, hasImage, imageFiles, prepareImage } from '../lib/images'
 import type { ImageUpload } from '../types.ts'
@@ -39,7 +39,19 @@ export default function Composer({
   onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning, temporaryOn = false, onToggleTemporary,
   memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false, onDeleteChat, onCopyChat, onDownloadChat,
 }: ComposerProps) {
-  const [exportOpen, setExportOpen] = useState(false)
+  // The overflow menu at the end of the chip row: the actions you reach for
+  // now and then (memories, temporary, export, delete) live there, so the
+  // row stays one line on a phone.
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!moreOpen) return undefined
+    const away = (e: PointerEvent): void => { if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false) }
+    const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') setMoreOpen(false) }
+    document.addEventListener('pointerdown', away)
+    document.addEventListener('keydown', key)
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', key) }
+  }, [moreOpen])
   const [text, setText] = useState('')
   // Images waiting to go with the next message: picked, pasted or dropped,
   // already scaled down (see prepareImage), shown as thumbnails until sent.
@@ -153,17 +165,18 @@ export default function Composer({
           <span>{reasoningLabel}</span>
         </button>
       )}
-      {onToggleTemporary && (
+      {onToggleTemporary && temporaryOn && (
+        // Only while on: a chat that isn't being saved must say so in the
+        // row. Turning it on, and off again, is in the More menu.
         <button
           type="button"
-          className={`reasoning-chip temporary-chip${temporaryOn ? ' on' : ''}`}
+          className="reasoning-chip temporary-chip on"
           onClick={onToggleTemporary}
-          aria-pressed={temporaryOn}
-          aria-label={temporaryOn ? 'Temporary chat -- nothing is being saved' : 'Save this chat normally -- tap to make it temporary'}
-          title={temporaryOn ? 'Temporary -- nothing is being saved. Tap to save normally.' : 'Tap to make this chat temporary: nothing will be saved.'}
+          aria-pressed
+          aria-label="Temporary chat -- nothing is being saved"
+          title="Temporary -- nothing is being saved. Tap to save normally."
         >
-          {/* Filled when on, outline when off -- same cue as the memory chip. */}
-          <Ghost size={14} aria-hidden="true" fill={temporaryOn ? 'currentColor' : 'none'} />
+          <Ghost size={14} aria-hidden="true" fill="currentColor" />
         </button>
       )}
       {onOpenFolderPicker && (
@@ -203,53 +216,53 @@ export default function Composer({
           <Brain size={14} aria-hidden="true" fill={memoryOn ? 'currentColor' : 'none'} />
         </button>
       )}
-      {memoryOn && onPickMemories && (
-        <button
-          type="button"
-          className="reasoning-chip memory-picker-chip"
-          onClick={onPickMemories}
-          aria-label="Choose which memories this chat uses"
-          title="Choose which memories this chat uses"
-        >
-          <ListChecks size={14} aria-hidden="true" />
-        </button>
-      )}
-      {(onCopyChat || onDownloadChat) && (
-        <span className={`export-wrap${onDeleteChat ? '' : ' at-end'}`}>
+      {(onPickMemories || onToggleTemporary || onCopyChat || onDownloadChat || onDeleteChat) && (
+        <span className="more-wrap" ref={moreRef}>
           <button
             type="button"
-            className="reasoning-chip export-chip"
-            onClick={() => setExportOpen((v) => !v)}
-            aria-expanded={exportOpen}
+            className="reasoning-chip more-chip"
+            onClick={() => setMoreOpen((v) => !v)}
+            aria-expanded={moreOpen}
             aria-haspopup="menu"
-            aria-label="Export this chat"
-            title="Copy or save this chat as Markdown"
+            aria-label="More actions"
+            title="Memories, temporary, export, delete"
           >
-            <Download size={14} aria-hidden="true" />
+            <Ellipsis size={15} aria-hidden="true" />
           </button>
-          {exportOpen && (
-            <div className="export-menu" role="menu" aria-label="Export this chat">
+          {moreOpen && (
+            <div className="more-menu" role="menu" aria-label="More actions">
+              {memoryOn && onPickMemories && (
+                <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onPickMemories() }}>
+                  <ListChecks size={14} aria-hidden="true" /> Choose memories for this chat
+                </button>
+              )}
+              {onToggleTemporary && (
+                <button
+                  type="button" role="menuitemcheckbox" aria-checked={temporaryOn}
+                  onClick={() => { setMoreOpen(false); onToggleTemporary() }}
+                  title={temporaryOn ? 'Temporary -- nothing is being saved. Choose to save normally.' : 'Nothing will be saved while this is on.'}
+                >
+                  <Ghost size={14} aria-hidden="true" fill={temporaryOn ? 'currentColor' : 'none'} /> Temporary chat{temporaryOn ? ' (on)' : ''}
+                </button>
+              )}
               {onCopyChat && (
-                <button type="button" role="menuitem" onClick={() => { setExportOpen(false); onCopyChat() }}>Copy as Markdown</button>
+                <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onCopyChat() }}>
+                  <Copy size={14} aria-hidden="true" /> Copy chat as Markdown
+                </button>
               )}
               {onDownloadChat && (
-                <button type="button" role="menuitem" onClick={() => { setExportOpen(false); onDownloadChat() }}>Save as .md file</button>
+                <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onDownloadChat() }}>
+                  <Download size={14} aria-hidden="true" /> Save chat as .md file
+                </button>
+              )}
+              {onDeleteChat && (
+                <button type="button" role="menuitem" className="danger" onClick={() => { setMoreOpen(false); onDeleteChat() }} title="Undo is offered">
+                  <Trash2 size={14} aria-hidden="true" /> Delete this chat
+                </button>
               )}
             </div>
           )}
         </span>
-      )}
-      {onDeleteChat && (
-        // At the far end of the row, away from the rest, and nowhere near New chat up top.
-        <button
-          type="button"
-          className={`reasoning-chip delete-chat-chip${onCopyChat || onDownloadChat ? ' beside' : ''}`}
-          onClick={onDeleteChat}
-          aria-label="Delete this chat"
-          title="Delete this chat (Undo is offered)"
-        >
-          <Trash2 size={14} aria-hidden="true" />
-        </button>
       )}
       </div>
       <div className="composer-attachments" aria-label="Images to send">

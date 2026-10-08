@@ -288,24 +288,24 @@ html, body, #root {
 /* Chips first, then the box: the box keeps the full width however many chips there are. */
 .composer-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .composer-chips:empty { display: none; }
-/* Delete sits apart at the end of the row: a quiet icon until pressed. */
-.delete-chat-chip { margin-left: auto; color: var(--paper-dim); }
-.delete-chat-chip.beside { margin-left: 0; }
-/* Export: a quiet icon at the end of the row with a two-item menu above it. */
-.export-wrap { position: relative; margin-left: auto; display: inline-flex; }
-.export-chip { color: var(--paper-dim); }
-.export-menu {
-  position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 5; min-width: 170px;
-  display: flex; flex-direction: column; padding: 4px; border-radius: 10px;
+/* More: one quiet chip at the end of the row, with the occasional actions
+   (memories, temporary, export, delete) in a menu above it. */
+.more-wrap { position: relative; margin-left: auto; display: inline-flex; }
+.more-chip { padding: 0 10px; color: var(--paper-dim); border-color: var(--line); }
+.more-chip[aria-expanded="true"] { color: var(--paper); background: var(--bg); }
+.more-menu {
+  position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 5; min-width: 220px;
+  display: flex; flex-direction: column; padding: 4px; border-radius: 12px;
   background: var(--bg-raised); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
 }
-.export-menu button { text-align: left; padding: 9px 12px; border: none; border-radius: 7px; background: none; color: var(--paper); font: inherit; font-size: 14px; }
-.export-menu button:hover, .export-menu button:focus-visible { background: var(--bg); }
+.more-menu button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 12px; border: none; border-radius: 8px; background: none; color: var(--paper); font: inherit; font-size: 14px; }
+.more-menu button:hover, .more-menu button:focus-visible { background: var(--bg); }
+.more-menu button[aria-checked="true"] { color: var(--rust); }
+.more-menu button.danger { color: var(--danger); }
 /* Copy, beside the speaker under a reply; "Copied" shows for a moment in its place. */
 .copy-btn { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; background: none; border: none; border-radius: 50%; color: var(--paper-dim); opacity: 0.7; cursor: pointer; }
 .copy-btn:hover, .copy-btn:focus-visible { opacity: 1; background: var(--bg-raised); color: var(--paper); }
 .copy-btn.done { color: var(--moss); opacity: 1; }
-.delete-chat-chip:hover, .delete-chat-chip:focus-visible { color: var(--danger); border-color: var(--danger); }
 .composer-row { display: flex; align-items: flex-end; gap: 8px; }
 
 .composer-input {
@@ -1018,7 +1018,6 @@ html, body, #root {
    never read as the same kind of toggle at a glance. */
 .temporary-chip { padding: 0 11px; color: var(--paper-dim); border-color: var(--line); }
 .temporary-chip.on { color: var(--bg); background: var(--rust); border-color: var(--rust); }
-.memory-picker-chip { padding: 0 11px; color: var(--paper-dim); }
 /* Lit when the chat has a tool list of its own, like the memory chip when on. */
 .tools-chip.on { color: var(--paper); background: var(--moss-dim); border-color: var(--moss); }
 
@@ -1044,7 +1043,6 @@ html, body, #root {
   color: var(--moss);
   font-size: 13px;
 }
-.memory-picker-chip:active { color: var(--paper); }
 
 .folder-chip span { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
