@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type React from 'react'
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { Drawer } from 'vaul'
 import { motion } from 'motion/react'
 import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus, CheckSquare, PanelLeftClose, Search, Settings, X } from 'lucide-react'
@@ -85,7 +85,12 @@ export function shortDateTime(ts: number, now: number = Date.now()): string {
 // that the drag can't be dismissed by a swipe that only clears a shorter span.
 const ACTIONS_WIDTH = 246
 
-function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename, onStar, onOpenFolderPicker }: RowProps) {
+/**
+ * Memoised on what the row shows, not on its callbacks: the list is on
+ * screen all the time beside the thread on a wide window, and every
+ * streaming token re-rendered every row -- three locale date formats each.
+ */
+const Row = memo(function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename, onStar, onOpenFolderPicker }: RowProps) {
   const [dragged, setDragged] = useState(false)
   // Only the open chat's messages are loaded; the rest carry a count.
   const count = conv.messageCount ?? conv.messages.length
@@ -223,7 +228,12 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename, on
       </div>
     </div>
   )
-}
+}, (a, b) => (
+  a.isActive === b.isActive && a.status?.state === b.status?.state && a.status?.text === b.status?.text
+  && a.conv.id === b.conv.id && a.conv.name === b.conv.name && a.conv.updatedAt === b.conv.updatedAt
+  && a.conv.starred === b.conv.starred && a.conv.temporary === b.conv.temporary && a.conv.folderId === b.conv.folderId
+  && (a.conv.messageCount ?? a.conv.messages.length) === (b.conv.messageCount ?? b.conv.messages.length)
+))
 
 /**
  * A row in select mode: the whole row toggles the chat's checkbox. No swipe
@@ -296,6 +306,8 @@ export default function ConversationList({
   onOpenSettings, variant = 'sheet', onCollapse,
 }: ConversationListProps) {
   const sidebar = variant === 'sidebar'
+  // Grouped once per change to the chats or folders, not on every render.
+  const sections = useMemo(() => sectionsOf(conversations, folders), [conversations, folders])
   // In the sidebar nothing closes: opening a chat just shows it beside the list.
   const close = sidebar ? () => {} : onClose
   // The search box: results replace the list while there's a query.
@@ -435,7 +447,7 @@ export default function ConversationList({
             </div>
           )}
           <div className="conv-list drawer-scroll" data-vaul-no-drag hidden={searching}>
-            {sectionsOf(conversations, folders).map((section) => (
+            {sections.map((section) => (
               <div key={section.key}>
                 {section.label && (
                   <div className="conv-section-head">
