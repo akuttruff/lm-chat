@@ -1339,14 +1339,14 @@ html, body, #root {
 }
 
 /* --- chat list actions with a mouse --- */
+/* On the row's second line, where the time was, so the title is never covered. */
 .conv-hover-actions {
   position: absolute;
-  top: 50%;
-  right: 8px;
+  right: 4px;
+  bottom: 7px;
   z-index: 2;
   display: none;
-  gap: 4px;
-  transform: translateY(-50%);
+  gap: 2px;
 }
 .conv-hover-actions button {
   display: grid;
@@ -1360,10 +1360,10 @@ html, body, #root {
   color: var(--paper-dim);
   cursor: pointer;
 }
-.conv-hover-actions button:hover { color: var(--paper); border-color: var(--paper-dim); }
-.conv-hover-actions .starred { color: var(--moss); border-color: var(--moss-dim); }
-.conv-hover-actions .starred:hover { color: var(--moss); border-color: var(--moss); }
-.conv-hover-actions .danger:hover { color: var(--danger); border-color: var(--danger); }
+.conv-hover-actions button:hover { background: var(--bg-raised); }
+.conv-hover-actions button:hover { color: var(--paper); }
+.conv-hover-actions .starred { color: var(--moss); }
+.conv-hover-actions .danger:hover { color: var(--danger); }
 .pointer-only { display: none; }
 
 @media (hover: hover) and (pointer: fine) {
