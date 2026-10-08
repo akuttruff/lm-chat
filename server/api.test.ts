@@ -55,6 +55,26 @@ const send = (p: string, method: string, body?: unknown) =>
     body: body === undefined ? undefined : JSON.stringify(body),
   })
 
+describe('chat PATCH takes only settable fields', () => {
+  it('ignores id, messages and timestamps, and rejects a name that is not text', async () => {
+    const created = await (await send('/api/chats', 'POST')).json() as { id: string }
+    await send('/api/chats/' + created.id, 'PATCH', { id: 'zzz', messages: 'x', createdAt: 1, name: 'Kept' })
+    const after = await (await get('/api/chats/' + created.id)).json() as { id: string; name: string; messages: unknown[] }
+    expect(after.id).toBe(created.id)
+    expect(after.name).toBe('Kept')
+    expect(Array.isArray(after.messages)).toBe(true)
+    expect((await send('/api/chats/' + created.id, 'PATCH', { name: 5 })).status).toBe(400)
+  })
+
+  it('answers an oversized body with a 400 instead of dropping the connection', async () => {
+    const created = await (await send('/api/chats', 'POST')).json() as { id: string }
+    const huge = 'x'.repeat(66 * 1024 * 1024)
+    const res = await send('/api/chats/' + created.id, 'PATCH', { name: huge })
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { error: string }).error).toMatch(/too large/)
+  })
+})
+
 describe('config', () => {
   it('never returns the token', async () => {
     api.store.setConfig({ apiToken: 'sk-lm-SECRET' })

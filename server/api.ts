@@ -113,18 +113,26 @@ export function listView(s: ConversationStore): ConversationStore {
 const UNDO_MS = 30 * 60_000
 const UNDO_MAX = 300
 
+/** The largest body a request may carry: a full set of images as base64, plus room for the words. */
+const MAX_BODY_BYTES = Math.ceil(MAX_IMAGES_PER_MESSAGE * MAX_IMAGE_BYTES * 4 / 3) + 1024 * 1024
+
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let body = ''
+    let tooLarge = false
     req.on('data', (c: Buffer | string) => {
+      if (tooLarge) return
       body += c
-      // Guard against a runaway client filling memory.
-      if (body.length > 25 * 1024 * 1024) {
-        req.destroy()
-        reject(new Error('body too large'))
+      // Guard against a runaway client filling memory. The rest is drained,
+      // not cut off: destroying the socket would lose the 400 that explains.
+      if (body.length > MAX_BODY_BYTES) {
+        tooLarge = true
+        body = ''
+        reject(new Error(`body too large (over ${Math.round(MAX_BODY_BYTES / 1024 / 1024)} MB)`))
       }
     })
     req.on('end', () => {
+      if (tooLarge) return
       if (!body) return resolve({})
       try { resolve(JSON.parse(body)) } catch (err) { reject(err as Error) }
     })
@@ -453,7 +461,18 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       }
       if (!action && method === 'PATCH') {
         void readBody(req).then((body) => {
-          const conv = store.patch(id, body as Record<string, never>)
+          // Only what a client may set: never the id, the messages, or timestamps.
+          const input = (body ?? {}) as Record<string, unknown>
+          const allowed: Partial<Conversation> = {}
+          if ('name' in input) {
+            if (typeof input.name !== 'string') throw new Error('name must be text')
+            allowed.name = input.name
+          }
+          if ('reasoning' in input) allowed.reasoning = typeof input.reasoning === 'string' ? input.reasoning : null
+          for (const key of ['memory', 'memorySelection', 'starred', 'folderId', 'temporary', 'tools'] as const) {
+            if (key in input) (allowed as Record<string, unknown>)[key] = input[key]
+          }
+          const conv = store.patch(id, allowed)
           if (conv) bus.send({ type: 'patch', payload: { conversationId: id, meta: metaOf(conv) } })
           return json(res, 200, conv && metaOf(conv))
         }).catch((err: Error) => json(res, 400, { error: err.message }))
