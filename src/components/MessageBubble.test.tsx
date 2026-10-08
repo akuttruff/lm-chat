@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import MessageBubble from './MessageBubble'
 
 describe('MessageBubble', () => {
@@ -57,6 +57,34 @@ describe('MessageBubble', () => {
   it('offers to save a whole reply as Markdown, named after its first heading', async () => {
     render(<MessageBubble role="assistant" text={'# Grocery List\n\n- eggs'} model="m" elapsed="1" />)
     expect(await screen.findByRole('button', { name: 'Save reply as grocery-list.md' })).toBeInTheDocument()
+  })
+
+  it('opens a reply in a full-screen reading view, titled after the chat, and closes it again', async () => {
+    render(<MessageBubble id="m1" role="assistant" text={'# Plan\n\nSome **bold** words'} model="m" elapsed="1" title="Weekly planning" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open in reading view' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Reading: Weekly planning' })
+    expect(dialog).toBeInTheDocument()
+    expect((await within(dialog).findByText('bold')).tagName).toBe('STRONG')
+    expect(within(dialog).getByRole('button', { name: 'Save reply as plan.md' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open in reading view' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Close reading view' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('offers Share in the reading view only where the browser can share', async () => {
+    render(<MessageBubble id="m1" role="assistant" text="hello there" model="m" elapsed="1" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open in reading view' }))
+    await screen.findByRole('dialog')
+    expect(screen.queryByRole('button', { name: 'Share reply' })).not.toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    const shareFn = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'share', { value: shareFn, configurable: true, writable: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Open in reading view' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Share reply' }))
+    await vi.waitFor(() => expect(shareFn).toHaveBeenCalledWith({ title: 'Reply', text: 'hello there' }))
+    Object.defineProperty(navigator, 'share', { value: undefined, configurable: true, writable: true })
   })
 
   it('renders markdown lists', async () => {

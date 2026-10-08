@@ -80,6 +80,7 @@ export default function App() {
         : (
           <ChatThread
             key={activeId ?? 'none'} messages={messages} summary={active?.summary} conversationId={activeId ?? 'none'}
+            title={active?.name || undefined}
             onRetry={busy ? undefined : () => void retry()}
             onEdit={(messageId, text) => branch(messageId, text).catch((err: Error) => { toast.error(err.message); })}
             focusMessageId={jump && jump.id === activeId ? jump.messageId : null}

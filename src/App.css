@@ -1356,3 +1356,43 @@ html, body, #root {
    none on body), and toasts don't opt back in -- so a "Chat deleted" toast's
    Undo couldn't be tapped while the chat list was still open. */
 [data-sonner-toast][data-visible='true'] { pointer-events: auto; }
+
+/* ====== Reading view: one reply, full screen, as a document ====== */
+.reader-backdrop {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: stretch; justify-content: center;
+}
+.reader {
+  display: flex; flex-direction: column;
+  width: 100%; max-width: 100%;
+  background: var(--bg);
+  outline: none;
+}
+.reader-bar {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 8px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.reader-title { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reader-tools { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; }
+.reader-scroll {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: 22px max(20px, calc((100% - 640px) / 2)) calc(40px + env(safe-area-inset-bottom, 0px));
+}
+.reader-body {
+  font-family: var(--reply-font);
+  font-size: calc(var(--reply-size) + 1px);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.reader-body h1, .reader-body h2, .reader-body h3 { font-size: 1.1em; margin: 1.4em 0 0.5em; }
+.reader-body p, .reader-body ul, .reader-body ol, .reader-body pre, .reader-body table, .reader-body blockquote { margin-bottom: 0.9em; }
+/* On a wide screen the reader is a panel over the thread rather than the whole screen. */
+@media (min-width: 900px) {
+  .reader-backdrop { padding: 32px 0; }
+  .reader { width: min(760px, 100% - 48px); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
+  .reader-bar { padding: 8px 10px; border-radius: 14px 14px 0 0; }
+}

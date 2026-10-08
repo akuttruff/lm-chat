@@ -29,6 +29,8 @@ interface ChatThreadProps {
   onEdit?: (messageId: string, text: string) => Promise<void> | void
   /** Scroll to this message and mark it for a moment: a search hit being opened. */
   focusMessageId?: string | null
+  /** The chat's name, for a reply's reading view. */
+  title?: string
 }
 
 /** What a row needs to offer editing: a way to start, and the editor's own two actions once started. */
@@ -118,7 +120,7 @@ function sameMessage(a: Message, b: Message): boolean {
     && a.stats?.outputTokens === b.stats?.outputTokens
 }
 
-const ThreadRow = memo(function ThreadRow({ message, onRetry, edit }: { message: Message; onRetry?: () => void; edit?: EditControls }) {
+const ThreadRow = memo(function ThreadRow({ message, onRetry, edit, title }: { message: Message; onRetry?: () => void; edit?: EditControls; title?: string }) {
   return (
     <motion.div
       className={`msg-row ${message.role}`}
@@ -165,13 +167,14 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry, edit }: { message:
           elapsed={message.elapsed}
           streaming={message.streaming}
           stats={message.stats}
+          title={title}
         />
         </>
       )}
     </motion.div>
   )
 }, (prev, next) => sameMessage(prev.message, next.message) && Boolean(prev.onRetry) === Boolean(next.onRetry)
-  && Boolean(prev.edit) === Boolean(next.edit) && prev.edit?.editing === next.edit?.editing)
+  && Boolean(prev.edit) === Boolean(next.edit) && prev.edit?.editing === next.edit?.editing && prev.title === next.title)
 // Compared field by field, not by reference: the server pushes the whole
 // conversation on every token, so every message object is new even when
 // nothing about it changed.
@@ -179,7 +182,7 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry, edit }: { message:
 /** How long a scroll must sit still before the reading position is saved. */
 const SAVE_SCROLL_DELAY_MS = 400
 
-export default function ChatThread({ messages, summary, conversationId = 'default', onRetry, onEdit, focusMessageId }: ChatThreadProps) {
+export default function ChatThread({ messages, summary, conversationId = 'default', onRetry, onEdit, focusMessageId, title }: ChatThreadProps) {
   // The message open for editing, if any: one at a time.
   const [editingId, setEditingId] = useState<string | null>(null)
   const editFor = (msg: Message): EditControls | undefined => {
@@ -356,7 +359,7 @@ export default function ChatThread({ messages, summary, conversationId = 'defaul
         )}
         <AnimatePresence initial={false}>
           {visible.flatMap((msg) => {
-            const row = <ThreadRow key={msg.id} message={msg} onRetry={msg.id === lastUserId ? onRetry : undefined} edit={editFor(msg)} />
+            const row = <ThreadRow key={msg.id} message={msg} onRetry={msg.id === lastUserId ? onRetry : undefined} edit={editFor(msg)} title={title} />
             if (!summary?.text || msg.id !== summary.through) return [row]
             return [row, (
               <motion.div

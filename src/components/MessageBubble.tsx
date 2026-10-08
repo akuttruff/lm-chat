@@ -1,8 +1,10 @@
-import { Suspense, lazy, memo } from 'react'
+import { Suspense, lazy, memo, useState } from 'react'
+import { Maximize2 } from 'lucide-react'
 import type { MessageImage, MessageRole, ReplyStats } from '../types.ts'
 import SpeakButton from './SpeakButton'
 import CopyButton from './CopyButton'
 import SaveButton from './SaveButton'
+import ReaderView from './ReaderView'
 
 const MarkdownText = lazy(() => import('./MarkdownText'))
 
@@ -19,6 +21,8 @@ interface MessageBubbleProps {
   elapsed?: string
   streaming?: boolean
   stats?: ReplyStats
+  /** The chat's name: the title of the reading view a reply opens into. */
+  title?: string
 }
 
 /** 9003 reads better as 9.0K in a footer; small counts stay exact. */
@@ -37,10 +41,11 @@ function statsLine(s: ReplyStats): string {
 }
 
 function MessageBubble({
-  id, role, text, images, model, instance, elapsed, streaming, stats,
+  id, role, text, images, model, instance, elapsed, streaming, stats, title,
 }: MessageBubbleProps) {
   const isError = role === 'error'
   const wrapClass = `msg ${isError ? 'error' : role}`
+  const [reading, setReading] = useState(false)
 
   return (
     <div className={wrapClass}>
@@ -79,6 +84,12 @@ function MessageBubble({
           {id && text && <SpeakButton id={id} text={text} />}
           {text && <CopyButton text={text} label="Copy reply" />}
           {text && <SaveButton text={text} />}
+          {text && (
+            <button type="button" className="copy-btn" aria-label="Open in reading view" title="Reading view" onClick={() => setReading(true)}>
+              <Maximize2 size={14} aria-hidden="true" />
+            </button>
+          )}
+          {reading && text && <ReaderView text={text} title={title || 'Reply'} onClose={() => setReading(false)} />}
           {model && (
             <div className="meta">
               {instance || model} &middot; {elapsed}s
