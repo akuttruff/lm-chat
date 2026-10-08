@@ -14,6 +14,7 @@ import { chatMarkdown, downloadText, exportFileName } from './lib/export';
 import useModelConfig from './hooks/useModelConfig';
 import useReplyStyle from './hooks/useReplyStyle';
 import useWakeLock from './hooks/useWakeLock';
+import useViewportHeight from './hooks/useViewportHeight';
 import useMediaQuery, { WIDE } from './hooks/useMediaQuery';
 import { edgeSwipe } from './lib/edgeSwipe';
 import './App.css';
@@ -32,6 +33,8 @@ export default function App() {
   // A courtesy now rather than load-bearing: the turn survives a locked
   // screen regardless, since the server owns it. Any chat replying counts.
   useWakeLock(Object.keys(working).length > 0);
+  // The app is exactly as tall as what is on screen; see the hook for why.
+  useViewportHeight();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatsOpen, setChatsOpen] = useState(false);

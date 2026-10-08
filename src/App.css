@@ -42,7 +42,12 @@ html, body, #root {
      The safe areas are handled where they matter -- the top here, the bottom
      inside the composer, so its bar runs to the screen's edge. */
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: var(--app-top, 0px);
+  /* Exactly the visible height, from the visual viewport (useViewportHeight);
+     100% of the layout viewport as a fallback before the first measurement. */
+  height: var(--app-height, 100%);
   max-width: 100vw;
   overflow-x: hidden;
   display: flex;
