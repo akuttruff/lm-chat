@@ -311,16 +311,14 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* The home indicator's inset is the bottom padding, not added on top of
-     it -- and only a sliver of it: the indicator sits in the last 13 points,
-     so the box can come down to 14 and still clear it. */
-  padding: 12px var(--gutter) max(10px, calc(env(safe-area-inset-bottom, 0px) - 20px));
+  /* Flush with the bottom edge, by choice: the home indicator's inset is not
+     reserved, so the box runs right down to the screen's edge. */
+  padding: 12px var(--gutter) 0;
   border-top: 1px solid var(--line);
   background: var(--bg);
 }
-/* While typing, the keyboard covers the home indicator's zone, so that inset
-   is dead space between the field and the keys: keep only a little. */
-.composer:focus-within { padding-bottom: 8px; }
+/* While typing, nothing between the field and the keys either. */
+.composer:focus-within { padding-bottom: 0; }
 /* An image is being dragged over the window: the box is where it will land. */
 .composer.dragging { background: color-mix(in srgb, var(--moss) 14%, var(--bg)); border-top-color: var(--moss); }
 .composer.dragging .composer-input { border-color: var(--moss); border-style: dashed; }
