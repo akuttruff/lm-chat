@@ -607,7 +607,8 @@ export class Engine {
     const commit = (messages: Message[], { touch = false }: { touch?: boolean } = {}): void => {
       clearTimeout(publishTimer)
       publishTimer = undefined
-      this.store.setMessages(conversationId, messages, { touch })
+      // Everything before tailFrom is already on disk and unchanged all turn.
+      this.store.setMessages(conversationId, messages, { touch, from: tailFrom })
       lastPersist = Date.now()
       this.publishTail(conversationId, tailFrom)
     }

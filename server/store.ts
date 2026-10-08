@@ -589,6 +589,7 @@ interface Stmts {
   updateConversationMeta: StatementSync
   deleteConversation: StatementSync
   deleteMessagesFor: StatementSync
+  deleteMessagesFrom: StatementSync
   insertMessage: StatementSync
   setActiveId: StatementSync
   insertConfig: StatementSync
@@ -644,6 +645,7 @@ export class Store {
       ),
       deleteConversation: this.db.prepare('DELETE FROM conversations WHERE id = ?'),
       deleteMessagesFor: this.db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
+      deleteMessagesFrom: this.db.prepare('DELETE FROM messages WHERE conversation_id = ? AND position >= ?'),
       insertMessage: this.db.prepare(`INSERT INTO messages (${MESSAGE_COLUMNS}) VALUES (${MESSAGE_PLACEHOLDERS})`),
       setActiveId: this.db.prepare(
         'INSERT INTO app_state (id, active_id) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET active_id = excluded.active_id',
@@ -739,15 +741,24 @@ export class Store {
   }
 
   /** Same rule as writeMeta: a no-op while `conv.temporary`, so setMessages's own persist flag doesn't have to know about it. */
-  private writeMessages(conv: Conversation): void {
+  /**
+   * `from`: the first position that may have changed, when the caller knows
+   * (a turn never touches what came before it). Only those rows are
+   * rewritten then, instead of the whole thread on every persist of a long
+   * streaming reply -- provided the rows before it are known to be on disk.
+   */
+  private writeMessages(conv: Conversation, from?: number): void {
     if (conv.temporary) return
     this.backupIfShrinking(conv.id, conv.messages.length)
+    const saved = this.savedCounts.get(conv.id)
+    const start = from != null && saved != null && from <= saved && from <= conv.messages.length ? from : 0
     this.db.exec('BEGIN')
     try {
       this.stmts.updateConversationMeta.run(
         ...convMetaParams(conv))
-      this.stmts.deleteMessagesFor.run(conv.id)
-      conv.messages.forEach((m, i) => this.stmts.insertMessage.run(...messageParams(conv.id, i, m)))
+      if (start === 0) this.stmts.deleteMessagesFor.run(conv.id)
+      else this.stmts.deleteMessagesFrom.run(conv.id, start)
+      for (let i = start; i < conv.messages.length; i++) this.stmts.insertMessage.run(...messageParams(conv.id, i, conv.messages[i]!))
       this.db.exec('COMMIT')
     } catch (err) {
       this.db.exec('ROLLBACK')
@@ -922,14 +933,14 @@ export class Store {
   setMessages(
     id: string,
     messages: Message[],
-    { persist = true, touch = true }: { persist?: boolean; touch?: boolean } = {},
+    { persist = true, touch = true, from }: { persist?: boolean; touch?: boolean; from?: number } = {},
   ): void {
     const conv = this.get(id)
     if (!conv) return
     conv.messages = messages
     if (!conv.name) conv.name = deriveName(messages)
     if (touch) conv.updatedAt = stamp()
-    if (persist) this.writeMessages(conv)
+    if (persist) this.writeMessages(conv, from)
   }
 
   remove(id: string): void {
