@@ -312,9 +312,9 @@ html, body, #root {
   flex-direction: column;
   gap: 8px;
   /* The home indicator's inset is the bottom padding, not added on top of
-     it -- and only part of it: the indicator sits in the last 13 points, so
-     the box can come 14 points lower than Apple's full 34 and still clear it. */
-  padding: 8px var(--gutter) max(10px, calc(env(safe-area-inset-bottom, 0px) - 14px));
+     it -- and only a sliver of it: the indicator sits in the last 13 points,
+     so the box can come down to 14 and still clear it. */
+  padding: 8px var(--gutter) max(10px, calc(env(safe-area-inset-bottom, 0px) - 20px));
   border-top: 1px solid var(--line);
   background: var(--bg);
 }
