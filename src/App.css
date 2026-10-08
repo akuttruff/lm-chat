@@ -60,6 +60,8 @@ html, body, #root {
   background: var(--bg);
 }
 .sidebar .conv-title-row { padding-top: 6px; }
+.conv-collapse { margin-left: auto; margin-right: 6px; }
+.sidebar .conv-select-toggle { flex: 0 0 auto; }
 .sidebar .drawer-title { margin-bottom: 8px; }
 .sidebar .conv-list.drawer-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .sidebar .drawer-actions { padding-bottom: 10px; }

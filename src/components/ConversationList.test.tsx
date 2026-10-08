@@ -89,6 +89,18 @@ describe('ConversationList', () => {
     expect(props.onClose).toHaveBeenCalled()
   })
 
+  it('can be collapsed from the sidebar, and a sheet has no collapse button', async () => {
+    const user = userEvent.setup()
+    const onCollapse = vi.fn()
+    const { unmount } = render(<ConversationList open={false} variant="sidebar" conversations={convs} activeId="a" folders={[]} onOpen={vi.fn()} onDelete={vi.fn()} onRename={vi.fn()} onClose={vi.fn()} onCollapse={onCollapse} />)
+    await user.click(await screen.findByRole('button', { name: 'Collapse chat list' }))
+    expect(onCollapse).toHaveBeenCalled()
+    unmount()
+    setup({ onCollapse })
+    await screen.findByText('Astrology forecast')
+    expect(screen.queryByRole('button', { name: 'Collapse chat list' })).not.toBeInTheDocument()
+  })
+
   it('renders as a sidebar on a wide screen: plain markup, nothing to close', async () => {
     const user = userEvent.setup()
     const props = setup({ variant: 'sidebar', open: false, onOpenSettings: vi.fn() })

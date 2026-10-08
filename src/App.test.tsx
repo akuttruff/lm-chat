@@ -51,6 +51,24 @@ const ready = async (): Promise<void> => {
 }
 
 describe('App', () => {
+  it('keeps the chat list beside the thread on a wide screen, collapsible and remembered', async () => {
+    const user = userEvent.setup()
+    const wide = (query: string) => ({ matches: query.includes('min-width'), media: query, onchange: null, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false })
+    vi.stubGlobal('matchMedia', wide)
+    stubApi()
+    render(<App />)
+    await ready()
+    emit([conv({ name: 'Transit questions' })])
+    expect(screen.getByRole('complementary', { name: 'Chats' })).toBeInTheDocument()
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: 'Chats' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Collapse chat list' }))
+    expect(screen.queryByRole('complementary', { name: 'Chats' })).not.toBeInTheDocument()
+    expect(localStorage.getItem('lm-chat.sidebar')).toBe('closed')
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Chats' }))
+    expect(screen.getByRole('complementary', { name: 'Chats' })).toBeInTheDocument()
+    expect(localStorage.getItem('lm-chat.sidebar')).toBe('open')
+  })
+
   it('shows the empty state before any messages', async () => {
     stubApi()
     render(<App />)

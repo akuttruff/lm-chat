@@ -38,6 +38,13 @@ export default function App() {
   // Wide enough, and the chat list stays on screen beside the thread; on a
   // phone it is a sheet, opened from the header or by a swipe in from the left.
   const wide = useMediaQuery(WIDE);
+  // The sidebar can be tucked away, and stays that way across visits.
+  const [sidebarOpen, setSidebarOpen] = useState(() => { try { return localStorage.getItem('lm-chat.sidebar') !== 'closed' } catch { return true } });
+  const setSidebar = (open: boolean): void => {
+    setSidebarOpen(open);
+    try { localStorage.setItem('lm-chat.sidebar', open ? 'open' : 'closed') } catch { /* a preference, not a record */ }
+  };
+  const sidebar = wide && sidebarOpen;
   const swipe = useMemo(() => edgeSwipe(() => setChatsOpen(true)), []);
   const [reasoningOpen, setReasoningOpen] = useState(false);
   // false: closed. 'browse': opened from Settings, every memory. 'select':
@@ -88,14 +95,15 @@ export default function App() {
       onOpenFolderPicker={(id) => setFolderPickerFor(id)}
       onNewChat={(folderId) => void newChat(folderId)}
       onOpenSettings={() => setSettingsOpen(true)}
+      onCollapse={() => setSidebar(false)}
       onClose={() => setChatsOpen(false)}
     />
   );
 
   return (
-    <div className={`app${wide ? ' with-sidebar' : ''}`}>
+    <div className={`app${sidebar ? ' with-sidebar' : ''}`}>
       <Toaster position="top-center" theme="dark" toastOptions={{ className: 'lm-chat-toast' }} />
-      {wide && list}
+      {sidebar && list}
       <div
         className="main"
         onTouchStart={(e) => { const t = e.touches[0]; if (t) swipe.start(t.clientX, t.clientY); }}
@@ -107,7 +115,8 @@ export default function App() {
         startedAt={startedAt}
         title={active?.name || undefined}
         onNewChat={() => void newChat()}
-        onOpenChats={wide ? undefined : () => setChatsOpen(true)}
+        // On a phone this opens the sheet; on a wide screen it brings a collapsed sidebar back.
+        onOpenChats={sidebar ? undefined : () => (wide ? setSidebar(true) : setChatsOpen(true))}
       />
       {/* Keyed by thread: switching mounts a fresh one, rather than animating
           one thread's messages out while the other's animate in. */}
@@ -163,7 +172,7 @@ export default function App() {
         onChange={(v) => void setReasoning(v)}
         onClose={() => setReasoningOpen(false)}
       />
-      {!wide && list}
+      {!sidebar && !wide && list}
       <SettingsSheet
         open={settingsOpen}
         config={config}

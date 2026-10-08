@@ -3,7 +3,7 @@ import type React from 'react'
 import { useEffect, useState } from 'react'
 import { Drawer } from 'vaul'
 import { motion } from 'motion/react'
-import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus, CheckSquare, Search, Settings, X } from 'lucide-react'
+import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus, CheckSquare, PanelLeftClose, Search, Settings, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Conversation, Folder, SearchHit } from '../types.ts'
 import type { ChatStatus } from '../hooks/useServerState.ts'
@@ -52,6 +52,8 @@ interface ConversationListProps {
    * `open` and never closes.
    */
   variant?: 'sheet' | 'sidebar'
+  /** Sidebar only: tuck the list away; the header's Chats button brings it back. */
+  onCollapse?: () => void
   onClose: () => void
 }
 
@@ -291,7 +293,7 @@ function highlight(text: string, query: string): ReactNode {
 export default function ConversationList({
   open, conversations, activeId, folders, working = {}, onOpen, onDelete, onRestore = () => {}, onRename,
   onStar = () => {}, onOpenFolderPicker = () => {}, onNewChat, onDeleteMany, onRestoreMany, onClose, onSearch, onOpenAt,
-  onOpenSettings, variant = 'sheet',
+  onOpenSettings, variant = 'sheet', onCollapse,
 }: ConversationListProps) {
   const sidebar = variant === 'sidebar'
   // In the sidebar nothing closes: opening a chat just shows it beside the list.
@@ -364,6 +366,11 @@ export default function ConversationList({
     <>
           <div className="conv-title-row">
             <Title className="drawer-title">Chats</Title>
+            {sidebar && onCollapse && (
+              <button type="button" className="icon-btn conv-collapse" aria-label="Collapse chat list" title="Collapse chat list" onClick={onCollapse}>
+                <PanelLeftClose size={17} aria-hidden="true" />
+              </button>
+            )}
             {onDeleteMany && conversations.length > 0 && (
               <button
                 type="button"
