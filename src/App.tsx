@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Toaster, toast } from 'sonner';
+import { PanelBottomOpen } from 'lucide-react';
 import Header from './components/Header';
 import ChatThread from './components/ChatThread';
 import Composer from './components/Composer';
@@ -45,6 +46,13 @@ export default function App() {
     try { localStorage.setItem('lm-chat.sidebar', open ? 'open' : 'closed') } catch { /* a preference, not a record */ }
   };
   const sidebar = wide && sidebarOpen;
+  // The message bar can be tucked away too, on a wide screen, to read.
+  const [composerOpen, setComposerOpen] = useState(() => { try { return localStorage.getItem('lm-chat.composer') !== 'closed' } catch { return true } });
+  const setComposer = (open: boolean): void => {
+    setComposerOpen(open);
+    try { localStorage.setItem('lm-chat.composer', open ? 'open' : 'closed') } catch { /* a preference, not a record */ }
+  };
+  const composer = !wide || composerOpen;
   const swipe = useMemo(() => edgeSwipe(() => setChatsOpen(true)), []);
   const [reasoningOpen, setReasoningOpen] = useState(false);
   // false: closed. 'browse': opened from Settings, every memory. 'select':
@@ -133,7 +141,12 @@ export default function App() {
             focusMessageId={jump && jump.id === activeId ? jump.messageId : null}
           />
         )}
-      <Composer
+      {!composer && (
+        <button type="button" className="composer-reveal" onClick={() => setComposer(true)} aria-label="Show message bar" title="Show the message bar">
+          <PanelBottomOpen size={18} aria-hidden="true" />
+        </button>
+      )}
+      {composer && <Composer
         onSend={(text, images) => void send(text, images)}
         disabled={busy}
         busy={busy}
@@ -162,7 +175,8 @@ export default function App() {
           void deleteChat(snapshot.id);
           toast('Chat deleted', { action: { label: 'Undo', onClick: () => void restoreChat(snapshot) } });
         } : undefined}
-      />
+        onCollapse={wide ? () => setComposer(false) : undefined}
+      />}
       </div>
       <ReasoningPicker
         open={reasoningOpen}

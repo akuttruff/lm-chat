@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { ArrowUp, Brain, Copy, Download, Ellipsis, Folder, Gauge, Ghost, ImagePlus, ListChecks, Square, Trash2, Wrench, X } from 'lucide-react'
+import { ArrowUp, Brain, Copy, Download, Ellipsis, Folder, Gauge, Ghost, ImagePlus, ListChecks, PanelBottomClose, Square, Trash2, Wrench, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { ACCEPTED, hasImage, imageFiles, prepareImage } from '../lib/images'
 import type { ImageUpload } from '../types.ts'
@@ -30,6 +30,8 @@ interface ComposerProps {
   /** The whole chat as Markdown: to the clipboard, or saved as a file. */
   onCopyChat?: () => void
   onDownloadChat?: () => void
+  /** Wide screens: tuck the whole bar away to read; a button at the corner brings it back. */
+  onCollapse?: () => void
 }
 
 /** As many as the server takes per message (see api.ts). */
@@ -37,7 +39,7 @@ const MAX_ATTACHMENTS = 6
 
 export default function Composer({
   onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning, temporaryOn = false, onToggleTemporary,
-  memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false, onDeleteChat, onCopyChat, onDownloadChat,
+  memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false, onDeleteChat, onCopyChat, onDownloadChat, onCollapse,
 }: ComposerProps) {
   // The overflow menu at the end of the chip row: the actions you reach for
   // now and then (memories, temporary, export, delete) live there, so the
@@ -214,6 +216,11 @@ export default function Composer({
           {/* Filled when on, outline when off -- a second cue alongside color,
               so on/off doesn't come down to spotting a shade of green. */}
           <Brain size={14} aria-hidden="true" fill={memoryOn ? 'currentColor' : 'none'} />
+        </button>
+      )}
+      {onCollapse && (
+        <button type="button" className="reasoning-chip collapse-chip" onClick={onCollapse} aria-label="Hide message bar" title="Hide the message bar">
+          <PanelBottomClose size={15} aria-hidden="true" />
         </button>
       )}
       {(onPickMemories || onToggleTemporary || onCopyChat || onDownloadChat || onDeleteChat) && (

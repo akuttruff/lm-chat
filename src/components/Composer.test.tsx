@@ -162,6 +162,18 @@ describe('folder chip', () => {
   })
 })
 
+describe('hiding the bar', () => {
+  it('offers a collapse chip only when wired, and calls back', async () => {
+    const user = userEvent.setup()
+    const onCollapse = vi.fn()
+    const { rerender } = render(<Composer onSend={vi.fn()} onCollapse={onCollapse} />)
+    await user.click(screen.getByRole('button', { name: 'Hide message bar' }))
+    expect(onCollapse).toHaveBeenCalled()
+    rerender(<Composer onSend={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Hide message bar' })).not.toBeInTheDocument()
+  })
+})
+
 describe('the More menu', () => {
   it('holds copy, save and delete, each closing the menu when chosen', async () => {
     const user = userEvent.setup()

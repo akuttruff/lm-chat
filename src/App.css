@@ -52,7 +52,16 @@ html, body, #root {
 }
 
 /* The column beside the sidebar: header, thread and composer. On a phone it is the whole app. */
-.main { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.main { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* The message bar, tucked away: one quiet button in the corner brings it back. */
+.composer-reveal {
+  position: absolute; right: 18px; bottom: 18px; z-index: 5;
+  display: grid; place-items: center; width: 40px; height: 40px;
+  border-radius: 50%; border: 1px solid var(--line); background: var(--bg-raised); color: var(--paper-dim);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); cursor: pointer;
+}
+.composer-reveal:hover, .composer-reveal:focus-visible { color: var(--paper); }
+.collapse-chip { padding: 0 10px; color: var(--paper-dim); border-color: var(--line); }
 .app.with-sidebar { flex-direction: row; }
 /* The chat list as a sidebar: always there, the thread's height, scrolling its own list. */
 .sidebar {
@@ -319,6 +328,10 @@ html, body, #root {
 }
 /* While typing, nothing between the field and the keys either. */
 .composer:focus-within { padding-bottom: 0; }
+/* A wide screen has no keyboard or home indicator to mind: the bar gets its own breathing room. */
+@media (min-width: 900px) {
+  .composer, .composer:focus-within { padding-bottom: 16px; }
+}
 /* An image is being dragged over the window: the box is where it will land. */
 .composer.dragging { background: color-mix(in srgb, var(--moss) 14%, var(--bg)); border-top-color: var(--moss); }
 .composer.dragging .composer-input { border-color: var(--moss); border-style: dashed; }

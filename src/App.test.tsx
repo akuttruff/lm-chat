@@ -69,6 +69,32 @@ describe('App', () => {
     expect(localStorage.getItem('lm-chat.sidebar')).toBe('open')
   })
 
+  it('tucks the message bar away on a wide screen, with a corner button to bring it back', async () => {
+    const user = userEvent.setup()
+    const wide = (query: string) => ({ matches: query.includes('min-width'), media: query, onchange: null, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false })
+    vi.stubGlobal('matchMedia', wide)
+    stubApi()
+    render(<App />)
+    await ready()
+    emit([conv({ name: 'Transit questions' })])
+    await user.click(screen.getByRole('button', { name: 'Hide message bar' }))
+    expect(screen.queryByPlaceholderText('Message')).not.toBeInTheDocument()
+    expect(localStorage.getItem('lm-chat.composer')).toBe('closed')
+    await user.click(screen.getByRole('button', { name: 'Show message bar' }))
+    expect(screen.getByPlaceholderText('Message')).toBeInTheDocument()
+    expect(localStorage.getItem('lm-chat.composer')).toBe('open')
+  })
+
+  it('never hides the message bar on a phone, even if a wide screen left it hidden', async () => {
+    localStorage.setItem('lm-chat.composer', 'closed')
+    stubApi()
+    render(<App />)
+    await ready()
+    emit([conv()])
+    expect(screen.getByPlaceholderText('Message')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Hide message bar' })).not.toBeInTheDocument()
+  })
+
   it('shows the empty state before any messages', async () => {
     stubApi()
     render(<App />)
