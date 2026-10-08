@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import fs from 'node:fs'
 import path from 'node:path'
 import { gzipSync } from 'node:zlib'
 import type { Plugin } from 'vite'
@@ -205,18 +204,6 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     // --- speech -------------------------------------------------------------
     // One piece of a reply, read aloud. The page splits a reply into pieces
     // (src/lib/speech.ts) and asks for the next while the last one plays.
-    // Temporary: the phone reports how it sees the screen (visual viewport,
-    // window, safe areas), appended to diag.log in the data dir, so a layout
-    // gap on a device that cannot be inspected from here can be measured.
-    if (url === '/api/diag' && method === 'POST') {
-      void readBody(req).then((body) => {
-        const line = `${new Date().toISOString()} ${req.headers['user-agent'] ?? '-'} ${JSON.stringify(body)}\n`
-        fs.appendFileSync(path.join(path.resolve(options.dir ?? '.data'), 'diag.log'), line)
-        res.statusCode = 204
-        res.end()
-      }).catch((err: Error) => json(res, 400, { error: err.message }))
-      return undefined
-    }
     if (url === '/api/speech' && method === 'POST') {
       void readBody(req).then(async (body) => {
         const config = store.getPublicConfig()

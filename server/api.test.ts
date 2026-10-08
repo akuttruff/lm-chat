@@ -55,15 +55,6 @@ const send = (p: string, method: string, body?: unknown) =>
     body: body === undefined ? undefined : JSON.stringify(body),
   })
 
-describe('diagnostics', () => {
-  it('appends what a device reports to diag.log', async () => {
-    const res = await send('/api/diag', 'POST', { inner: { h: 700 } })
-    expect(res.status).toBe(204)
-    const log = fs.readFileSync(path.join(dir, 'diag.log'), 'utf8')
-    expect(log).toContain('"inner":{"h":700}')
-  })
-})
-
 describe('config', () => {
   it('never returns the token', async () => {
     api.store.setConfig({ apiToken: 'sk-lm-SECRET' })
