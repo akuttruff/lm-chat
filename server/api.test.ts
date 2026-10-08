@@ -75,6 +75,21 @@ describe('chat PATCH takes only settable fields', () => {
   })
 })
 
+describe('what moves a chat up the list', () => {
+  it('starring, renaming or filing a chat leaves its time alone; sending a message does not', async () => {
+    const created = await (await send('/api/chats', 'POST')).json() as { id: string; updatedAt: number }
+    api.store.setMessages(created.id, [{ id: 'u1', role: 'user', text: 'hi' }])
+    const before = api.store.get(created.id)!.updatedAt
+    await new Promise((r) => setTimeout(r, 5))
+    await send('/api/chats/' + created.id, 'PATCH', { starred: true })
+    await send('/api/chats/' + created.id, 'PATCH', { name: 'Renamed' })
+    await send('/api/chats/' + created.id, 'PATCH', { folderId: null })
+    expect(api.store.get(created.id)!.updatedAt).toBe(before)
+    api.store.setMessages(created.id, [{ id: 'u1', role: 'user', text: 'hi' }, { id: 'u2', role: 'user', text: 'again' }])
+    expect(api.store.get(created.id)!.updatedAt).toBeGreaterThan(before)
+  })
+})
+
 describe('config', () => {
   it('never returns the token', async () => {
     api.store.setConfig({ apiToken: 'sk-lm-SECRET' })

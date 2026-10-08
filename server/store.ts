@@ -886,7 +886,13 @@ export class Store {
    * `touch: false` leaves updatedAt -- and so the chat's place in the list --
    * alone: for bookkeeping the server does in the background.
    */
-  patch(id: string, patch: Partial<Conversation>, { touch = true }: { touch?: boolean } = {}): Conversation | undefined {
+  /**
+   * Change a chat's settings or name. `touch` is off by default: starring,
+   * renaming or filing a chat is not a conversation, so it must not move the
+   * chat up the list or change the time shown next to it. Only a message
+   * sent does that (see setMessages).
+   */
+  patch(id: string, patch: Partial<Conversation>, { touch = false }: { touch?: boolean } = {}): Conversation | undefined {
     const conv = this.get(id)
     if (!conv) return undefined
     // Anything but a real on/off means "use the default".
