@@ -80,6 +80,26 @@ describe('ConversationList', () => {
     expect(screen.queryByText(shortDateTime(convs[0]!.updatedAt))).not.toBeInTheDocument()
   })
 
+  it('offers Settings at the foot of the list, closing the sheet on the way', async () => {
+    const user = userEvent.setup()
+    const onOpenSettings = vi.fn()
+    const props = setup({ onOpenSettings })
+    await user.click(await screen.findByRole('button', { name: 'Settings' }))
+    expect(onOpenSettings).toHaveBeenCalled()
+    expect(props.onClose).toHaveBeenCalled()
+  })
+
+  it('renders as a sidebar on a wide screen: plain markup, nothing to close', async () => {
+    const user = userEvent.setup()
+    const props = setup({ variant: 'sidebar', open: false, onOpenSettings: vi.fn() })
+    const aside = await screen.findByRole('complementary', { name: 'Chats' })
+    expect(aside).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await user.click(screen.getByText('Astrology forecast'))
+    expect(props.onOpen).toHaveBeenCalledWith('a')
+    expect(props.onClose).not.toHaveBeenCalled()
+  })
+
   it('opens a conversation and closes the drawer', async () => {
     const user = userEvent.setup()
     const props = setup()

@@ -47,12 +47,37 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* The column beside the sidebar: header, thread and composer. On a phone it is the whole app. */
+.main { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.app.with-sidebar { flex-direction: row; }
+/* The chat list as a sidebar: always there, the thread's height, scrolling its own list. */
+.sidebar {
+  flex: 0 0 300px;
+  display: flex; flex-direction: column;
+  min-height: 0;
+  padding: 10px 12px 0;
+  border-right: 1px solid var(--line);
+  background: var(--bg);
+}
+.sidebar .conv-title-row { padding-top: 6px; }
+.sidebar .drawer-title { margin-bottom: 8px; }
+.sidebar .conv-list.drawer-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.sidebar .drawer-actions { padding-bottom: 10px; }
+/* Settings at the foot of the chat list. */
+.conv-settings {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  margin-bottom: 8px; padding: 10px 8px; border: 1px solid var(--line); border-radius: 10px;
+  background: none; color: var(--paper); font: inherit; font-size: 14px; cursor: pointer; text-align: left;
+}
+.conv-settings:hover, .conv-settings:focus-visible { background: var(--bg-raised); }
+
 /* ====== Header ====== */
 .app-header {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 14px 16px 12px;
   border-bottom: 1px solid var(--line);
 }
@@ -63,10 +88,12 @@ html, body, #root {
   gap: 2px;
 }
 
+.brand { min-width: 0; flex: 1 1 auto; }
 .brand .name {
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 .brand .status {

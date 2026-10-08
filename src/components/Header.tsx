@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react'
-import { Menu, Plus, Settings } from 'lucide-react'
+import { Menu, Plus } from 'lucide-react'
 import type { Status } from '../types.ts'
 
 interface HeaderProps {
   status: Status
   /** When a reply is in flight, so the header can tick out the wait. */
   startedAt: number | null
+  /** The open chat's name; the app's own name when there is none. */
+  title?: string
   onNewChat: () => void
-  onOpenSettings: () => void
-  onOpenChats: () => void
+  /** Absent when the chat list is already on screen beside the thread. */
+  onOpenChats?: () => void
 }
 
 export default function Header({
-  status, startedAt, onNewChat, onOpenSettings, onOpenChats,
+  status, startedAt, title, onNewChat, onOpenChats,
 }: HeaderProps) {
   const dotClass = `dot${status.state ? ` ${status.state}` : ''}`
   const [elapsed, setElapsed] = useState(0)
@@ -28,11 +30,14 @@ export default function Header({
 
   return (
     <header className="app-header">
-      <button className="icon-btn" onClick={onOpenChats} aria-label="Chats">
-        <Menu size={18} aria-hidden="true" />
-      </button>
+      {onOpenChats && (
+        <button className="icon-btn" onClick={onOpenChats} aria-label="Chats">
+          <Menu size={18} aria-hidden="true" />
+        </button>
+      )}
       <div className="brand">
-        <div className="name">LM Chat</div>
+        {/* The chat's name, so you always know where you are; the app's name only on an empty screen. */}
+        <div className="name" title={title}>{title || 'LM Chat'}</div>
         <div className="status">
           <span className={dotClass} />
           <span>{status.text}{startedAt ? ` · ${elapsed}s` : ''}</span>
@@ -41,9 +46,6 @@ export default function Header({
       <div className="header-actions">
         <button className="icon-btn" onClick={onNewChat} aria-label="New chat">
           <Plus size={18} aria-hidden="true" />
-        </button>
-        <button className="icon-btn" onClick={onOpenSettings} aria-label="Settings">
-          <Settings size={18} aria-hidden="true" />
         </button>
       </div>
     </header>

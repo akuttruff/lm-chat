@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
+import type React from 'react'
 import { useEffect, useState } from 'react'
 import { Drawer } from 'vaul'
 import { motion } from 'motion/react'
-import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus, CheckSquare, Search, X } from 'lucide-react'
+import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus, CheckSquare, Search, Settings, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Conversation, Folder, SearchHit } from '../types.ts'
 import type { ChatStatus } from '../hooks/useServerState.ts'
@@ -43,6 +44,14 @@ interface ConversationListProps {
   onOpenFolderPicker?: (id: string) => void
   /** Start a chat filed into this folder, from the + on its header. */
   onNewChat?: (folderId: string) => void
+  /** Settings lives at the foot of the list, out of the header's way. */
+  onOpenSettings?: () => void
+  /**
+   * How the list is shown: a bottom sheet (the phone), or a sidebar that is
+   * always on screen beside the thread (a wide window). The sidebar ignores
+   * `open` and never closes.
+   */
+  variant?: 'sheet' | 'sidebar'
   onClose: () => void
 }
 
@@ -282,7 +291,11 @@ function highlight(text: string, query: string): ReactNode {
 export default function ConversationList({
   open, conversations, activeId, folders, working = {}, onOpen, onDelete, onRestore = () => {}, onRename,
   onStar = () => {}, onOpenFolderPicker = () => {}, onNewChat, onDeleteMany, onRestoreMany, onClose, onSearch, onOpenAt,
+  onOpenSettings, variant = 'sheet',
 }: ConversationListProps) {
+  const sidebar = variant === 'sidebar'
+  // In the sidebar nothing closes: opening a chat just shows it beside the list.
+  const close = sidebar ? () => {} : onClose
   // The search box: results replace the list while there's a query.
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<SearchHit[] | null>(null)
@@ -346,14 +359,11 @@ export default function ConversationList({
     }
   }
 
-  return (
-    <Drawer.Root open={open} onOpenChange={(v) => !v && onClose()}>
-      <Drawer.Portal>
-        <Drawer.Overlay className="drawer-overlay" />
-        <Drawer.Content className="drawer-content" aria-describedby={undefined}>
-          <div className="drawer-handle" />
+  const Title: React.ElementType = sidebar ? 'h2' : Drawer.Title
+  const content = (
+    <>
           <div className="conv-title-row">
-            <Drawer.Title className="drawer-title">Chats</Drawer.Title>
+            <Title className="drawer-title">Chats</Title>
             {onDeleteMany && conversations.length > 0 && (
               <button
                 type="button"
@@ -448,7 +458,7 @@ export default function ConversationList({
                         className="conv-section-add"
                         aria-label={`New chat in ${section.label}`}
                         title={`New chat in ${section.label}`}
-                        onClick={() => { onNewChat(section.folderId!); onClose() }}
+                        onClick={() => { onNewChat(section.folderId!); close() }}
                       >
                         <Plus size={15} aria-hidden="true" />
                       </button>
@@ -463,7 +473,7 @@ export default function ConversationList({
                     conv={c}
                     isActive={c.id === activeId}
                     status={working[c.id]}
-                    onOpen={(id) => { onOpen(id); onClose() }}
+                    onOpen={(id) => { onOpen(id); close() }}
                     onDelete={onDelete}
                     onRestore={onRestore}
                     onRename={onRename}
@@ -475,6 +485,11 @@ export default function ConversationList({
             ))}
           </div>
           <div className="drawer-actions">
+            {onOpenSettings && !selecting && (
+              <button type="button" className="conv-settings" onClick={() => { onOpenSettings(); close() }}>
+                <Settings size={15} aria-hidden="true" /> Settings
+              </button>
+            )}
             <div className="hint drawer-foot">
               {selecting ? (
                 <span>Tap chats to select them, or a folder&apos;s box for all of its chats.</span>
@@ -486,6 +501,17 @@ export default function ConversationList({
               )}
             </div>
           </div>
+    </>
+  )
+
+  if (sidebar) return <aside className="sidebar" aria-label="Chats">{content}</aside>
+  return (
+    <Drawer.Root open={open} onOpenChange={(v) => !v && onClose()}>
+      <Drawer.Portal>
+        <Drawer.Overlay className="drawer-overlay" />
+        <Drawer.Content className="drawer-content" aria-describedby={undefined}>
+          <div className="drawer-handle" />
+          {content}
         </Drawer.Content>
       </Drawer.Portal>
     </Drawer.Root>

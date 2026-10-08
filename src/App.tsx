@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Toaster, toast } from 'sonner';
 import Header from './components/Header';
 import ChatThread from './components/ChatThread';
@@ -14,6 +14,8 @@ import { chatMarkdown, downloadText, exportFileName } from './lib/export';
 import useModelConfig from './hooks/useModelConfig';
 import useReplyStyle from './hooks/useReplyStyle';
 import useWakeLock from './hooks/useWakeLock';
+import useMediaQuery, { WIDE } from './hooks/useMediaQuery';
+import { edgeSwipe } from './lib/edgeSwipe';
 import './App.css';
 
 export default function App() {
@@ -33,6 +35,10 @@ export default function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [chatsOpen, setChatsOpen] = useState(false);
+  // Wide enough, and the chat list stays on screen beside the thread; on a
+  // phone it is a sheet, opened from the header or by a swipe in from the left.
+  const wide = useMediaQuery(WIDE);
+  const swipe = useMemo(() => edgeSwipe(() => setChatsOpen(true)), []);
   const [reasoningOpen, setReasoningOpen] = useState(false);
   // false: closed. 'browse': opened from Settings, every memory. 'select':
   // opened from the composer, picking which ones the active chat uses.
@@ -61,15 +67,47 @@ export default function App() {
   // What a chat with no level of its own gets: the folder's, else Settings'.
   const inheritedReasoning = activeFolder?.reasoning || config?.reasoning;
 
+  const list = (
+    <ConversationList
+      open={chatsOpen}
+      variant={wide ? 'sidebar' : 'sheet'}
+      conversations={conversations}
+      activeId={activeId}
+      folders={folders}
+      working={working}
+      onOpen={(id) => void openChat(id)}
+      onSearch={search}
+      onOpenAt={(id, messageId) => { void openChat(id); setJump(messageId ? { id, messageId } : null); }}
+      onDelete={(id) => void deleteChat(id)}
+      onRestore={(conv) => void restoreChat(conv)}
+      onDeleteMany={deleteChats}
+      // One at a time, oldest-first, so the list rebuilds in its original order.
+      onRestoreMany={async (convs) => { for (const c of convs) await restoreChat(c) }}
+      onRename={(id, name) => void renameChat(id, name)}
+      onStar={(id, starred) => void setStarred(id, starred)}
+      onOpenFolderPicker={(id) => setFolderPickerFor(id)}
+      onNewChat={(folderId) => void newChat(folderId)}
+      onOpenSettings={() => setSettingsOpen(true)}
+      onClose={() => setChatsOpen(false)}
+    />
+  );
+
   return (
-    <div className="app">
+    <div className={`app${wide ? ' with-sidebar' : ''}`}>
       <Toaster position="top-center" theme="dark" toastOptions={{ className: 'lm-chat-toast' }} />
+      {wide && list}
+      <div
+        className="main"
+        onTouchStart={(e) => { const t = e.touches[0]; if (t) swipe.start(t.clientX, t.clientY); }}
+        onTouchMove={(e) => { const t = e.touches[0]; if (t) swipe.move(t.clientX, t.clientY); }}
+        onTouchEnd={swipe.end}
+      >
       <Header
         status={status}
         startedAt={startedAt}
+        title={active?.name || undefined}
         onNewChat={() => void newChat()}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onOpenChats={() => setChatsOpen(true)}
+        onOpenChats={wide ? undefined : () => setChatsOpen(true)}
       />
       {/* Keyed by thread: switching mounts a fresh one, rather than animating
           one thread's messages out while the other's animate in. */}
@@ -116,6 +154,7 @@ export default function App() {
           toast('Chat deleted', { action: { label: 'Undo', onClick: () => void restoreChat(snapshot) } });
         } : undefined}
       />
+      </div>
       <ReasoningPicker
         open={reasoningOpen}
         value={reasoning}
@@ -124,26 +163,7 @@ export default function App() {
         onChange={(v) => void setReasoning(v)}
         onClose={() => setReasoningOpen(false)}
       />
-      <ConversationList
-        open={chatsOpen}
-        conversations={conversations}
-        activeId={activeId}
-        folders={folders}
-        working={working}
-        onOpen={(id) => void openChat(id)}
-        onSearch={search}
-        onOpenAt={(id, messageId) => { void openChat(id); setJump(messageId ? { id, messageId } : null); }}
-        onDelete={(id) => void deleteChat(id)}
-        onRestore={(conv) => void restoreChat(conv)}
-        onDeleteMany={deleteChats}
-        // One at a time, oldest-first, so the list rebuilds in its original order.
-        onRestoreMany={async (convs) => { for (const c of convs) await restoreChat(c) }}
-        onRename={(id, name) => void renameChat(id, name)}
-        onStar={(id, starred) => void setStarred(id, starred)}
-        onOpenFolderPicker={(id) => setFolderPickerFor(id)}
-        onNewChat={(folderId) => void newChat(folderId)}
-        onClose={() => setChatsOpen(false)}
-      />
+      {!wide && list}
       <SettingsSheet
         open={settingsOpen}
         config={config}
