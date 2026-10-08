@@ -520,12 +520,13 @@ html, body, #root {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 6px 6px;
-  font-size: 12px;
+  padding: 16px 6px 4px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--paper-dim);
+  /* Quieter than the chat names, which are what the list is for. */
+  color: color-mix(in srgb, var(--paper-dim) 72%, transparent);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 /* "+" on a folder's header: a new chat filed there. Small, but a full-size tap target. */
 .conv-section-add {
@@ -535,12 +536,13 @@ html, body, #root {
   width: 28px;
   height: 28px;
   margin: -6px -4px -6px 0;
-  border: 1px solid var(--line);
+  border: none;
   border-radius: 8px;
   background: none;
-  color: var(--moss);
+  color: var(--paper-dim);
   cursor: pointer;
 }
+.conv-section-add:hover, .conv-section-add:focus-visible { color: var(--moss); background: var(--bg); }
 .conv-section-add:active { background: var(--bg); }
 .conv-list > div:first-child .conv-section-head { padding-top: 4px; }
 
@@ -553,14 +555,18 @@ html, body, #root {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 14px 6px;
+  padding: 10px 6px;
   background: none;
   border: none;
   color: var(--paper);
-  font-size: 15px;
+  font-size: 15.5px;
   text-align: left;
   cursor: pointer;
 }
+/* Two lines per chat: the name gets the whole width, the time sits under it. */
+.conv-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.conv-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.conv-name-row .conv-name { flex: 0 1 auto; } /* the star sits right after the name, not at the far edge */
 
 .conv-row.revealed { opacity: 0.55; }
 
@@ -598,6 +604,9 @@ html, body, #root {
   font-size: 12px;
   color: var(--paper-dim);
   font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conv-actions {
@@ -950,8 +959,8 @@ html, body, #root {
 
 .conv-glyph { flex: 0 0 auto; color: var(--line); }
 .conv-row.active .conv-glyph { color: var(--moss); }
-.conv-star { flex: 0 0 auto; color: var(--moss); margin-left: -4px; }
-.conv-temporary { flex: 0 0 auto; display: inline-flex; color: var(--rust); margin-left: -4px; }
+.conv-star { flex: 0 0 auto; color: var(--moss); }
+.conv-temporary { flex: 0 0 auto; display: inline-flex; color: var(--rust); }
 
 .conv-actions {
   position: absolute;

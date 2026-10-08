@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Toaster } from 'sonner'
-import ConversationList, { fullDateTime } from './ConversationList.tsx'
+import ConversationList, { fullDateTime, shortDateTime } from './ConversationList.tsx'
 import type { Conversation, Folder } from '../types.ts'
 
 const now = Date.now()
@@ -36,17 +36,28 @@ describe('ConversationList', () => {
     expect(screen.getByText('New chat')).toBeInTheDocument()
   })
 
-  it('shows the full date and time, not a relative one that keeps sliding', async () => {
+  it('shows a short, stable time under each name, with the full date and time on hover', async () => {
     setup()
     await screen.findByText('Astrology forecast')
-    expect(screen.getByText(fullDateTime(convs[0]!.updatedAt))).toBeInTheDocument()
-    expect(screen.getByText(fullDateTime(convs[1]!.updatedAt))).toBeInTheDocument()
+    const t = screen.getByText(shortDateTime(convs[0]!.updatedAt))
+    expect(t).toBeInTheDocument()
+    expect(t).toHaveAttribute('title', fullDateTime(convs[0]!.updatedAt))
+    expect(screen.getByText(shortDateTime(convs[1]!.updatedAt))).toBeInTheDocument()
+  })
+
+  it('keeps the time short without letting it slide: clock today, weekday this week, date beyond', () => {
+    const at = new Date(2026, 9, 7, 20, 15).getTime() // Wed Oct 7 2026, 8:15 PM
+    const time = new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    expect(shortDateTime(at, new Date(2026, 9, 7, 23).getTime())).toBe(time)
+    expect(shortDateTime(at, new Date(2026, 9, 9, 9).getTime())).toBe(`${new Date(at).toLocaleDateString(undefined, { weekday: 'short' })} ${time}`)
+    expect(shortDateTime(at, new Date(2026, 10, 20).getTime())).toBe(new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))
+    expect(shortDateTime(at, new Date(2027, 1, 1).getTime())).toBe(new Date(at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }))
   })
 
   it('counts a chat held only in outline, without its messages', async () => {
     const outlined = convs.map((c) => (c.id === 'a' ? { ...c, messages: [], messageCount: 12, messagesOmitted: true } : c))
     setup({ conversations: outlined })
-    expect(await screen.findByText(`12 msgs · ${fullDateTime(convs[0]!.updatedAt)}`)).toBeInTheDocument()
+    expect(await screen.findByText(`12 msgs · ${shortDateTime(convs[0]!.updatedAt)}`)).toBeInTheDocument()
   })
 
   it('shows the message count before the date, for a thread that has messages', async () => {
@@ -54,7 +65,7 @@ describe('ConversationList', () => {
       c.id === 'a' ? { ...c, messages: Array.from({ length: 5 }, (_, i) => ({ id: i, role: 'user' as const, text: 'hi' })) } : c
     ))
     setup({ conversations: withMessages })
-    expect(await screen.findByText(`5 msgs · ${fullDateTime(convs[0]!.updatedAt)}`)).toBeInTheDocument()
+    expect(await screen.findByText(`5 msgs · ${shortDateTime(convs[0]!.updatedAt)}`)).toBeInTheDocument()
   })
 
   it('marks chats that are replying or queued in place of their time', async () => {
@@ -66,7 +77,7 @@ describe('ConversationList', () => {
     })
     expect(await screen.findByText('replying')).toBeInTheDocument()
     expect(screen.getByText('queued')).toBeInTheDocument()
-    expect(screen.queryByText(fullDateTime(convs[0]!.updatedAt))).not.toBeInTheDocument()
+    expect(screen.queryByText(shortDateTime(convs[0]!.updatedAt))).not.toBeInTheDocument()
   })
 
   it('opens a conversation and closes the drawer', async () => {

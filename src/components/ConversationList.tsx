@@ -53,6 +53,23 @@ export function fullDateTime(ts: number): string {
   })
 }
 
+/**
+ * The same moment, as short as it can be while staying put: "8:15 PM" today,
+ * "Tue 8:15 PM" within the week, "Sep 28" this year, "Sep 28, 2025" before.
+ * Nothing here slides as you read, unlike "2h ago"; it only changes at midnight.
+ */
+export function shortDateTime(ts: number, now: number = Date.now()): string {
+  const d = new Date(ts)
+  const today = new Date(now)
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  const sameDay = d.toDateString() === today.toDateString()
+  if (sameDay) return time
+  const days = (today.setHours(0, 0, 0, 0) - new Date(ts).setHours(0, 0, 0, 0)) / 86_400_000
+  if (days > 0 && days < 7) return `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`
+  if (d.getFullYear() === new Date(now).getFullYear()) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
 // Four revealed buttons now (star, folder, rename, delete) -- wide enough
 // that the drag can't be dismissed by a swipe that only clears a shorter span.
 const ACTIONS_WIDTH = 246
@@ -134,27 +151,32 @@ function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename, on
         }}
       >
         <MessageSquare size={15} className="conv-glyph" aria-hidden="true" />
-        <span className="conv-name">{conv.name || 'New chat'}</span>
-        {/* A plain indicator, not a control: the actual toggle lives in the
-            actions above/below, reachable by swipe, hover or keyboard focus --
-            two interactive buttons can't nest inside this row's own button. */}
-        {conv.starred && <Star size={12} className="conv-star" aria-hidden="true" fill="currentColor" />}
-        {/* Nothing about a temporary chat is on disk -- worth knowing at a glance, not just while you're in it. */}
-        {conv.temporary && (
-          <span className="conv-temporary" role="img" aria-label="Temporary: not being saved">
-            <Ghost size={12} aria-hidden="true" />
+        <span className="conv-main">
+          <span className="conv-name-row">
+            <span className="conv-name">{conv.name || 'New chat'}</span>
+            {/* A plain indicator, not a control: the actual toggle lives in the
+                actions above/below, reachable by swipe, hover or keyboard focus --
+                two interactive buttons can't nest inside this row's own button. */}
+            {conv.starred && <Star size={12} className="conv-star" aria-hidden="true" fill="currentColor" />}
+            {/* Nothing about a temporary chat is on disk -- worth knowing at a glance, not just while you're in it. */}
+            {conv.temporary && (
+              <span className="conv-temporary" role="img" aria-label="Temporary: not being saved">
+                <Ghost size={12} aria-hidden="true" />
+              </span>
+            )}
           </span>
-        )}
-        {status ? (
-          <span className="conv-working" title={status.text}>
-            <span className="dot pending" aria-hidden="true" />
-            {status.text.startsWith('waiting') ? 'queued' : 'replying'}
-          </span>
-        ) : (
-          <span className="conv-time">
-            {count > 0 ? `${count} msgs · ` : ''}{fullDateTime(conv.updatedAt)}
-          </span>
-        )}
+          {/* The second line stays quiet so the names are what the eye lands on. */}
+          {status ? (
+            <span className="conv-working" title={status.text}>
+              <span className="dot pending" aria-hidden="true" />
+              {status.text.startsWith('waiting') ? 'queued' : 'replying'}
+            </span>
+          ) : (
+            <span className="conv-time" title={fullDateTime(conv.updatedAt)}>
+              {count > 0 ? `${count} msgs · ` : ''}{shortDateTime(conv.updatedAt)}
+            </span>
+          )}
+        </span>
       </motion.button>
 
       {/* With a mouse there's nothing to swipe: the same actions appear on
@@ -201,9 +223,13 @@ function SelectRow({ conv, checked, onToggle }: { conv: Conversation; checked: b
   return (
     <label className={`conv-row conv-select-row${checked ? ' checked' : ''}`}>
       <input type="checkbox" checked={checked} onChange={() => onToggle(conv.id)} aria-label={conv.name || 'New chat'} />
-      <span className="conv-name">{conv.name || 'New chat'}</span>
-      {conv.starred && <Star size={12} className="conv-star" aria-hidden="true" fill="currentColor" />}
-      <span className="conv-time">{count > 0 ? `${count} msgs · ` : ''}{fullDateTime(conv.updatedAt)}</span>
+      <span className="conv-main">
+        <span className="conv-name-row">
+          <span className="conv-name">{conv.name || 'New chat'}</span>
+          {conv.starred && <Star size={12} className="conv-star" aria-hidden="true" fill="currentColor" />}
+        </span>
+        <span className="conv-time" title={fullDateTime(conv.updatedAt)}>{count > 0 ? `${count} msgs · ` : ''}{shortDateTime(conv.updatedAt)}</span>
+      </span>
     </label>
   )
 }
