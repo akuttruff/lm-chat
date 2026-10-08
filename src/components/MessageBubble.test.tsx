@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import MessageBubble from './MessageBubble'
 
 describe('MessageBubble', () => {
@@ -18,6 +18,45 @@ describe('MessageBubble', () => {
     render(<MessageBubble role="assistant" text={'**bold** and `code`'} model="m" elapsed="1" />)
     expect((await screen.findByText('bold')).tagName).toBe('STRONG')
     expect(screen.getByText('code').tagName).toBe('CODE')
+  })
+
+  it('offers to save a fenced Markdown block as a file, named after its heading', async () => {
+    const md = 'Here you go:\n\n```markdown\n# Weekly Meal Plan\n\n- oats\n```\n'
+    render(<MessageBubble role="assistant" text={md} model="m" elapsed="1" />)
+    const save = await screen.findByRole('button', { name: 'Save as weekly-meal-plan.md' })
+    const url = vi.fn<(b: Blob) => string>(() => 'blob:x')
+    vi.stubGlobal('URL', { ...URL, createObjectURL: url, revokeObjectURL: vi.fn() })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    fireEvent.click(save)
+    expect(url).toHaveBeenCalledTimes(1)
+    const blob = url.mock.calls[0]![0] as Blob
+    expect(blob.type).toBe('text/markdown')
+    expect(await blob.text()).toBe('# Weekly Meal Plan\n\n- oats\n')
+    expect(click).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+    click.mockRestore()
+  })
+
+  it('takes a file name written on the fence; a bare fence can be copied but not saved', async () => {
+    render(<MessageBubble role="assistant" text={'```csv totals.csv\na,b\n```\n\n```\nplain\n```'} model="m" elapsed="1" />)
+    expect(await screen.findByRole('button', { name: 'Save as totals.csv' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy totals.csv' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Save as / })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument()
+  })
+
+  it('copies just the fenced text, not the words around it', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true, writable: true })
+    render(<MessageBubble role="assistant" text={'Here:\n\n```json\n{"a":1}\n```'} model="m" elapsed="1" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy snippet.json' }))
+    const { waitFor } = await import('@testing-library/react')
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('{"a":1}\n'))
+  })
+
+  it('offers to save a whole reply as Markdown, named after its first heading', async () => {
+    render(<MessageBubble role="assistant" text={'# Grocery List\n\n- eggs'} model="m" elapsed="1" />)
+    expect(await screen.findByRole('button', { name: 'Save reply as grocery-list.md' })).toBeInTheDocument()
   })
 
   it('renders markdown lists', async () => {

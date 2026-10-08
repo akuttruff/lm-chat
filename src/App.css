@@ -898,6 +898,18 @@ html, body, #root {
   border-radius: var(--radius);
 }
 .md pre code { padding: 0; background: none; }
+/* A fenced block with a file form: the save button sits in its top-right corner. */
+.code-block { position: relative; }
+.code-block pre { padding-top: 28px; }
+.code-tools { position: absolute; top: 4px; right: 6px; display: flex; align-items: center; gap: 2px; }
+.code-tools .copy-btn { width: 26px; height: 26px; }
+.code-save {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border: none; border-radius: 999px;
+  background: var(--bg-raised); color: var(--paper-dim);
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 11px; cursor: pointer; opacity: 0.85;
+}
+.code-save:hover, .code-save:focus-visible { opacity: 1; color: var(--paper); }
 .md a { color: var(--moss); }
 .md blockquote {
   margin: 0 0 10px;
