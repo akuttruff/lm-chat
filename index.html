@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
     <title>LM Chat — LM Studio</title>
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Opaque, not translucent: with "black-translucent" iOS 18 makes the web
+         view the screen's height minus the status bar yet starts it at the very
+         top, so the bottom 50 points can never be painted. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="LM Chat" />
     <meta name="theme-color" content="#1B1D1A" />
     <!-- iOS masks this to its own squircle, so it wants an opaque, full-bleed
