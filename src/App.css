@@ -12,6 +12,10 @@
   /* Reply typography, chosen per device in Settings (see lib/replyStyle.ts). */
   --reply-font: inherit;
   --reply-size: 15.5px;
+  /* The reading column: thread and composer share it, centred when the
+     screen is wider, with an even gutter either side on a phone. */
+  --column: 760px;
+  --gutter: max(16px, calc((100% - var(--column)) / 2));
   font-size: 16px;
 }
 
@@ -113,10 +117,10 @@ html, body, #root {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  padding: 18px 16px 12px;
+  padding: 18px var(--gutter) 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .empty {
@@ -139,6 +143,8 @@ html, body, #root {
   flex-direction: column;
   max-width: 88%;
 }
+/* A reply is the page, not a bubble: full column width, no box. */
+.msg.assistant, .msg.error, .msg.tool, .msg.reasoning { max-width: 100%; width: 100%; }
 .msg.user {
   align-self: flex-end;
   align-items: flex-end;
@@ -157,7 +163,7 @@ html, body, #root {
   padding: 10px 13px;
   border-radius: var(--radius);
   font-size: 15.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -204,9 +210,11 @@ html, body, #root {
 .attach-btn:disabled { opacity: 0.4; cursor: default; }
 
 .msg.assistant .bubble {
-  background: var(--bg-raised);
-  border: 1px solid var(--line);
-  border-bottom-left-radius: 3px;
+  /* No box around a reply: it reads as text on the page, with even gutters. */
+  padding: 2px 0;
+  border-radius: 0;
+  line-height: 1.55;
+  width: 100%;
   /* Only the reply follows the device's choice: code inside it stays mono
      (.md code sets its own family), and thinking blocks and tool cards are
      separate rows with fonts of their own. */
@@ -270,7 +278,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px 12px 10px;
+  padding: 8px var(--gutter) 10px;
   border-top: 1px solid var(--line);
   background: var(--bg);
 }
