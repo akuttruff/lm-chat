@@ -11,6 +11,8 @@ import type { ChatStatus } from '../hooks/useServerState.ts'
 interface RowProps {
   conv: Conversation
   isActive: boolean
+  /** The calendar day, as a string that changes at midnight: the time label depends on it. */
+  today: string
   /** Set while this chat has a reply in flight. */
   status?: ChatStatus
   onOpen: (id: string) => void
@@ -84,6 +86,18 @@ export function shortDateTime(ts: number, now: number = Date.now()): string {
 // Four revealed buttons now (star, folder, rename, delete) -- wide enough
 // that the drag can't be dismissed by a swipe that only clears a shorter span.
 const ACTIONS_WIDTH = 246
+
+/**
+ * Whether two copies of a chat would render the same row -- and hand the
+ * same thing to Undo: the server pushes whole new objects, and some of what
+ * changes (a streamed reply, a summary) does not bump updatedAt.
+ */
+function sameConv(a: Conversation, b: Conversation): boolean {
+  return a.id === b.id && a.name === b.name && a.updatedAt === b.updatedAt
+    && a.starred === b.starred && a.temporary === b.temporary && a.folderId === b.folderId
+    && (a.messageCount ?? a.messages.length) === (b.messageCount ?? b.messages.length)
+    && a.messages === b.messages && a.summary === b.summary && a.responseId === b.responseId
+}
 
 /**
  * Memoised on what the row shows, not on its callbacks: the list is on
@@ -229,17 +243,16 @@ const Row = memo(function Row({ conv, isActive, status, onOpen, onDelete, onRest
     </div>
   )
 }, (a, b) => (
-  a.isActive === b.isActive && a.status?.state === b.status?.state && a.status?.text === b.status?.text
-  && a.conv.id === b.conv.id && a.conv.name === b.conv.name && a.conv.updatedAt === b.conv.updatedAt
-  && a.conv.starred === b.conv.starred && a.conv.temporary === b.conv.temporary && a.conv.folderId === b.conv.folderId
-  && (a.conv.messageCount ?? a.conv.messages.length) === (b.conv.messageCount ?? b.conv.messages.length)
+  a.isActive === b.isActive && a.today === b.today
+  && a.status?.state === b.status?.state && a.status?.text === b.status?.text
+  && sameConv(a.conv, b.conv)
 ))
 
 /**
  * A row in select mode: the whole row toggles the chat's checkbox. No swipe
  * and no row actions -- the bar at the top acts on the selection instead.
  */
-function SelectRow({ conv, checked, onToggle }: { conv: Conversation; checked: boolean; onToggle: (id: string) => void }) {
+const SelectRow = memo(function SelectRow({ conv, checked, onToggle }: { conv: Conversation; checked: boolean; today: string; onToggle: (id: string) => void }) {
   const count = conv.messageCount ?? conv.messages.length
   return (
     <label className={`conv-row conv-select-row${checked ? ' checked' : ''}`}>
@@ -253,7 +266,7 @@ function SelectRow({ conv, checked, onToggle }: { conv: Conversation; checked: b
       </span>
     </label>
   )
-}
+}, (a, b) => a.checked === b.checked && a.today === b.today && sameConv(a.conv, b.conv))
 
 interface Section {
   key: string
@@ -308,6 +321,13 @@ export default function ConversationList({
   const sidebar = variant === 'sidebar'
   // Grouped once per change to the chats or folders, not on every render.
   const sections = useMemo(() => sectionsOf(conversations, folders), [conversations, folders])
+  // The rows' time labels depend on the day ("8:15 PM" today, "Tue 8:15 PM"
+  // after midnight); memoised rows need telling when it turns.
+  const [today, setToday] = useState(() => new Date().toDateString())
+  useEffect(() => {
+    const t = setInterval(() => setToday((prev) => { const now = new Date().toDateString(); return now === prev ? prev : now }), 60_000)
+    return () => clearInterval(t)
+  }, [])
   // In the sidebar nothing closes: opening a chat just shows it beside the list.
   const close = sidebar ? () => {} : onClose
   // The search box: results replace the list while there's a query.
@@ -485,12 +505,13 @@ export default function ConversationList({
                   </div>
                 )}
                 {section.chats.map((c) => (selecting ? (
-                  <SelectRow key={c.id} conv={c} checked={selected!.has(c.id)} onToggle={toggle} />
+                  <SelectRow key={c.id} conv={c} checked={selected!.has(c.id)} today={today} onToggle={toggle} />
                 ) : (
                   <Row
                     key={c.id}
                     conv={c}
                     isActive={c.id === activeId}
+                    today={today}
                     status={working[c.id]}
                     onOpen={(id) => { onOpen(id); close() }}
                     onDelete={onDelete}

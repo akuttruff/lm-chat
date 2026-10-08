@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Toaster } from 'sonner'
 import ConversationList, { fullDateTime, shortDateTime } from './ConversationList.tsx'
@@ -10,6 +10,14 @@ const convs: Conversation[] = [
   { id: 'a', name: 'Astrology forecast', createdAt: now, updatedAt: now - 60_000, messages: [], responseId: null },
   { id: 'b', name: '', createdAt: now, updatedAt: now - 7_200_000, messages: [], responseId: null },
 ]
+
+function setupProps(overrides = {}) {
+  return {
+    open: true, conversations: convs, activeId: 'a', folders: [] as Folder[],
+    onOpen: vi.fn(), onDelete: vi.fn(), onRename: vi.fn(), onStar: vi.fn(), onOpenFolderPicker: vi.fn(), onClose: vi.fn(),
+    ...overrides,
+  }
+}
 
 function setup(overrides = {}) {
   const props = {
@@ -110,6 +118,43 @@ describe('ConversationList', () => {
     await user.click(screen.getByText('Astrology forecast'))
     expect(props.onOpen).toHaveBeenCalledWith('a')
     expect(props.onClose).not.toHaveBeenCalled()
+  })
+
+  describe('memoised rows', () => {
+    const fresh = (over: Partial<Conversation>) => convs.map((c) => (c.id === 'a' ? { ...c, ...over } : { ...c }))
+
+    it('still updates when only the name, star, status or active chat changes, with every object new', async () => {
+      const props = setup()
+      await screen.findByText('Astrology forecast')
+      const { rerender } = render(<></>)
+      void rerender
+      // Each rerender hands the list brand-new objects, as the server does.
+      const list = (over: Partial<Conversation>, extra = {}) => <ConversationList {...props} conversations={fresh(over)} {...extra} />
+      const r = render(list({ name: 'Renamed forecast' }))
+      expect(await screen.findByText('Renamed forecast')).toBeInTheDocument()
+      r.rerender(list({ name: 'Renamed forecast', starred: true }))
+      expect(screen.getByRole('button', { name: /Unstar Renamed forecast/ })).toBeInTheDocument()
+      r.rerender(list({ name: 'Renamed forecast', starred: true }, { working: { a: { state: 'pending', text: 'writing...', startedAt: now } } }))
+      expect(await screen.findByText('replying')).toBeInTheDocument()
+      r.rerender(list({ name: 'Renamed forecast', starred: true }, { activeId: 'b' }))
+      expect(screen.getByText('Renamed forecast').closest('.conv-row')).not.toHaveClass('active')
+    })
+
+    it('rolls the time label over at midnight even though nothing else changed', async () => {
+      vi.useFakeTimers()
+      const at = new Date(2026, 9, 7, 20, 15).getTime() // Wed 8:15 PM
+      vi.setSystemTime(new Date(2026, 9, 7, 23, 59, 30))
+      const props = { ...setupProps(), conversations: [{ ...convs[0]!, updatedAt: at }] }
+      render(<ConversationList {...props} />)
+      expect(screen.getByText(shortDateTime(at, Date.now()))).toBeInTheDocument()
+      const before = shortDateTime(at, Date.now())
+      vi.setSystemTime(new Date(2026, 9, 8, 0, 0, 40))
+      await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
+      const after = shortDateTime(at, Date.now())
+      expect(after).not.toBe(before)
+      expect(screen.getByText(after)).toBeInTheDocument()
+      vi.useRealTimers()
+    })
   })
 
   it('opens a conversation and closes the drawer', async () => {

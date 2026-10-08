@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type {
   Conversation, ConversationMeta, ConversationStore, Folder, FolderUpdate, ImageUpload, Message, PublicConfig, Status, SearchHit,
 } from '../types.ts'
@@ -401,13 +401,17 @@ export default function useServerState(): ServerState {
     if (r.ok) setConfig(await r.json() as PublicConfig)
   }, [])
 
+  // Starred chats first, each group newest first. `starred` is optional --
+  // Number(undefined) is NaN, which is falsy and silently skips the whole
+  // comparison, so this needs Boolean() first, not just Number(). Memoised
+  // on the items, so the list keeps its identity across renders that did
+  // not change it (a status tick, a config save) and memos downstream hold.
+  const conversations = useMemo(() => [...store.items].sort(
+    (a, b) => Number(Boolean(b.starred)) - Number(Boolean(a.starred)) || b.updatedAt - a.updatedAt,
+  ), [store.items])
+
   return {
-    // Starred chats first, each group newest first. `starred` is optional --
-    // Number(undefined) is NaN, which is falsy and silently skips the whole
-    // comparison, so this needs Boolean() first, not just Number().
-    conversations: [...store.items].sort(
-      (a, b) => Number(Boolean(b.starred)) - Number(Boolean(a.starred)) || b.updatedAt - a.updatedAt,
-    ),
+    conversations,
     activeId: store.activeId,
     active,
     loadingActive: active?.messagesOmitted === true,
