@@ -872,6 +872,11 @@ html, body, #root {
 }
 
 /* --- markdown in assistant bubbles --- */
+/* The bubble keeps pre-wrap for plain text while a reply streams; rendered
+   markdown must not, or the newlines between list items and blocks show up
+   as blank lines. Fenced code keeps its own line breaks. */
+.md { white-space: normal; }
+.md pre { white-space: pre; }
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
 .md p { margin: 0 0 10px; }
