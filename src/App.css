@@ -36,18 +36,13 @@ html, body, #root {
 
 /* ====== App layout ====== */
 .app {
-  /* Pinned to the screen's edges rather than sized with 100dvh: as a
-     home-screen app on iOS, dvh leaves out the status bar's height while
-     the page is laid out under it, and that gap landed under the composer.
-     The safe areas are handled where they matter -- the top here, the bottom
-     inside the composer, so its bar runs to the screen's edge. */
+  /* Pinned to the viewport's edges. Nothing here resizes with the keyboard
+     on purpose: moving the focused field while the keyboard is appearing
+     made iOS abandon it. The safe areas are handled where they matter --
+     the top here, the bottom inside the composer, so its bar runs to the
+     screen's edge. */
   position: fixed;
-  left: 0;
-  right: 0;
-  top: var(--app-top, 0px);
-  /* Exactly the visible height, from the visual viewport (useViewportHeight);
-     100% of the layout viewport as a fallback before the first measurement. */
-  height: var(--app-height, 100%);
+  inset: 0;
   max-width: 100vw;
   overflow-x: hidden;
   display: flex;
