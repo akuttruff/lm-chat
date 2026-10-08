@@ -1415,9 +1415,8 @@ html, body, #root {
 }
 .reader-body h1, .reader-body h2, .reader-body h3 { font-size: 1.1em; margin: 1.4em 0 0.5em; }
 .reader-body p, .reader-body ul, .reader-body ol, .reader-body pre, .reader-body table, .reader-body blockquote { margin-bottom: 0.9em; }
-/* On a wide screen the reader is a panel over the thread rather than the whole screen. */
+/* A wider column with more air on a big screen; still the whole window, so reading has nothing else in view. */
 @media (min-width: 900px) {
-  .reader-backdrop { padding: 32px 0; }
-  .reader { width: min(760px, 100% - 48px); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
-  .reader-bar { padding: 8px 10px; border-radius: 14px 14px 0 0; }
+  .reader-scroll { padding: 40px max(32px, calc((100% - 720px) / 2)) 80px; }
+  .reader-bar { padding: 10px 16px; }
 }
