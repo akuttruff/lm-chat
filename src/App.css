@@ -313,7 +313,7 @@ html, body, #root {
   gap: 8px;
   /* Flush with the bottom edge, by choice: the home indicator's inset is not
      reserved, so the box runs right down to the screen's edge. */
-  padding: 12px var(--gutter) 0;
+  padding: 18px var(--gutter) 0;
   border-top: 1px solid var(--line);
   background: var(--bg);
 }
