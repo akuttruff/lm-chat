@@ -579,6 +579,21 @@ describe('turns', () => {
     expect((await (await get('/api/chats')).json() as { items: { id: string; folded?: boolean }[] }).items.find((c) => c.id === id)?.folded).toBe(true)
   })
 
+  it('backfills recaps for chats that have a summary but none yet', async () => {
+    api.store.setConfig({ model: 'qwen' })
+    const id = api.store.getConversations().activeId!
+    api.store.setMessages(id, [{ id: 'u1', role: 'user', text: 'hello' }, { id: 'a1', role: 'assistant', text: 'hi' }])
+    api.store.patch(id, { summary: { text: '- greeted', through: 'a1' } }, { touch: false })
+    const stream = (text: string) => new ReadableStream({ start(c) { for (const f of [`data: {"type":"message.delta","content":${JSON.stringify(text)}}\n\n`, 'data: {"type":"chat.end","result":{}}\n\n']) c.enqueue(new TextEncoder().encode(f)); c.close() } })
+    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(String(url).endsWith('/api/v1/chat') ? new Response(stream('You were greeted.'), { status: 200 }) : new Response('{}', { status: 404 }))))
+    const res = await send('/api/chats/recap', 'POST')
+    expect(res.status).toBe(202)
+    expect(await res.json()).toEqual({ candidates: 1 })
+    await vi.waitFor(() => expect(api.store.get(id)!.recap).toBe('You were greeted.'))
+    // Done once: a second run finds nothing to do.
+    expect(await (await send('/api/chats/recap', 'POST')).json()).toEqual({ candidates: 0 })
+  })
+
   it('retries the last message, replacing what followed it', async () => {
     api.store.setConfig({ model: 'qwen' })
     const id = api.store.getConversations().activeId!

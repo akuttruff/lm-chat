@@ -1075,6 +1075,23 @@ export class Engine {
    * background, so a backlog never crowds out a reply. Returns at once with
    * how many it will try; each title arrives as a `patch` event.
    */
+  /**
+   * A one-off backfill: a recap for every chat that has a summary but no
+   * recap yet (compacted before recaps existed). One at a time in the
+   * background; each lands as a patch event. Returns how many it will try.
+   */
+  recapAll(): { candidates: number } {
+    const candidates = this.store.getConversations().items
+      .filter((c) => c.summary?.text && !c.recap && !c.temporary)
+      .map((c) => c.id)
+    if (this.store.getConfig().model && candidates.length) {
+      void (async () => {
+        for (const id of candidates) await this.recap(id)
+      })()
+    }
+    return { candidates: candidates.length }
+  }
+
   retitleAll(): { candidates: number } {
     const config = this.store.getConfig()
     const candidates = this.store.getConversations().items
