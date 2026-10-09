@@ -1,5 +1,5 @@
 import { Suspense, lazy, memo, useState } from 'react'
-import { ChevronDown, ChevronUp, Maximize2 } from 'lucide-react'
+import { Maximize2 } from 'lucide-react'
 import type { MessageImage, MessageRole, ReplyStats } from '../types.ts'
 import SpeakButton from './SpeakButton'
 import CopyButton from './CopyButton'
@@ -46,10 +46,6 @@ function MessageBubble({
   const isError = role === 'error'
   const wrapClass = `msg ${isError ? 'error' : role}`
   const [reading, setReading] = useState(false)
-  // A long reply can be folded to its first lines, to skim past it; tapping
-  // the folded text or the chevron opens it again. Per reply, for the session.
-  const [collapsed, setCollapsed] = useState(false)
-  const foldable = role === 'assistant' && !streaming && (text?.length ?? 0) > 400
 
   return (
     <div className={wrapClass}>
@@ -64,14 +60,7 @@ function MessageBubble({
         </div>
       )}
       {(text || role !== 'user') && (
-      <div
-        className={`bubble${collapsed ? ' collapsed' : ''}`}
-        onClick={collapsed ? () => setCollapsed(false) : undefined}
-        role={collapsed ? 'button' : undefined}
-        aria-label={collapsed ? 'Expand reply' : undefined}
-        tabIndex={collapsed ? 0 : undefined}
-        onKeyDown={collapsed ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(false) } } : undefined}
-      >
+      <div className="bubble">
         {role === 'assistant' && !streaming ? (
           <div className="md">
             {/* The words are readable at once; formatting follows a moment later. */}
@@ -95,11 +84,6 @@ function MessageBubble({
           {id && text && <SpeakButton id={id} text={text} />}
           {text && <CopyButton text={text} label="Copy reply" />}
           {text && <SaveButton text={text} />}
-          {foldable && (
-            <button type="button" className="copy-btn" aria-label={collapsed ? 'Expand reply' : 'Collapse reply'} title={collapsed ? 'Expand' : 'Collapse'} aria-expanded={!collapsed} onClick={() => setCollapsed((v) => !v)}>
-              {collapsed ? <ChevronDown size={15} aria-hidden="true" /> : <ChevronUp size={15} aria-hidden="true" />}
-            </button>
-          )}
           {text && (
             <button type="button" className="copy-btn" aria-label="Open in reading view" title="Reading view" onClick={() => setReading(true)}>
               <Maximize2 size={14} aria-hidden="true" />

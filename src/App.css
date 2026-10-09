@@ -1413,16 +1413,6 @@ html, body, #root {
    Undo couldn't be tapped while the chat list was still open. */
 [data-sonner-toast][data-visible='true'] { pointer-events: auto; }
 
-/* A folded reply: its first lines, fading out, and the whole thing is a button to open it. */
-.msg.assistant .bubble.collapsed {
-  max-height: 7.5em;
-  overflow: hidden;
-  cursor: pointer;
-  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
-}
-.msg.assistant .bubble.collapsed:focus-visible { outline: 2px solid var(--moss); outline-offset: 2px; border-radius: 6px; }
-
 /* ====== Reading view: one reply, full screen, as a document ====== */
 .reader-backdrop {
   position: fixed; inset: 0; z-index: 60;

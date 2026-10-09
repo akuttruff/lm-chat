@@ -87,26 +87,6 @@ describe('MessageBubble', () => {
     Object.defineProperty(navigator, 'share', { value: undefined, configurable: true, writable: true })
   })
 
-  it('folds a long reply to its first lines, and opens it again from the chevron or the text', async () => {
-    const long = 'A long reply. '.repeat(40)
-    const { container } = render(<MessageBubble id="m1" role="assistant" text={long} model="m" elapsed="1" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Collapse reply' }))
-    expect(container.querySelector('.bubble')).toHaveClass('collapsed')
-    fireEvent.click(screen.getByRole('button', { name: 'Expand reply', expanded: false }))
-    expect(container.querySelector('.bubble')).not.toHaveClass('collapsed')
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse reply' }))
-    // The folded text itself opens it too.
-    fireEvent.click(container.querySelector('.bubble')!)
-    expect(container.querySelector('.bubble')).not.toHaveClass('collapsed')
-  })
-
-  it('offers no fold for a short reply, or your own message', () => {
-    render(<MessageBubble id="m1" role="assistant" text="short" model="m" elapsed="1" />)
-    expect(screen.queryByRole('button', { name: /Collapse reply/ })).not.toBeInTheDocument()
-    render(<MessageBubble role="user" text={'me '.repeat(300)} />)
-    expect(screen.queryByRole('button', { name: /Collapse reply/ })).not.toBeInTheDocument()
-  })
-
   it('renders markdown lists', async () => {
     render(<MessageBubble role="assistant" text={'- one\n- two'} model="m" elapsed="1" />)
     expect(await screen.findAllByRole('listitem')).toHaveLength(2)
