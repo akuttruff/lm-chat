@@ -211,7 +211,6 @@ function migrateSchema(db: DatabaseSync): void {
     const has = (table: string, column: string): boolean =>
       (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
     if (!has('conversations', 'temporary')) db.exec('ALTER TABLE conversations ADD COLUMN temporary INTEGER NOT NULL DEFAULT 0')
-    if (!has('conversations', 'folded')) db.exec('ALTER TABLE conversations ADD COLUMN folded INTEGER NOT NULL DEFAULT 0')
     db.exec('PRAGMA user_version = 5')
   }
   if (version < 6) {
@@ -267,6 +266,13 @@ function migrateSchema(db: DatabaseSync): void {
     // A tool call's parameters, as JSON.
     if (!has('messages', 'args')) db.exec('ALTER TABLE messages ADD COLUMN args TEXT')
     db.exec('PRAGMA user_version = 12')
+  }
+  if (version < 13) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    // Folded by /compact: shown from the summary on, on every device.
+    if (!has('conversations', 'folded')) db.exec('ALTER TABLE conversations ADD COLUMN folded INTEGER NOT NULL DEFAULT 0')
+    db.exec('PRAGMA user_version = 13')
   }
 }
 
