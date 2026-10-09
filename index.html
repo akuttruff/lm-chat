@@ -11,6 +11,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="LM Chat" />
     <meta name="theme-color" content="#1B1D1A" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Dark from the first frame: the stylesheet arrives a moment later, and
+         until it does the page would otherwise be white. -->
+    <style>html, body { background: #1B1D1A; }</style>
     <!-- iOS masks this to its own squircle, so it wants an opaque, full-bleed
          180x180 with no rounded corners of its own. -->
     <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />

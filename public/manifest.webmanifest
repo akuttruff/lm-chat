@@ -1,0 +1,16 @@
+{
+  "name": "LM Chat",
+  "short_name": "LM Chat",
+  "description": "Chat with the models on your Mac's LM Studio server, from any device on your network.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1B1D1A",
+  "theme_color": "#1B1D1A",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-180.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
