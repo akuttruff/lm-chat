@@ -1466,3 +1466,10 @@ html, body, #root {
   .reader-scroll { padding: 40px max(32px, calc((100% - 720px) / 2)) 80px; }
   .reader-bar { padding: 10px 16px; }
 }
+
+/* Desktop: no visible scroll bars anywhere; everything still scrolls by wheel, trackpad and keys.
+   Phones already use overlay bars that fade away, so this only applies with a mouse or trackpad. */
+@media (hover: hover) and (pointer: fine) {
+  * { scrollbar-width: none; }
+  *::-webkit-scrollbar { display: none; }
+}
