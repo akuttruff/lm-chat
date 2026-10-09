@@ -141,7 +141,7 @@ html, body, #root {
   color: var(--paper);
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--radius);
   font-size: 16px;
   display: flex;
   align-items: center;
@@ -346,7 +346,7 @@ html, body, #root {
 .more-chip { padding: 0 10px; color: var(--paper-dim); border-color: var(--line); }
 .more-chip[aria-expanded="true"] { color: var(--paper); background: var(--bg); }
 .more-menu {
-  position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 5; min-width: 220px;
+  position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 5; min-width: 260px;
   display: flex; flex-direction: column; padding: 4px; border-radius: 12px;
   background: var(--bg-raised); border: 1px solid var(--line); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
 }
@@ -433,10 +433,10 @@ html, body, #root {
 
 .field label {
   display: block;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
   color: var(--paper-dim);
   margin-bottom: 6px;
-  font-family: "SF Mono", ui-monospace, Menlo, monospace;
 }
 
 .field input,
@@ -488,7 +488,7 @@ html, body, #root {
 .row button {
   flex: 1;
   padding: 12px;
-  border-radius: 9px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: transparent;
   color: var(--paper);
@@ -697,7 +697,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   max-height: 88dvh;
-  padding: 0 18px;
+  padding: 0 16px;
   background: var(--bg-raised);
   border-top: 1px solid var(--line);
   border-radius: 16px 16px 0 0;
@@ -715,10 +715,12 @@ html, body, #root {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  /* Enough tail room that the last field can scroll clear of the pinned
-     footer and the software keyboard, instead of sitting under them. */
-  padding-bottom: 40vh;
+  padding-bottom: 24px;
 }
+/* With a field focused the keyboard is up: enough tail room that the last
+   field can scroll clear of it and the pinned footer, instead of sitting
+   under them. Without one, a short sheet no longer floats over empty space. */
+.drawer-scroll:focus-within { padding-bottom: 40vh; }
 
 /* Whenever a field is scrolled into view -- by us, by Vaul repositioning for
    the keyboard, or by the browser -- keep it clear of the pinned footer. */
@@ -761,6 +763,7 @@ html, body, #root {
   text-transform: uppercase;
   color: var(--paper-dim);
 }
+.sheet-h.first { margin-top: 2px; }
 
 .drawer-foot { text-align: center; margin: 0; }
 
@@ -1219,7 +1222,7 @@ html, body, #root {
   background: var(--bg);
   border: 1px solid var(--line);
   color: var(--paper);
-  border-radius: 9px;
+  border-radius: var(--radius);
   padding: 11px 12px;
   font: inherit;
   font-size: 15px;
@@ -1229,7 +1232,7 @@ html, body, #root {
   display: grid;
   place-items: center;
   width: 44px;
-  border-radius: 9px;
+  border-radius: var(--radius);
   border: none;
   background: var(--moss);
   color: var(--bg);
@@ -1274,6 +1277,16 @@ html, body, #root {
 }
 
 .drawer-content { overflow-x: hidden; overscroll-behavior: contain; }
+/* On a wide screen a sheet is a centred column, not a strip across the whole window. */
+@media (min-width: 900px) {
+  .drawer-content {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 24px;
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+  }
+}
 .conv-list { overscroll-behavior: contain; }
 .reasoning-text { overflow-wrap: anywhere; }
 

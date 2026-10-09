@@ -209,7 +209,7 @@ export default function SettingsSheet({
         <Drawer.Overlay className="drawer-overlay" />
         <Drawer.Content className="drawer-content" aria-describedby={undefined}>
           <div className="drawer-handle" />
-          <Drawer.Title className="drawer-title">Connection</Drawer.Title>
+          <Drawer.Title className="drawer-title">Settings</Drawer.Title>
 
           {/* Vaul drags the content element to dismiss. If that same element
               is also the scroll container the two gestures fight, so the
@@ -227,6 +227,7 @@ export default function SettingsSheet({
               field?.scrollIntoView({ block: 'center', behavior: 'smooth' })
             }}
           >
+            <h3 className="sheet-h first">Connection</h3>
 
           <div className="field">
             <label htmlFor="cfg-url">LM Studio address</label>
