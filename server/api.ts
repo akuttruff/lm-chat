@@ -469,7 +469,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
             allowed.name = input.name
           }
           if ('reasoning' in input) allowed.reasoning = typeof input.reasoning === 'string' ? input.reasoning : null
-          for (const key of ['memory', 'memorySelection', 'starred', 'folderId', 'temporary', 'tools', 'folded'] as const) {
+          for (const key of ['memory', 'memorySelection', 'starred', 'folderId', 'temporary', 'tools', 'folded', 'recap'] as const) {
             if (key in input) (allowed as Record<string, unknown>)[key] = input[key]
           }
           const conv = store.patch(id, allowed)
@@ -494,13 +494,15 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       if (action === '/compact' && method === 'POST') {
         if (engine.isRunning(id)) return json(res, 409, { error: 'Wait for the reply to finish, then compact.' })
         const before = store.get(id)!.messages.length
-        void engine.compact(id, { force: true }).then((done) => {
+        void engine.compact(id, { force: true }).then(async (done) => {
           let conv = store.get(id)
           if (!done || !conv?.summary) return json(res, 400, { error: 'Nothing to compact yet, or the summary could not be made. Check that a model is selected.' })
           // Folded on the server, so every device shows the chat from the summary on.
-          conv = store.patch(id, { folded: true }, { touch: false }) ?? conv
+          conv = store.patch(id, { folded: true, recap: null }, { touch: false }) ?? conv
           bus.send({ type: 'patch', payload: { conversationId: id, meta: metaOf(conv) } })
-          return json(res, 200, { ok: true, summary: conv.summary, folded: before })
+          // And a recap the reader can actually read, in place of what was folded.
+          const recap = await engine.recap(id)
+          return json(res, 200, { ok: true, summary: conv.summary, folded: before, recap })
         }).catch((err: Error) => json(res, 500, { error: err.message }))
         return undefined
       }

@@ -44,6 +44,8 @@ interface ChatThreadProps {
    * messages" is pressed. Nothing is removed; it is a view of the thread.
    */
   foldThrough?: string | number | null
+  /** What the fold covers, in a couple of paragraphs for the reader. */
+  recap?: string | null
 }
 
 /** How far a scroll must travel in one direction before it counts as intent, not jitter. */
@@ -200,7 +202,7 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry, edit, title }: { m
 /** How long a scroll must sit still before the reading position is saved. */
 const SAVE_SCROLL_DELAY_MS = 400
 
-export default function ChatThread({ messages: allMessages, summary, conversationId = 'default', onRetry, onEdit, focusMessageId, title, onScrollDirection, foldThrough }: ChatThreadProps) {
+export default function ChatThread({ messages: allMessages, summary, conversationId = 'default', onRetry, onEdit, focusMessageId, title, onScrollDirection, foldThrough, recap }: ChatThreadProps) {
   // The fold: everything the summary covers is out of view until asked for.
   const [unfolded, setUnfolded] = useState(false)
   const foldIndex = foldThrough != null ? allMessages.findIndex((m) => m.id === foldThrough) : -1
@@ -394,6 +396,12 @@ export default function ChatThread({ messages: allMessages, summary, conversatio
       <div className="thread" ref={threadRef} onScroll={handleScroll}>
         {folded > 0 && (
           <div className="msg-row summary folded">
+            {recap && (
+              <section className="recap" aria-label="Recap of the earlier conversation">
+                <h3>Previously</h3>
+                {recap.split(/\n{2,}/).map((p, i) => <p key={i}>{p.trim()}</p>)}
+              </section>
+            )}
             <SummaryNote text={summary?.text ?? ''} />
             <button type="button" className="show-earlier" onClick={() => setUnfolded(true)}>
               Show {folded} earlier message{folded === 1 ? '' : 's'}

@@ -113,6 +113,8 @@ export interface Conversation {
    * reader opens them. A view of the thread; nothing is removed.
    */
   folded?: boolean
+  /** A short recap for the reader of what the fold covers, written at /compact time. */
+  recap?: string | null
   /** How many messages the server holds. Set on chats it sends in the list. */
   messageCount?: number
   /**

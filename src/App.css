@@ -1370,6 +1370,11 @@ html, body, #root {
 /* After /compact: the summary sits at the top in place of what it covers, with one button to bring those back. */
 .msg-row.summary.folded { flex-direction: column; align-items: center; gap: 4px; margin-bottom: 6px; }
 .msg-row.summary.folded .summary-note { width: 100%; }
+/* The reader's recap of a folded chat: a short note in the reply's voice, above the model-facing summary. */
+.recap { width: 100%; margin: 4px 0 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-raised); font-family: var(--reply-font); font-size: var(--reply-size); line-height: 1.55; }
+.recap h3 { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper-dim); }
+.recap p { margin: 0 0 8px; }
+.recap p:last-child { margin-bottom: 0; }
 /* The same note once opened: the summary with the refold button under it. */
 .msg-row.summary { flex-direction: column; align-items: center; gap: 4px; }
 .msg-row.summary .summary-note { width: 100%; }

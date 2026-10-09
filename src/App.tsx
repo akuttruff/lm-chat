@@ -166,6 +166,7 @@ export default function App() {
             onScrollDirection={wide ? undefined : (d) => setChromeHidden(d === 'down')}
             // Folded by /compact, on the server: the summary stands in for what it covers.
             foldThrough={active?.folded && active.summary ? active.summary.through : null}
+            recap={active?.folded ? active.recap ?? null : null}
           />
         )}
       {!composer && (

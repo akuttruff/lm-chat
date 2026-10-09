@@ -559,13 +559,20 @@ describe('turns', () => {
     const id = api.store.getConversations().activeId!
     expect((await send(`/api/chats/${id}/compact`, 'POST')).status).toBe(400)
     api.store.setMessages(id, [{ id: 'u1', role: 'user', text: 'hello' }, { id: 'a1', role: 'assistant', text: 'hi there' }])
-    const frames = ['data: {"type":"message.delta","content":"- greeted"}\n\n', 'data: {"type":"chat.end","result":{}}\n\n']
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(new ReadableStream({ start(c) { for (const f of frames) c.enqueue(new TextEncoder().encode(f)); c.close() } }), { status: 200 }))))
+    // The first call writes the model's summary, the second the reader's recap.
+    const answers = ['- greeted', 'You said hello and were greeted back.']
+    const stream = (text: string) => new ReadableStream({ start(c) { for (const f of [`data: {"type":"message.delta","content":${JSON.stringify(text)}}\n\n`, 'data: {"type":"chat.end","result":{}}\n\n']) c.enqueue(new TextEncoder().encode(f)); c.close() } })
+    vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(
+      // Only the chat calls get an answer; the capability lookup gets a plain 404 and falls back.
+      String(url).endsWith('/api/v1/chat') ? new Response(stream(answers.shift()!), { status: 200 }) : new Response('{}', { status: 404 }),
+    )))
     const res = await send(`/api/chats/${id}/compact`, 'POST')
     expect(res.status).toBe(200)
-    const body = await res.json() as { ok: boolean; summary: { text: string; through: string }; folded: number }
+    const body = await res.json() as { ok: boolean; summary: { text: string; through: string }; folded: number; recap: string }
     expect(body.summary).toEqual({ text: '- greeted', through: 'a1' })
     expect(body.folded).toBe(2)
+    expect(body.recap).toBe('You said hello and were greeted back.')
+    expect(api.store.get(id)!.recap).toBe('You said hello and were greeted back.')
     expect(api.store.get(id)!.messages).toHaveLength(2)
     // Folded on the server, where every device sees it; and it survives a reopen.
     expect(api.store.get(id)!.folded).toBe(true)

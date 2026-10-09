@@ -236,6 +236,13 @@ describe('folded after /compact', () => {
     expect(screen.getByRole('button', { name: 'Show 1 earlier message' })).toBeTruthy()
   })
 
+  it('shows the recap for the reader above the fold, paragraph by paragraph', () => {
+    render(<ChatThread messages={HISTORY} summary={{ text: 's', through: '1' }} foldThrough="1" recap={'You asked about Jupiter.\n\nIt stations in December.'} />)
+    const recap = screen.getByRole('region', { name: /recap of the earlier conversation/i })
+    expect(recap.querySelectorAll('p')).toHaveLength(2)
+    expect(recap).toHaveTextContent('You asked about Jupiter.')
+  })
+
   it('ignores a fold whose message is gone', () => {
     render(<ChatThread messages={HISTORY} foldThrough="missing" />)
     expect(screen.getByText(HISTORY[0]!.text!)).toBeTruthy()

@@ -64,6 +64,7 @@ export function blankConversation(): Conversation {
     folderId: null,
     temporary: false,
     folded: false,
+    recap: null,
   }
 }
 
@@ -104,7 +105,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   memory_selection TEXT,
   folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
   temporary INTEGER NOT NULL DEFAULT 0,
-  folded INTEGER NOT NULL DEFAULT 0
+  folded INTEGER NOT NULL DEFAULT 0,
+  recap TEXT
 );
 CREATE TABLE IF NOT EXISTS folders (
   id TEXT PRIMARY KEY,
@@ -274,6 +276,13 @@ function migrateSchema(db: DatabaseSync): void {
     if (!has('conversations', 'folded')) db.exec('ALTER TABLE conversations ADD COLUMN folded INTEGER NOT NULL DEFAULT 0')
     db.exec('PRAGMA user_version = 13')
   }
+  if (version < 14) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    // The reader's recap of a folded chat.
+    if (!has('conversations', 'recap')) db.exec('ALTER TABLE conversations ADD COLUMN recap TEXT')
+    db.exec('PRAGMA user_version = 14')
+  }
 }
 
 interface ConversationRow {
@@ -291,6 +300,7 @@ interface ConversationRow {
   folder_id: string | null
   temporary: number
   folded: number
+  recap: string | null
   tools: string | null
 }
 
@@ -377,16 +387,17 @@ function metaFromRow(row: ConversationRow): Omit<Conversation, 'messages'> {
     folderId: row.folder_id,
     temporary: row.temporary === 1,
     folded: row.folded === 1,
+    recap: row.recap,
     tools: row.tools,
   }
 }
 
 const CONV_COLUMNS =
-  'id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through,memory,starred,memory_selection,folder_id,temporary,tools,folded'
+  'id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through,memory,starred,memory_selection,folder_id,temporary,tools,folded,recap'
 const CONV_PLACEHOLDERS = CONV_COLUMNS.split(',').map(() => '?').join(',')
 const UPDATE_CONV_META =
   'UPDATE conversations SET name=?, updated_at=?, response_id=?, reasoning=?, summary_text=?, summary_through=?, ' +
-  'memory=?, starred=?, memory_selection=?, folder_id=?, temporary=?, tools=?, folded=? WHERE id=?'
+  'memory=?, starred=?, memory_selection=?, folder_id=?, temporary=?, tools=?, folded=?, recap=? WHERE id=?'
 const memoryValue = (m: Conversation['memory']): number | null => (m == null ? null : m ? 1 : 0)
 const selectionValue = (s: Conversation['memorySelection']): string | null => (s == null ? null : JSON.stringify(s))
 
@@ -395,7 +406,7 @@ function convParams(c: Conversation): SQLInputValue[] {
   return [
     c.id, c.name, c.createdAt, c.updatedAt, c.responseId, c.reasoning ?? null,
     c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory),
-    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.tools ?? null, c.folded ? 1 : 0,
+    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.tools ?? null, c.folded ? 1 : 0, c.recap ?? null,
   ]
 }
 
@@ -404,7 +415,7 @@ function convMetaParams(c: Conversation): SQLInputValue[] {
   return [
     c.name, c.updatedAt, c.responseId, c.reasoning ?? null,
     c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory),
-    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.tools ?? null, c.folded ? 1 : 0, c.id,
+    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.tools ?? null, c.folded ? 1 : 0, c.recap ?? null, c.id,
   ]
 }
 

@@ -221,6 +221,15 @@ export function planFullCompaction(history: Message[], summary: ContextSummary |
   return { fold: rest, through: rest[rest.length - 1]!.id, previous }
 }
 
+/** The reader's recap: two short paragraphs of what the folded conversation covered, in plain words. */
+export const RECAP_PROMPT = [
+  'Write a recap of a conversation for the person who had it, from the summary below.',
+  'One or two short paragraphs, at most 120 words, plain prose, no headings or bullets.',
+  'Say what was discussed and what was decided or learned; keep names, numbers and dates.',
+  'Address the reader as "you". Reply with the recap only.',
+].join(' ')
+export const RECAP_MAX_TOKENS = 260
+
 export function summarizerPrompt(limit: number): string {
   const words = Math.max(80, Math.round((limit * SUMMARY_RATIO) / 6))
   return [
@@ -1133,6 +1142,43 @@ export class Engine {
     } finally {
       releaseSlot?.()
       this.titling.delete(conversationId)
+    }
+  }
+
+  /**
+   * After /compact: a short recap of what the fold covers, written for the
+   * reader from the model's own summary, and kept on the chat. Best effort.
+   */
+  async recap(conversationId: string): Promise<string | null> {
+    const conv = this.store.get(conversationId)
+    const config = this.store.getConfig()
+    if (!conv?.summary?.text || !config.model) return null
+    let releaseSlot: (() => void) | undefined
+    try {
+      releaseSlot = await this.slots.acquire('background')
+      const model = config.backgroundModel.trim() || config.model
+      const body: Record<string, unknown> = {
+        model, system_prompt: RECAP_PROMPT, input: conv.summary.text, stream: true, max_output_tokens: RECAP_MAX_TOKENS,
+      }
+      const reasoning = cheapestReasoning((await this.capabilities({ ...config, model })) ?? manifestCapability(model))
+      if (reasoning) body.reasoning = reasoning
+      const res = await fetch(`${config.lmStudioUrl.replace(/\/+$/, '')}/api/v1/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}) },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
+      })
+      if (!res.ok || !res.body) throw new Error(await describeHttpError(res))
+      const text = (await collectMessage(res.body)).trim()
+      if (!text) throw new Error('empty recap')
+      const updated = this.store.patch(conversationId, { recap: text }, { touch: false })
+      if (updated) this.bus.send({ type: 'patch', payload: { conversationId, meta: metaOf(updated) } })
+      return text
+    } catch (err) {
+      console.log(`[engine] recap skipped: ${(err as Error).message}`)
+      return null
+    } finally {
+      releaseSlot?.()
     }
   }
 
