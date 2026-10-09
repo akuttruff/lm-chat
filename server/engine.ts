@@ -210,6 +210,17 @@ export function planCompaction(
   return { fold, through: fold[fold.length - 1]!.id, previous }
 }
 
+/**
+ * Fold everything so far -- every message the previous summary does not
+ * already cover -- on request (the /compact command), whatever the budget.
+ * Null when there is nothing replayable to fold.
+ */
+export function planFullCompaction(history: Message[], summary: ContextSummary | null | undefined): CompactionPlan | null {
+  const { rest, summary: previous } = splitAtSummary(history, summary)
+  if (!rest.some(replayable)) return null
+  return { fold: rest, through: rest[rest.length - 1]!.id, previous }
+}
+
 export function summarizerPrompt(limit: number): string {
   const words = Math.max(80, Math.round((limit * SUMMARY_RATIO) / 6))
   return [
@@ -1130,13 +1141,14 @@ export class Engine {
    * has outgrown the budget. Best effort: on any failure the thread keeps its
    * previous summary and buildHistoryPrompt's trimming covers the gap.
    */
-  async compact(conversationId: string): Promise<boolean> {
+  async compact(conversationId: string, { force = false }: { force?: boolean } = {}): Promise<boolean> {
     if (this.compacting.has(conversationId)) return false
     const conv = this.store.get(conversationId)
     if (!conv) return false
     const config = this.store.getConfig()
     const limit = historyLimit(config.historyChars)
-    const plan = planCompaction(conv.messages, conv.summary, limit)
+    // Asked for (the /compact command): fold everything so far, budget or not.
+    const plan = force ? planFullCompaction(conv.messages, conv.summary) : planCompaction(conv.messages, conv.summary, limit)
     if (!plan || !config.model) return false
 
     this.compacting.add(conversationId)

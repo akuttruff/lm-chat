@@ -38,6 +38,12 @@ interface ChatThreadProps {
    * away on 'down' and brings them back on 'up'.
    */
   onScrollDirection?: (direction: 'down' | 'up') => void
+  /**
+   * Hide every message up to and including this one -- what the summary
+   * covers after a /compact -- behind the summary note, until "Show earlier
+   * messages" is pressed. Nothing is removed; it is a view of the thread.
+   */
+  foldThrough?: string | number | null
 }
 
 /** How far a scroll must travel in one direction before it counts as intent, not jitter. */
@@ -194,7 +200,12 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry, edit, title }: { m
 /** How long a scroll must sit still before the reading position is saved. */
 const SAVE_SCROLL_DELAY_MS = 400
 
-export default function ChatThread({ messages, summary, conversationId = 'default', onRetry, onEdit, focusMessageId, title, onScrollDirection }: ChatThreadProps) {
+export default function ChatThread({ messages: allMessages, summary, conversationId = 'default', onRetry, onEdit, focusMessageId, title, onScrollDirection, foldThrough }: ChatThreadProps) {
+  // The fold: everything the summary covers is out of view until asked for.
+  const [unfolded, setUnfolded] = useState(false)
+  const foldAt = foldThrough != null && !unfolded ? allMessages.findIndex((m) => m.id === foldThrough) : -1
+  const messages = foldAt >= 0 ? allMessages.slice(foldAt + 1) : allMessages
+  const folded = foldAt >= 0 ? foldAt + 1 : 0
   // The message open for editing, if any: one at a time.
   const [editingId, setEditingId] = useState<string | null>(null)
   const editFor = (msg: Message): EditControls | undefined => {
@@ -364,7 +375,7 @@ export default function ChatThread({ messages, summary, conversationId = 'defaul
     }
   }
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && !folded) {
     return (
       <div className="thread" ref={threadRef}>
         <div className="empty">
@@ -378,6 +389,14 @@ export default function ChatThread({ messages, summary, conversationId = 'defaul
   return (
     <div className="thread-wrap">
       <div className="thread" ref={threadRef} onScroll={handleScroll}>
+        {folded > 0 && (
+          <div className="msg-row summary folded">
+            <SummaryNote text={summary?.text ?? ''} />
+            <button type="button" className="show-earlier" onClick={() => setUnfolded(true)}>
+              Show {folded} earlier message{folded === 1 ? '' : 's'}
+            </button>
+          </div>
+        )}
         {hidden > 0 && (
           <button type="button" className="show-earlier" onClick={showEarlier}>
             Show {Math.min(hidden, INITIAL_WINDOW * 2)} earlier message{hidden === 1 ? '' : 's'}

@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { Bus } from './bus.ts'
 import {
-  Engine, formatToolOutput, parseIntegrations, buildHistoryPrompt, planCompaction, summarizerInput,
+  Engine, formatToolOutput, parseIntegrations, buildHistoryPrompt, planCompaction, planFullCompaction, summarizerInput,
   summaryTokenCap, newEngineState, cleanTitle, DATE_NOTE, toolArgs,
 } from './engine.ts'
 import { Store } from './store.ts'
@@ -910,6 +910,22 @@ describe('conversation context', () => {
     it('trims on message boundaries when there is no summary to lean on', () => {
       const prompt = buildHistoryPrompt('', [...thread(20), user('now')], 3000)!
       expect(prompt).toMatch(/context:\n\n\.\.\.\n\n(User|Assistant): /)
+    })
+
+    it('folds everything so far when asked to, whatever the budget', async () => {
+      configure({ historyChars: '24000' })
+      store.setMessages(convId, thread(3))
+      expect(planFullCompaction(thread(3), null)!.fold).toHaveLength(6)
+      expect(planFullCompaction([], null)).toBeNull()
+      const f = sequence([evt({ type: 'message.delta', content: '- three questions, answered' }), evt({ type: 'chat.end', result: {} })])
+      vi.stubGlobal('fetch', f)
+      expect(await engine.compact(convId, { force: true })).toBe(true)
+      const conv = store.get(convId)!
+      expect(conv.summary?.text).toBe('- three questions, answered')
+      expect(conv.summary?.through).toBe(conv.messages[5]!.id)
+      expect(conv.messages).toHaveLength(6)
+      // Without force the same thread is left alone: it fits.
+      expect(await engine.compact(convId)).toBe(false)
     })
 
     it('summarizes after a turn that pushes the thread over budget', async () => {

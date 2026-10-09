@@ -222,6 +222,22 @@ describe('auto-compaction summary', () => {
   })
 })
 
+describe('folded after /compact', () => {
+  it('hides what the summary covers behind the note, and brings it back on request', () => {
+    render(<ChatThread messages={HISTORY} summary={{ text: '- asked a question', through: '1' }} foldThrough="1" />)
+    expect(screen.queryByText(HISTORY[0]!.text!)).toBeNull()
+    expect(screen.getByText(HISTORY[1]!.text!)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /earlier turns summarized/i })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 earlier message' }))
+    expect(screen.getByText(HISTORY[0]!.text!)).toBeTruthy()
+  })
+
+  it('ignores a fold whose message is gone', () => {
+    render(<ChatThread messages={HISTORY} foldThrough="missing" />)
+    expect(screen.getByText(HISTORY[0]!.text!)).toBeTruthy()
+  })
+})
+
 describe('long threads', () => {
   const many = (n: number): Message[] => Array.from({ length: n }, (_, i) => msg(`m${i}`, i % 2 ? 'assistant' : 'user', `message ${i}`))
 

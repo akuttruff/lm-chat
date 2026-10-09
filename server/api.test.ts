@@ -554,6 +554,21 @@ describe('turns', () => {
     expect((await send(`/api/chats/${id}/turns`, 'POST', { text: 'two' })).status).toBe(409)
   })
 
+  it('compacts on request, and refuses while a reply is in flight or with nothing to fold', async () => {
+    api.store.setConfig({ model: 'qwen' })
+    const id = api.store.getConversations().activeId!
+    expect((await send(`/api/chats/${id}/compact`, 'POST')).status).toBe(400)
+    api.store.setMessages(id, [{ id: 'u1', role: 'user', text: 'hello' }, { id: 'a1', role: 'assistant', text: 'hi there' }])
+    const frames = ['data: {"type":"message.delta","content":"- greeted"}\n\n', 'data: {"type":"chat.end","result":{}}\n\n']
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(new ReadableStream({ start(c) { for (const f of frames) c.enqueue(new TextEncoder().encode(f)); c.close() } }), { status: 200 }))))
+    const res = await send(`/api/chats/${id}/compact`, 'POST')
+    expect(res.status).toBe(200)
+    const body = await res.json() as { ok: boolean; summary: { text: string; through: string }; folded: number }
+    expect(body.summary).toEqual({ text: '- greeted', through: 'a1' })
+    expect(body.folded).toBe(2)
+    expect(api.store.get(id)!.messages).toHaveLength(2)
+  })
+
   it('retries the last message, replacing what followed it', async () => {
     api.store.setConfig({ model: 'qwen' })
     const id = api.store.getConversations().activeId!

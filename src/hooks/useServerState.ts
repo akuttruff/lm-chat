@@ -30,6 +30,8 @@ export interface ServerState {
   stop: () => Promise<void>
   /** Re-run the last message you sent, replacing the reply that followed it. */
   retry: () => Promise<void>
+  /** The /compact command: summarize the whole chat so far; resolves with where the summary now ends. */
+  compact: () => Promise<{ through: string | number; folded: number }>
   /** Send a changed version of a message you sent, in a new chat that picks up from there; this one stays as it is. */
   branch: (messageId: string, text: string) => Promise<void>
   /** Chats containing the words, best first. */
@@ -301,6 +303,15 @@ export default function useServerState(): ServerState {
     await post(`/api/chats/${encodeURIComponent(id)}/turns`, images?.length ? { text, images } : { text })
   }, [])
 
+  const compact = useCallback(async () => {
+    const id = activeIdRef.current
+    if (!id) throw new Error('No chat is open.')
+    const res = await post(`/api/chats/${encodeURIComponent(id)}/compact`)
+    const body = await res.json() as { ok?: boolean; summary?: { through: string | number }; folded?: number; error?: string }
+    if (!res.ok || !body.summary) throw new Error(body.error ?? 'Compaction failed.')
+    return { through: body.summary.through, folded: body.folded ?? 0 }
+  }, [])
+
   const retry = useCallback(async () => {
     const id = activeIdRef.current
     if (!id) return
@@ -424,6 +435,7 @@ export default function useServerState(): ServerState {
     send,
     stop,
     retry,
+    compact,
     branch,
     search,
     newChat,

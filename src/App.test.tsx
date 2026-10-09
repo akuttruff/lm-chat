@@ -95,6 +95,31 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'Hide message bar' })).not.toBeInTheDocument()
   })
 
+  it('treats /compact as a command: compacts the chat and folds it, sending no message', async () => {
+    const user = userEvent.setup()
+    const calls = stubApi()
+    const reply = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as unknown as Response)
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      calls.push({ url, init })
+      if (url === '/api/chats/c1/compact') return reply({ ok: true, summary: { text: 's', through: '1' }, folded: 2 })
+      if (url === '/api/config') return reply({ lmStudioUrl: 'x', model: 'qwen', systemPrompt: '', mcpTools: '', contextLength: '', reasoning: '', stallSeconds: '180', historyChars: '24000', parallel: '4', memoryDefault: 'off', hasToken: true })
+      if (url.startsWith('/api/model-config')) return reply({ found: false, reasoning: null, thinking: null })
+      return reply(url === '/api/folders' ? [] : {})
+    }))
+    render(<App />)
+    await ready()
+    emit([conv({ messages: [{ id: '1', role: 'user', text: 'first' }, { id: '2', role: 'assistant', text: 'second' }] })])
+    await screen.findByText('first')
+    await user.type(screen.getByPlaceholderText('Message'), '/compact')
+    await user.click(screen.getByRole('button', { name: /send/i }))
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/chats/c1/compact')).toBe(true))
+    expect(calls.some((c) => c.url === '/api/chats/c1/turns')).toBe(false)
+    emit([conv({ summary: { text: 's', through: '1' }, messages: [{ id: '1', role: 'user', text: 'first' }, { id: '2', role: 'assistant', text: 'second' }] })])
+    await waitFor(() => expect(screen.queryByText('first')).not.toBeInTheDocument())
+    expect(screen.getByText('second')).toBeInTheDocument()
+    expect(localStorage.getItem('lm-chat.folds')).toContain('"c1":"1"')
+  })
+
   it('shows the empty state before any messages', async () => {
     stubApi()
     render(<App />)

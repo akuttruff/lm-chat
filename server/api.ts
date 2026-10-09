@@ -488,6 +488,19 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         bus.send({ type: 'removed', payload: { conversationId: id, activeId: after.activeId, replacement } })
         return json(res, 200, { ok: true, activeId: after.activeId })
       }
+      // The /compact command: summarize everything so far, now. Answers once
+      // the summary is in place (it takes the model a few seconds), so the
+      // client can fold the thread behind it.
+      if (action === '/compact' && method === 'POST') {
+        if (engine.isRunning(id)) return json(res, 409, { error: 'Wait for the reply to finish, then compact.' })
+        const before = store.get(id)!.messages.length
+        void engine.compact(id, { force: true }).then((done) => {
+          const conv = store.get(id)
+          if (!done || !conv?.summary) return json(res, 400, { error: 'Nothing to compact yet, or the summary could not be made. Check that a model is selected.' })
+          return json(res, 200, { ok: true, summary: conv.summary, folded: before })
+        }).catch((err: Error) => json(res, 500, { error: err.message }))
+        return undefined
+      }
       if (action === '/active' && method === 'POST') {
         store.setActive(id)
         bus.send({ type: 'active', payload: { activeId: id } })
