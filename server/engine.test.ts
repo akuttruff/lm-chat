@@ -1589,5 +1589,6 @@ describe('wholeSentences', () => {
     expect(wholeSentences('You did a thing today, which was good. It worked out nicely. For Thanksgiving, you designated Nov'))
       .toBe('You did a thing today, which was good. It worked out nicely.')
     expect(wholeSentences('A single long thought that never came to a close because the cap')).toBe('A single long thought that never came to a close because the cap')
+    expect(wholeSentences('Batteries cost roughly **$80** and last __years__.')).toBe('Batteries cost roughly $80 and last years.')
   })
 })

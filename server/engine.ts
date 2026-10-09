@@ -237,7 +237,8 @@ export const RECAP_MAX_TOKENS = 700
  * lose most of it (better a long recap than a one-line one).
  */
 export function wholeSentences(text: string): string {
-  const t = text.trim()
+  // Plain prose was asked for; a model that bolds a number anyway would show the asterisks.
+  const t = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1').trim()
   if (/[.!?…»”")\]]$/.test(t)) return t
   const cut = Math.max(t.lastIndexOf('. '), t.lastIndexOf('! '), t.lastIndexOf('? '), t.lastIndexOf('.\n'), t.lastIndexOf('!\n'), t.lastIndexOf('?\n'))
   if (cut < 40) return t
