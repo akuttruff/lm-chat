@@ -31,7 +31,19 @@ interface ChatThreadProps {
   focusMessageId?: string | null
   /** The chat's name, for a reply's reading view. */
   title?: string
+  /**
+   * Which way the reader is going: 'down' once they have scrolled a little
+   * way down into the thread, 'up' on the first move back, or whenever the
+   * top or the bottom is reached. The app tucks its header and message bar
+   * away on 'down' and brings them back on 'up'.
+   */
+  onScrollDirection?: (direction: 'down' | 'up') => void
 }
+
+/** How far a scroll must travel in one direction before it counts as intent, not jitter. */
+const DIRECTION_THRESHOLD_PX = 14
+/** Within this distance of the top, the header always shows. */
+const NEAR_TOP_PX = 48
 
 /** What a row needs to offer editing: a way to start, and the editor's own two actions once started. */
 interface EditControls {
@@ -182,7 +194,7 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry, edit, title }: { m
 /** How long a scroll must sit still before the reading position is saved. */
 const SAVE_SCROLL_DELAY_MS = 400
 
-export default function ChatThread({ messages, summary, conversationId = 'default', onRetry, onEdit, focusMessageId, title }: ChatThreadProps) {
+export default function ChatThread({ messages, summary, conversationId = 'default', onRetry, onEdit, focusMessageId, title, onScrollDirection }: ChatThreadProps) {
   // The message open for editing, if any: one at a time.
   const [editingId, setEditingId] = useState<string | null>(null)
   const editFor = (msg: Message): EditControls | undefined => {
@@ -316,12 +328,33 @@ export default function ChatThread({ messages, summary, conversationId = 'defaul
     }
   }, [flushScrollSave])
 
+  // The last scroll position, and the direction last reported, so a change
+  // of direction is reported once rather than on every pixel.
+  const lastScroll = useRef<{ top: number; direction: 'down' | 'up' | null }>({ top: 0, direction: null })
+
   const handleScroll = (): void => {
     const el = threadRef.current
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     const followingNow = distanceFromBottom <= NEAR_BOTTOM_PX
     setFollowing(followingNow)
+    if (onScrollDirection) {
+      const last = lastScroll.current
+      const delta = el.scrollTop - last.top
+      let direction: 'down' | 'up' | null = null
+      if (el.scrollTop <= NEAR_TOP_PX || followingNow) direction = 'up'
+      else if (delta > DIRECTION_THRESHOLD_PX) direction = 'down'
+      else if (delta < -DIRECTION_THRESHOLD_PX) direction = 'up'
+      if (direction) {
+        last.top = el.scrollTop
+        if (direction !== last.direction) {
+          last.direction = direction
+          onScrollDirection(direction)
+        }
+      } else if (Math.abs(delta) > DIRECTION_THRESHOLD_PX) {
+        last.top = el.scrollTop
+      }
+    }
     clearTimeout(saveTimer.current)
     if (followingNow) {
       // Caught up: next time, just show the bottom rather than an old spot.

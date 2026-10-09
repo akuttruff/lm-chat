@@ -130,6 +130,33 @@ describe('scrolling back to the bottom', () => {
   })
 })
 
+describe('reporting which way the reader scrolls', () => {
+  it('says down once the reader heads down into the thread, up on the first move back, and up at the top or bottom', () => {
+    const onScrollDirection = vi.fn()
+    render(<ChatThread messages={HISTORY} onScrollDirection={onScrollDirection} />)
+    const el = thread()
+    measure(el, 0)
+    scrollTo(el, 100)
+    scrollTo(el, 140)
+    expect(onScrollDirection.mock.calls.map((c) => c[0])).toEqual(['down'])
+    scrollTo(el, 150) // a jitter, not a change of mind
+    scrollTo(el, 120)
+    expect(onScrollDirection.mock.calls.map((c) => c[0])).toEqual(['down', 'up'])
+    scrollTo(el, 300)
+    expect(onScrollDirection.mock.calls.map((c) => c[0])).toEqual(['down', 'up', 'down'])
+    scrollTo(el, CONTENT) // the bottom: the bar is wanted again
+    expect(onScrollDirection.mock.calls.map((c) => c[0])).toEqual(['down', 'up', 'down', 'up'])
+  })
+
+  it('reports nothing when not asked to', () => {
+    render(<ChatThread messages={HISTORY} />)
+    const el = thread()
+    measure(el, 0)
+    scrollTo(el, 200)
+    expect(el.scrollTop).toBe(200)
+  })
+})
+
 describe('retrying your last message', () => {
   const TWO_TURNS: Message[] = [
     msg('1', 'user', 'first'), msg('2', 'assistant', 'first answer'),

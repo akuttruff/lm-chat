@@ -53,6 +53,15 @@ html, body, #root {
 
 /* The column beside the sidebar: header, thread and composer. On a phone it is the whole app. */
 .main { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* On a phone, reading down slides the header and the message bar out of the
+   way; the thread takes the room (the negative margins are their measured
+   heights, see useChromeHeights). Scrolling up slides them back. */
+@media (max-width: 899px) {
+  .app-header, .composer { transition: transform 0.22s ease, margin 0.22s ease; will-change: transform; }
+  .main.chrome-hidden .app-header { transform: translateY(-100%); margin-bottom: calc(-1 * var(--header-h, 64px)); }
+  .main.chrome-hidden .composer { transform: translateY(100%); margin-top: calc(-1 * var(--composer-h, 120px)); }
+  @media (prefers-reduced-motion: reduce) { .app-header, .composer { transition: none; } }
+}
 /* The message bar, tucked away: one quiet button in the corner brings it back. */
 .composer-reveal {
   position: absolute; right: 18px; bottom: 18px; z-index: 5;

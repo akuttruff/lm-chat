@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import { PanelBottomOpen } from 'lucide-react';
 import Header from './components/Header';
@@ -16,6 +16,7 @@ import useModelConfig from './hooks/useModelConfig';
 import useReplyStyle from './hooks/useReplyStyle';
 import useWakeLock from './hooks/useWakeLock';
 import useMediaQuery, { WIDE } from './hooks/useMediaQuery';
+import useChromeHeights from './hooks/useChromeHeights';
 import { edgeSwipe } from './lib/edgeSwipe';
 import './App.css';
 
@@ -53,6 +54,13 @@ export default function App() {
     try { localStorage.setItem('lm-chat.composer', open ? 'open' : 'closed') } catch { /* a preference, not a record */ }
   };
   const composer = !wide || composerOpen;
+  // On a phone, reading down a long reply tucks the header and the message
+  // bar away; the first scroll back up brings them back. Never on a wide
+  // screen, and never while the composer has focus (the keyboard is up).
+  const [chromeHidden, setChromeHidden] = useState(false);
+  useEffect(() => { setChromeHidden(false) }, [activeId]);
+  const mainRef = useRef<HTMLDivElement>(null);
+  useChromeHeights(mainRef);
   const swipe = useMemo(() => edgeSwipe(() => setChatsOpen(true)), []);
   const [reasoningOpen, setReasoningOpen] = useState(false);
   // false: closed. 'browse': opened from Settings, every memory. 'select':
@@ -113,7 +121,9 @@ export default function App() {
       <Toaster position="top-center" theme="dark" toastOptions={{ className: 'lm-chat-toast' }} />
       {sidebar && list}
       <div
-        className="main"
+        ref={mainRef}
+        className={`main${!wide && chromeHidden ? ' chrome-hidden' : ''}`}
+        onFocusCapture={(e) => { if ((e.target as HTMLElement).closest?.('.composer')) setChromeHidden(false) }}
         onTouchStart={(e) => { const t = e.touches[0]; if (t) swipe.start(t.clientX, t.clientY); }}
         onTouchMove={(e) => { const t = e.touches[0]; if (t) swipe.move(t.clientX, t.clientY); }}
         onTouchEnd={swipe.end}
@@ -139,6 +149,7 @@ export default function App() {
             onRetry={busy ? undefined : () => void retry()}
             onEdit={(messageId, text) => branch(messageId, text).catch((err: Error) => { toast.error(err.message); })}
             focusMessageId={jump && jump.id === activeId ? jump.messageId : null}
+            onScrollDirection={wide ? undefined : (d) => setChromeHidden(d === 'down')}
           />
         )}
       {!composer && (
