@@ -396,8 +396,9 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     }
     // Likewise for recaps: chats compacted before recaps existed get one.
     // `curl -X POST localhost:8010/api/chats/recap`.
-    if (url === '/api/chats/recap' && method === 'POST') {
-      return json(res, 202, engine.recapAll())
+    // `?all=1` rewrites the recaps that exist too.
+    if ((url === '/api/chats/recap' || url.startsWith('/api/chats/recap?')) && method === 'POST') {
+      return json(res, 202, engine.recapAll({ all: url.includes('all=1') }))
     }
     // Several chats at once, from the drawer's select mode. Each is kept for
     // Undo exactly as a single delete keeps it; ids that no longer exist are

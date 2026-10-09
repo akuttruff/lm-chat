@@ -228,7 +228,21 @@ export const RECAP_PROMPT = [
   'Say what was discussed and what was decided or learned; keep names, numbers and dates.',
   'Address the reader as "you". Reply with the recap only.',
 ].join(' ')
-export const RECAP_MAX_TOKENS = 260
+/** Room for a recap that runs long: the prompt asks for 120 words, the cap only guards against a runaway. */
+export const RECAP_MAX_TOKENS = 700
+
+/**
+ * A recap that still hit the cap ends mid-sentence; keep whole sentences
+ * only. Left alone when it already ends cleanly or when trimming would
+ * lose most of it (better a long recap than a one-line one).
+ */
+export function wholeSentences(text: string): string {
+  const t = text.trim()
+  if (/[.!?…»”")\]]$/.test(t)) return t
+  const cut = Math.max(t.lastIndexOf('. '), t.lastIndexOf('! '), t.lastIndexOf('? '), t.lastIndexOf('.\n'), t.lastIndexOf('!\n'), t.lastIndexOf('?\n'))
+  if (cut < 40) return t
+  return t.slice(0, cut + 1).trim()
+}
 
 export function summarizerPrompt(limit: number): string {
   const words = Math.max(80, Math.round((limit * SUMMARY_RATIO) / 6))
@@ -1080,9 +1094,9 @@ export class Engine {
    * recap yet (compacted before recaps existed). One at a time in the
    * background; each lands as a patch event. Returns how many it will try.
    */
-  recapAll(): { candidates: number } {
+  recapAll({ all = false }: { all?: boolean } = {}): { candidates: number } {
     const candidates = this.store.getConversations().items
-      .filter((c) => c.summary?.text && !c.recap && !c.temporary)
+      .filter((c) => c.summary?.text && (all || !c.recap) && !c.temporary)
       .map((c) => c.id)
     if (this.store.getConfig().model && candidates.length) {
       void (async () => {
@@ -1186,7 +1200,7 @@ export class Engine {
         signal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
       })
       if (!res.ok || !res.body) throw new Error(await describeHttpError(res))
-      const text = (await collectMessage(res.body)).trim()
+      const text = wholeSentences(await collectMessage(res.body))
       if (!text) throw new Error('empty recap')
       const updated = this.store.patch(conversationId, { recap: text }, { touch: false })
       if (updated) this.bus.send({ type: 'patch', payload: { conversationId, meta: metaOf(updated) } })

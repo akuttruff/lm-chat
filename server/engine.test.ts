@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { Bus } from './bus.ts'
 import {
-  Engine, formatToolOutput, parseIntegrations, buildHistoryPrompt, planCompaction, planFullCompaction, summarizerInput,
+  Engine, formatToolOutput, parseIntegrations, buildHistoryPrompt, planCompaction, planFullCompaction, summarizerInput, wholeSentences,
   summaryTokenCap, newEngineState, cleanTitle, DATE_NOTE, toolArgs,
 } from './engine.ts'
 import { Store } from './store.ts'
@@ -1580,5 +1580,14 @@ describe('review fixes', () => {
     const last = store.get(conv.id)!.messages.at(-1)!
     expect(last.role).toBe('error')
     expect(last.text).toMatch(/Couldn't reach LM Studio/)
+  })
+})
+
+describe('wholeSentences', () => {
+  it('keeps a recap that ends cleanly, trims one cut off mid-sentence, and leaves a short one alone', () => {
+    expect(wholeSentences('You did a thing. It worked.')).toBe('You did a thing. It worked.')
+    expect(wholeSentences('You did a thing today, which was good. It worked out nicely. For Thanksgiving, you designated Nov'))
+      .toBe('You did a thing today, which was good. It worked out nicely.')
+    expect(wholeSentences('A single long thought that never came to a close because the cap')).toBe('A single long thought that never came to a close because the cap')
   })
 })
