@@ -59,24 +59,13 @@ export default function App() {
   // screen, and never while the composer has focus (the keyboard is up).
   const [chromeHidden, setChromeHidden] = useState(false);
   useEffect(() => { setChromeHidden(false) }, [activeId]);
-  // Where each chat was folded by /compact, kept on this device so the fold
-  // survives a reload; the thread stays whole on the server.
-  const [folds, setFolds] = useState<Record<string, string | number>>(() => { try { return JSON.parse(localStorage.getItem('lm-chat.folds') ?? '{}') as Record<string, string | number> } catch { return {} } });
-  const fold = (id: string, through: string | number): void => {
-    setFolds((prev) => {
-      const next = { ...prev, [id]: through };
-      try { localStorage.setItem('lm-chat.folds', JSON.stringify(next)) } catch { /* a view preference */ }
-      return next;
-    });
-  };
   /** Typed into the message box: a command rather than a message. */
   const runCommand = async (text: string): Promise<boolean> => {
     if (text.trim().toLowerCase() !== '/compact') return false;
     if (!active) { toast.error('No chat is open.'); return true; }
     const pending = toast.loading('Summarizing the conversation so far…');
     try {
-      const { through, folded } = await compact();
-      fold(active.id, through);
+      const { folded } = await compact();
       toast.success(`Compacted: ${folded} earlier message${folded === 1 ? '' : 's'} summarized and tucked away.`, { id: pending });
     } catch (err) {
       toast.error((err as Error).message, { id: pending });
@@ -175,7 +164,8 @@ export default function App() {
             onEdit={(messageId, text) => branch(messageId, text).catch((err: Error) => { toast.error(err.message); })}
             focusMessageId={jump && jump.id === activeId ? jump.messageId : null}
             onScrollDirection={wide ? undefined : (d) => setChromeHidden(d === 'down')}
-            foldThrough={activeId ? folds[activeId] ?? null : null}
+            // Folded by /compact, on the server: the summary stands in for what it covers.
+            foldThrough={active?.folded && active.summary ? active.summary.through : null}
           />
         )}
       {!composer && (

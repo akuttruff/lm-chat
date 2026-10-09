@@ -107,6 +107,12 @@ export interface Conversation {
    * it; turning it off saves everything held in memory since, in one go.
    */
   temporary?: boolean
+  /**
+   * Folded by /compact: the thread shows the summary in place of the
+   * messages it covers, on every device, until the summary moves on or the
+   * reader opens them. A view of the thread; nothing is removed.
+   */
+  folded?: boolean
   /** How many messages the server holds. Set on chats it sends in the list. */
   messageCount?: number
   /**

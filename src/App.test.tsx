@@ -114,10 +114,10 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: /send/i }))
     await waitFor(() => expect(calls.some((c) => c.url === '/api/chats/c1/compact')).toBe(true))
     expect(calls.some((c) => c.url === '/api/chats/c1/turns')).toBe(false)
-    emit([conv({ summary: { text: 's', through: '1' }, messages: [{ id: '1', role: 'user', text: 'first' }, { id: '2', role: 'assistant', text: 'second' }] })])
+    // The server folds the chat and says so; every device then shows it from the summary on.
+    emit([conv({ folded: true, summary: { text: 's', through: '1' }, messages: [{ id: '1', role: 'user', text: 'first' }, { id: '2', role: 'assistant', text: 'second' }] })])
     await waitFor(() => expect(screen.queryByText('first')).not.toBeInTheDocument())
     expect(screen.getByText('second')).toBeInTheDocument()
-    expect(localStorage.getItem('lm-chat.folds')).toContain('"c1":"1"')
   })
 
   it('shows the empty state before any messages', async () => {

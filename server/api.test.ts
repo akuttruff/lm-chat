@@ -567,6 +567,9 @@ describe('turns', () => {
     expect(body.summary).toEqual({ text: '- greeted', through: 'a1' })
     expect(body.folded).toBe(2)
     expect(api.store.get(id)!.messages).toHaveLength(2)
+    // Folded on the server, where every device sees it; and it survives a reopen.
+    expect(api.store.get(id)!.folded).toBe(true)
+    expect((await (await get('/api/chats')).json() as { items: { id: string; folded?: boolean }[] }).items.find((c) => c.id === id)?.folded).toBe(true)
   })
 
   it('retries the last message, replacing what followed it', async () => {

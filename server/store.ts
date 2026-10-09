@@ -63,6 +63,7 @@ export function blankConversation(): Conversation {
     starred: false,
     folderId: null,
     temporary: false,
+    folded: false,
   }
 }
 
@@ -102,7 +103,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   starred INTEGER NOT NULL DEFAULT 0,
   memory_selection TEXT,
   folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
-  temporary INTEGER NOT NULL DEFAULT 0
+  temporary INTEGER NOT NULL DEFAULT 0,
+  folded INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS folders (
   id TEXT PRIMARY KEY,
@@ -209,6 +211,7 @@ function migrateSchema(db: DatabaseSync): void {
     const has = (table: string, column: string): boolean =>
       (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
     if (!has('conversations', 'temporary')) db.exec('ALTER TABLE conversations ADD COLUMN temporary INTEGER NOT NULL DEFAULT 0')
+    if (!has('conversations', 'folded')) db.exec('ALTER TABLE conversations ADD COLUMN folded INTEGER NOT NULL DEFAULT 0')
     db.exec('PRAGMA user_version = 5')
   }
   if (version < 6) {
@@ -281,6 +284,7 @@ interface ConversationRow {
   memory_selection: string | null
   folder_id: string | null
   temporary: number
+  folded: number
   tools: string | null
 }
 
@@ -366,16 +370,17 @@ function metaFromRow(row: ConversationRow): Omit<Conversation, 'messages'> {
     starred: row.starred === 1,
     folderId: row.folder_id,
     temporary: row.temporary === 1,
+    folded: row.folded === 1,
     tools: row.tools,
   }
 }
 
 const CONV_COLUMNS =
-  'id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through,memory,starred,memory_selection,folder_id,temporary,tools'
+  'id,name,created_at,updated_at,response_id,reasoning,summary_text,summary_through,memory,starred,memory_selection,folder_id,temporary,tools,folded'
 const CONV_PLACEHOLDERS = CONV_COLUMNS.split(',').map(() => '?').join(',')
 const UPDATE_CONV_META =
   'UPDATE conversations SET name=?, updated_at=?, response_id=?, reasoning=?, summary_text=?, summary_through=?, ' +
-  'memory=?, starred=?, memory_selection=?, folder_id=?, temporary=?, tools=? WHERE id=?'
+  'memory=?, starred=?, memory_selection=?, folder_id=?, temporary=?, tools=?, folded=? WHERE id=?'
 const memoryValue = (m: Conversation['memory']): number | null => (m == null ? null : m ? 1 : 0)
 const selectionValue = (s: Conversation['memorySelection']): string | null => (s == null ? null : JSON.stringify(s))
 
@@ -384,7 +389,7 @@ function convParams(c: Conversation): SQLInputValue[] {
   return [
     c.id, c.name, c.createdAt, c.updatedAt, c.responseId, c.reasoning ?? null,
     c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory),
-    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.tools ?? null,
+    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.tools ?? null, c.folded ? 1 : 0,
   ]
 }
 
@@ -393,7 +398,7 @@ function convMetaParams(c: Conversation): SQLInputValue[] {
   return [
     c.name, c.updatedAt, c.responseId, c.reasoning ?? null,
     c.summary?.text ?? null, c.summary ? String(c.summary.through) : null, memoryValue(c.memory),
-    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.tools ?? null, c.id,
+    c.starred ? 1 : 0, selectionValue(c.memorySelection), c.folderId ?? null, c.temporary ? 1 : 0, c.tools ?? null, c.folded ? 1 : 0, c.id,
   ]
 }
 
@@ -908,6 +913,7 @@ export class Store {
       patch = { ...patch, folderId: typeof f === 'string' && this.stmts.selectFolderById.get(f) ? f : null }
     }
     if ('temporary' in patch) patch = { ...patch, temporary: patch.temporary === true }
+    if ('folded' in patch) patch = { ...patch, folded: patch.folded === true }
     // Anything but text means "same as the folder / Settings"; '' is a real choice of no tools.
     if ('tools' in patch) patch = { ...patch, tools: typeof patch.tools === 'string' ? patch.tools : null }
 
