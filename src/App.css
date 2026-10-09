@@ -1370,6 +1370,9 @@ html, body, #root {
 /* After /compact: the summary sits at the top in place of what it covers, with one button to bring those back. */
 .msg-row.summary.folded { flex-direction: column; align-items: center; gap: 4px; margin-bottom: 6px; }
 .msg-row.summary.folded .summary-note { width: 100%; }
+/* The same note once opened: the summary with the refold button under it. */
+.msg-row.summary { flex-direction: column; align-items: center; gap: 4px; }
+.msg-row.summary .summary-note { width: 100%; }
 .show-earlier {
   display: block; margin: 4px auto 14px; padding: 7px 14px;
   background: none; border: 1px solid var(--line); border-radius: 999px;

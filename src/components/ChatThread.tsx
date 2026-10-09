@@ -203,9 +203,12 @@ const SAVE_SCROLL_DELAY_MS = 400
 export default function ChatThread({ messages: allMessages, summary, conversationId = 'default', onRetry, onEdit, focusMessageId, title, onScrollDirection, foldThrough }: ChatThreadProps) {
   // The fold: everything the summary covers is out of view until asked for.
   const [unfolded, setUnfolded] = useState(false)
-  const foldAt = foldThrough != null && !unfolded ? allMessages.findIndex((m) => m.id === foldThrough) : -1
+  const foldIndex = foldThrough != null ? allMessages.findIndex((m) => m.id === foldThrough) : -1
+  const foldAt = unfolded ? -1 : foldIndex
   const messages = foldAt >= 0 ? allMessages.slice(foldAt + 1) : allMessages
   const folded = foldAt >= 0 ? foldAt + 1 : 0
+  // Opened: the earlier messages are back, with a way to tuck them away again.
+  const canRefold = unfolded && foldIndex >= 0
   // The message open for editing, if any: one at a time.
   const [editingId, setEditingId] = useState<string | null>(null)
   const editFor = (msg: Message): EditControls | undefined => {
@@ -415,6 +418,11 @@ export default function ChatThread({ messages: allMessages, summary, conversatio
                 transition={{ duration: 0.18 }}
               >
                 <SummaryNote text={summary.text} />
+                {canRefold && msg.id === foldThrough && (
+                  <button type="button" className="show-earlier" onClick={() => setUnfolded(false)}>
+                    Hide the {foldIndex + 1} earlier message{foldIndex === 0 ? '' : 's'} again
+                  </button>
+                )}
               </motion.div>
             )]
           })}

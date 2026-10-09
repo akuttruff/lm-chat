@@ -230,6 +230,10 @@ describe('folded after /compact', () => {
     expect(screen.getByRole('button', { name: /earlier turns summarized/i })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Show 1 earlier message' }))
     expect(screen.getByText(HISTORY[0]!.text!)).toBeTruthy()
+    // And back again, from the summary's note.
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the 1 earlier message again' }))
+    expect(screen.queryByText(HISTORY[0]!.text!)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show 1 earlier message' })).toBeTruthy()
   })
 
   it('ignores a fold whose message is gone', () => {
