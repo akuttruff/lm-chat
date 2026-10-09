@@ -167,12 +167,14 @@ html, body, #root {
 
 .empty {
   margin: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
   text-align: center;
   color: var(--paper-dim);
-  max-width: 260px;
+  max-width: 280px;
   font-size: 14.5px;
   line-height: 1.5;
 }
+.empty p { margin: 0; text-wrap: balance; }
 .empty .glyph {
   font-size: 26px;
   margin-bottom: 10px;

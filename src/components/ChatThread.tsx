@@ -335,8 +335,8 @@ export default function ChatThread({ messages, summary, conversationId = 'defaul
     return (
       <div className="thread" ref={threadRef}>
         <div className="empty">
-          <MessagesSquare size={28} aria-hidden="true" />
-          Point this at your Mac&apos;s LM Studio server and start chatting from anywhere on your network.
+          <MessagesSquare size={28} className="glyph" aria-hidden="true" />
+          <p>Point this at your Mac&apos;s LM Studio server and start chatting from anywhere on your network.</p>
         </div>
       </div>
     )
