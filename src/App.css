@@ -79,8 +79,12 @@ html, body, #root {
   min-height: 0;
   padding: 10px 12px 0;
   border-right: 1px solid var(--line);
-  background: var(--bg);
+  /* The same raised surface as the sheet: the rows and the footer are painted
+     that colour (so swipe actions stay hidden under a row), and on any other
+     background they read as lighter bands. */
+  background: var(--bg-raised);
 }
+.sidebar .conv-settings:hover, .sidebar .conv-settings:focus-visible { background: var(--bg); }
 .sidebar .conv-title-row { padding-top: 6px; }
 .conv-collapse { margin-left: auto; margin-right: 6px; }
 .sidebar .conv-select-toggle { flex: 0 0 auto; }
