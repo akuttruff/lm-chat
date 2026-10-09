@@ -133,6 +133,7 @@ export default function App() {
         startedAt={startedAt}
         title={active?.name || undefined}
         onNewChat={() => void newChat()}
+        onRename={active && active.messages.length > 0 ? (name) => void renameChat(active.id, name) : undefined}
         // On a phone this opens the sheet; on a wide screen it brings a collapsed sidebar back.
         onOpenChats={sidebar ? undefined : () => (wide ? setSidebar(true) : setChatsOpen(true))}
       />

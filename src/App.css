@@ -123,6 +123,10 @@ html, body, #root {
   letter-spacing: -0.01em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* The name as a button (tap to rename) and as a field (renaming): the same text, in place. */
+.brand .name-btn { display: block; max-width: 100%; margin: 0; padding: 0; border: none; background: none; color: inherit; font: inherit; font-size: 17px; font-weight: 600; text-align: left; cursor: text; border-radius: 6px; }
+.brand .name-btn:hover, .brand .name-btn:focus-visible { outline: none; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 4px; }
+.brand .name-edit { width: 100%; margin: -3px 0; padding: 2px 6px; border: 1px solid var(--moss-dim); border-radius: 6px; background: var(--bg); color: var(--paper); font: inherit; font-size: 17px; font-weight: 600; outline: none; }
 
 .brand .status {
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
