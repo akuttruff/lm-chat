@@ -48,7 +48,12 @@ export function exportFileName(name: string): string {
 
 /** Hand the browser a file to save. */
 export function downloadText(fileName: string, text: string, type = 'text/markdown'): void {
-  const url = URL.createObjectURL(new Blob([text], { type }))
+  downloadBlob(fileName, new Blob([text], { type }))
+}
+
+/** Offers a blob to the browser as a file download. */
+export function downloadBlob(fileName: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = fileName

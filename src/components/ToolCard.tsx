@@ -2,6 +2,8 @@ import { useMemo, useState, memo } from 'react'
 import { motion } from 'motion/react'
 import { Wrench, ChevronRight, TriangleAlert } from 'lucide-react'
 import { argValue, argsSummary, prettyOutput, sizeLabel, toolLabel } from '../lib/toolFormat.ts'
+import { looksLikeChart, parseWheel } from '../lib/chartWheel.ts'
+import ChartWheel from './ChartWheel'
 
 interface ToolCardProps {
   name?: string
@@ -20,7 +22,8 @@ const SHORT = 120
  * One tool call. Collapsed, it's a single row -- what ran, from where, how
  * much it returned -- with its parameters on one line and one line of the
  * result; expanded, each parameter in full, then the whole result in its
- * own scrolling panel, JSON indented.
+ * own scrolling panel, JSON indented. A chart from the astrology server is
+ * also drawn as a wheel (see ChartWheel), shown either way.
  */
 function ToolCard({ name, plugin, args, output, failed }: ToolCardProps) {
   const [open, setOpen] = useState(false)
@@ -30,6 +33,8 @@ function ToolCard({ name, plugin, args, output, failed }: ToolCardProps) {
   const expandable = text.length > SHORT || params.length > 0
   // Only format what's being shown: results run to tens of kilobytes.
   const full = useMemo(() => (open ? prettyOutput(text) : ''), [open, text])
+  // A chart result is drawn as a wheel above its text, whether or not the card is open.
+  const wheel = useMemo(() => (!failed && looksLikeChart(text) ? parseWheel(text) : null), [failed, text])
   const source = plugin?.replace(/^mcp\//, '')
   const meta = [source, text.length > SHORT ? sizeLabel(text.length) : null, failed ? 'failed' : null]
     .filter(Boolean).join(' · ')
@@ -69,6 +74,7 @@ function ToolCard({ name, plugin, args, output, failed }: ToolCardProps) {
             ))}
           </dl>
         )}
+        {wheel && <ChartWheel wheel={wheel} />}
         {short && <div className="tc-short">{text}</div>}
         {text.length > SHORT && !open && <div className="tc-preview">{text.replace(/\s+/g, ' ').slice(0, 300)}</div>}
         {text.length > SHORT && open && <pre className="tc-output">{full}</pre>}
