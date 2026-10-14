@@ -175,7 +175,7 @@ describe('hiding the bar', () => {
 })
 
 describe('the More menu', () => {
-  it('holds copy, save and delete, each closing the menu when chosen', async () => {
+  it('holds copy and save, each closing the menu when chosen; delete is a chip of its own', async () => {
     const user = userEvent.setup()
     const onCopyChat = vi.fn()
     const onDownloadChat = vi.fn()
@@ -190,13 +190,14 @@ describe('the More menu', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Save chat as .md file' }))
     expect(onDownloadChat).toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'More actions' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Delete this chat' }))
+    expect(screen.queryByRole('menuitem', { name: /delete/i })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Delete this chat' }))
     expect(onDeleteChat).toHaveBeenCalled()
   })
 
   it('closes on Escape and on a tap outside, and is absent when there is nothing to put in it', async () => {
     const user = userEvent.setup()
-    const { rerender } = render(<Composer onSend={vi.fn()} onDeleteChat={vi.fn()} />)
+    const { rerender } = render(<Composer onSend={vi.fn()} onCopyChat={vi.fn()} />)
     await user.click(screen.getByRole('button', { name: 'More actions' }))
     expect(screen.getByRole('menu')).toBeInTheDocument()
     await user.keyboard('{Escape}')
@@ -204,8 +205,9 @@ describe('the More menu', () => {
     await user.click(screen.getByRole('button', { name: 'More actions' }))
     await user.click(document.body)
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-    rerender(<Composer onSend={vi.fn()} />)
+    rerender(<Composer onSend={vi.fn()} onDeleteChat={vi.fn()} />)
     expect(screen.queryByRole('button', { name: 'More actions' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete this chat' })).toBeInTheDocument()
   })
 
   it('offers the memory picker only while memory is on', async () => {

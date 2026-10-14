@@ -42,8 +42,8 @@ export default function Composer({
   memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false, onDeleteChat, onCopyChat, onDownloadChat, onCollapse,
 }: ComposerProps) {
   // The overflow menu at the end of the chip row: the actions you reach for
-  // now and then (memories, temporary, export, delete) live there, so the
-  // row stays one line on a phone.
+  // now and then (memories, temporary, export) live there, so the row stays
+  // one line on a phone. Delete sits beside it, one tap away.
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLSpanElement>(null)
   useEffect(() => {
@@ -223,7 +223,12 @@ export default function Composer({
           <PanelBottomClose size={15} aria-hidden="true" />
         </button>
       )}
-      {(onPickMemories || onToggleTemporary || onCopyChat || onDownloadChat || onDeleteChat) && (
+      {onDeleteChat && (
+        <button type="button" className="reasoning-chip delete-chip" onClick={onDeleteChat} aria-label="Delete this chat" title="Delete this chat (Undo is offered)">
+          <Trash2 size={15} aria-hidden="true" />
+        </button>
+      )}
+      {(onPickMemories || onToggleTemporary || onCopyChat || onDownloadChat) && (
         <span className="more-wrap" ref={moreRef}>
           <button
             type="button"
@@ -232,7 +237,7 @@ export default function Composer({
             aria-expanded={moreOpen}
             aria-haspopup="menu"
             aria-label="More actions"
-            title="Memories, temporary, export, delete"
+            title="Memories, temporary, export"
           >
             <Ellipsis size={15} aria-hidden="true" />
           </button>
@@ -260,11 +265,6 @@ export default function Composer({
               {onDownloadChat && (
                 <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onDownloadChat() }}>
                   <Download size={14} aria-hidden="true" /> Save chat as .md file
-                </button>
-              )}
-              {onDeleteChat && (
-                <button type="button" role="menuitem" className="danger" onClick={() => { setMoreOpen(false); onDeleteChat() }} title="Undo is offered">
-                  <Trash2 size={14} aria-hidden="true" /> Delete this chat
                 </button>
               )}
             </div>
