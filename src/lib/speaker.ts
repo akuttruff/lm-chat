@@ -1,17 +1,34 @@
-import { speechChunks, speechText } from './speech.ts'
-
 /**
- * Plays one reply aloud at a time. A reply is split into pieces
- * (speechChunks); the first is short so the voice starts at once, and each
- * next piece is fetched while the current one plays.
+ * Plays one reply aloud at a time, as a single track.
  *
- * One <audio> element is reused for everything. iPhone Safari only lets a
- * page play sound that a tap started, and the first piece arrives after the
- * tap has finished; an element that played something during the tap stays
- * allowed, so the tap starts it on a moment of silence first.
+ * The server renders the whole reply into one audio file (see
+ * server/speech.ts, Tracks) and this plays it in one <audio> element. One
+ * file is what makes it behave like music on a phone: it plays on with the
+ * screen off, the lock screen shows it with a scrubber, and seeking is the
+ * browser's own. While the file is being rendered, a loop of silence keeps
+ * the audio session open, so a phone locked during those seconds still
+ * starts the reading when it is ready.
+ *
+ * iPhone Safari only lets a page play sound that a tap started, and the
+ * track arrives after the tap has finished; an element that played
+ * something during the tap stays allowed, so the tap starts it on that
+ * silence first.
  */
 
-export type SpeakerState = { id: string | null; status: 'idle' | 'loading' | 'playing' | 'paused' }
+export type SpeakerStatus = 'idle' | 'preparing' | 'loading' | 'playing' | 'paused'
+
+export interface SpeakerState {
+  id: string | null
+  status: SpeakerStatus
+  /** While preparing: pieces rendered, of how many. */
+  done: number
+  total: number
+  /** Where the track is, in seconds, and how long it runs (0 until known). */
+  time: number
+  duration: number
+}
+
+export const IDLE: SpeakerState = { id: null, status: 'idle', done: 0, total: 0, time: 0, duration: 0 }
 
 /** A tenth of a second of silence: 44-byte WAV header, 8 kHz, 800 zero samples. */
 const SILENCE = (() => {
@@ -28,28 +45,54 @@ const SILENCE = (() => {
   return `data:audio/wav;base64,${btoa(bin)}`
 })()
 
+/** How far a skip button moves. */
+export const SKIP_SECONDS = 15
+
+/** "4:06", or "1:02:30" past an hour. */
+export function clock(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const rest = String(s % 60).padStart(2, '0')
+  return h ? `${h}:${String(m).padStart(2, '0')}:${rest}` : `${m}:${rest}`
+}
+
 export interface SpeakOptions {
   /** Defaults to the one in Settings, which the server applies. */
   voice?: string
   speed?: string
+  /** What the lock screen calls it: the chat's name. */
+  title?: string
+}
+
+interface TrackStatus {
+  name: string
+  ready: boolean
+  done: number
+  total: number
+  url?: string
+  seconds?: number
+  error?: string
 }
 
 export class Speaker {
-  private state: SpeakerState = { id: null, status: 'idle' }
+  private state: SpeakerState = IDLE
   private listeners = new Set<() => void>()
   private audio: HTMLAudioElement | null = null
   /** Bumped by every speak() and stop(), so a superseded run stops at its next step. */
   private run = 0
-  private urls: string[] = []
   private aborter: AbortController | null = null
-  /** Set while paused. A piece that arrives during a pause waits on this before it plays. */
-  private paused: { resume: Promise<void>; release: () => void } | null = null
 
   constructor(
     private readonly fetchImpl: typeof fetch = (...a) => fetch(...a),
     private readonly makeAudio: () => HTMLAudioElement = () => new Audio(),
     private readonly onError: (message: string) => void = () => {},
-  ) {}
+    private readonly session: MediaSession | null = typeof navigator !== 'undefined' ? (navigator.mediaSession ?? null) : null,
+    /** How often to ask after a track still being rendered. */
+    private readonly pollMs = 600,
+  ) {
+    this.wireSession()
+  }
 
   getState = (): SpeakerState => this.state
   subscribe = (fn: () => void): (() => void) => {
@@ -57,58 +100,64 @@ export class Speaker {
     return () => { this.listeners.delete(fn) }
   }
 
-  private set(state: SpeakerState): void {
-    this.state = state
+  private set(patch: Partial<SpeakerState>): void {
+    this.state = { ...this.state, ...patch }
     for (const fn of this.listeners) fn()
+    this.tellSession()
   }
 
   /** Stop whatever is playing or loading. */
   stop = (): void => {
     this.run++
-    this.paused?.release()
-    this.paused = null
     this.aborter?.abort()
     this.aborter = null
     if (this.audio) {
       this.audio.onended = null
       this.audio.onerror = null
+      this.audio.ontimeupdate = null
+      this.audio.ondurationchange = null
       this.audio.pause()
+      this.audio.loop = false
     }
-    for (const u of this.urls) URL.revokeObjectURL(u)
-    this.urls = []
-    if (this.state.status !== 'idle') this.set({ id: null, status: 'idle' })
+    if (this.state.status !== 'idle') this.set(IDLE)
   }
 
   /** Hold the voice where it is; resume() carries on from the same word. */
   pause = (): void => {
-    if (this.state.status !== 'playing' || this.paused) return
-    let release = (): void => {}
-    const resume = new Promise<void>((r) => { release = r })
-    this.paused = { resume, release }
+    if (this.state.status !== 'playing') return
     this.audio?.pause()
-    this.set({ id: this.state.id, status: 'paused' })
+    this.set({ status: 'paused' })
   }
 
   /** Carry on after pause(). Call it from a tap, like speak(): iPhone Safari wants one. */
   resume = (): void => {
-    if (this.state.status !== 'paused' || !this.paused) return
-    const { release } = this.paused
-    this.paused = null
-    // Mid-piece: pick up where it stopped. Between pieces, the waiting piece starts itself.
-    if (this.audio?.src && !this.audio.ended) this.audio.play()?.catch(() => { /* reported by the run */ })
-    this.set({ id: this.state.id, status: 'playing' })
-    release()
+    if (this.state.status !== 'paused') return
+    this.audio?.play()?.catch(() => { /* reported by onerror */ })
+    this.set({ status: 'playing' })
   }
+
+  /** Jump to a moment in the track, in seconds. */
+  seek = (seconds: number): void => {
+    const audio = this.audio
+    if (!audio || !this.state.duration || this.state.status === 'preparing' || this.state.status === 'idle') return
+    const time = Math.min(Math.max(seconds, 0), this.state.duration)
+    audio.currentTime = time
+    this.set({ time })
+  }
+
+  /** Skip forward or back by `delta` seconds. */
+  skip = (delta: number): void => { this.seek(this.state.time + delta) }
 
   /**
    * Tap on a reply's speaker: start it; on the one already going, pause it
-   * or resume it. While it's still fetching the first piece, the tap stops it.
+   * or resume it. While it's still being rendered, the tap stops it.
    */
   toggle = (id: string, markdown: string, options: SpeakOptions = {}): void => {
     if (this.state.id === id) {
       if (this.state.status === 'playing') { this.pause(); return }
       if (this.state.status === 'paused') { this.resume(); return }
-      if (this.state.status === 'loading') { this.stop(); return }
+      this.stop()
+      return
     }
     void this.speak(id, markdown, options)
   }
@@ -117,57 +166,85 @@ export class Speaker {
   async speak(id: string, markdown: string, options: SpeakOptions = {}): Promise<void> {
     this.stop()
     const run = this.run
-    const chunks = speechChunks(speechText(markdown))
-    if (!chunks.length) return
+    if (!markdown.trim()) return
     const audio = this.audio ?? (this.audio = this.makeAudio())
-    // Inside the tap: unlock the element for the pieces that come later.
+    // Inside the tap: unlock the element, and keep a sound going while the
+    // track is rendered, so a phone locked meanwhile keeps this page awake.
+    audio.loop = true
     audio.src = SILENCE
-    audio.play()?.catch(() => { /* jsdom, or a browser that refuses silence: the real piece will say */ })
-    this.set({ id, status: 'loading' })
+    audio.play()?.catch(() => { /* jsdom, or a browser that refuses silence: the real track will say */ })
+    this.set({ id, status: 'preparing', done: 0, total: 0, time: 0, duration: 0 })
+    if (this.session) {
+      try {
+        this.session.metadata = new MediaMetadata({ title: options.title || 'Reply', artist: 'LM Chat' })
+      } catch { /* no MediaMetadata here */ }
+    }
     const aborter = new AbortController()
     this.aborter = aborter
 
-    const fetchPiece = async (text: string): Promise<string> => {
-      const res = await this.fetchImpl('/api/speech', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, ...(options.voice ? { voice: options.voice } : {}), ...(options.speed ? { speed: options.speed } : {}) }),
-        signal: aborter.signal,
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string }
-        throw new Error(body.error || `The voice failed (${res.status}).`)
-      }
-      const url = URL.createObjectURL(await res.blob())
-      this.urls.push(url)
-      return url
-    }
-
     try {
-      let next = fetchPiece(chunks[0]!)
-      for (let i = 0; i < chunks.length; i++) {
-        const url = await next
-        if (run !== this.run) return
-        // Paused between pieces: hold the next one until resumed (or stopped).
-        while (this.paused) await this.paused.resume
-        if (run !== this.run) return
-        // Ask for the following piece now, so it's ready when this one ends.
-        if (i + 1 < chunks.length) next = fetchPiece(chunks[i + 1]!)
-        await new Promise<void>((resolve, reject) => {
-          audio.onended = () => resolve()
-          audio.onerror = () => reject(new Error("This device couldn't play the voice."))
-          audio.src = url
-          audio.play().then(() => { if (run === this.run && !this.paused) this.set({ id, status: 'playing' }) }, reject)
+      const body = { id, text: markdown, ...(options.voice ? { voice: options.voice } : {}), ...(options.speed ? { speed: options.speed } : {}) }
+      let status: TrackStatus
+      for (;;) {
+        const res = await this.fetchImpl('/api/speech/tracks', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: aborter.signal,
         })
+        const answer = await res.json().catch(() => ({})) as Partial<TrackStatus> & { error?: string }
+        if (!res.ok || answer.error) throw new Error(answer.error || `The voice failed (${res.status}).`)
+        status = answer as TrackStatus
         if (run !== this.run) return
-        URL.revokeObjectURL(url)
-        this.urls = this.urls.filter((u) => u !== url)
+        if (status.ready && status.url) break
+        this.set({ done: status.done, total: status.total })
+        await new Promise<void>((r) => setTimeout(r, this.pollMs))
+        if (run !== this.run) return
       }
-      if (run === this.run) this.stop()
+      audio.loop = false
+      audio.ontimeupdate = () => { if (run === this.run) this.set({ time: audio.currentTime }) }
+      audio.ondurationchange = () => { if (run === this.run && Number.isFinite(audio.duration)) this.set({ duration: audio.duration }) }
+      audio.onended = () => { if (run === this.run) this.stop() }
+      audio.onerror = () => {
+        if (run !== this.run) return
+        this.stop()
+        this.onError("This device couldn't play the voice.")
+      }
+      this.set({ status: 'loading', done: status.total, total: status.total, duration: status.seconds ?? 0 })
+      audio.src = status.url!
+      await audio.play()
+      if (run === this.run) this.set({ status: 'playing' })
     } catch (err) {
       if (run !== this.run || (err as Error).name === 'AbortError') return
       this.stop()
       this.onError((err as Error).message)
     }
+  }
+
+  /** The lock screen's buttons: the same as the page's. */
+  private wireSession(): void {
+    const s = this.session
+    if (!s) return
+    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ['play', () => this.resume()],
+      ['pause', () => this.pause()],
+      ['stop', () => this.stop()],
+      ['seekbackward', (d) => this.skip(-(d.seekOffset ?? SKIP_SECONDS))],
+      ['seekforward', (d) => this.skip(d.seekOffset ?? SKIP_SECONDS)],
+      ['seekto', (d) => { if (typeof d.seekTime === 'number') this.seek(d.seekTime) }],
+    ]
+    for (const [action, handler] of handlers) {
+      try { s.setActionHandler(action, handler) } catch { /* an action this browser lacks */ }
+    }
+  }
+
+  /** What the lock screen shows: playing or paused, and how far along. */
+  private tellSession(): void {
+    const s = this.session
+    if (!s) return
+    const { status, time, duration } = this.state
+    try {
+      s.playbackState = status === 'playing' ? 'playing' : status === 'paused' ? 'paused' : 'none'
+      if (duration > 0 && (status === 'playing' || status === 'paused')) {
+        s.setPositionState?.({ duration, playbackRate: 1, position: Math.min(time, duration) })
+      }
+    } catch { /* not every browser takes a position */ }
   }
 }

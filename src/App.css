@@ -1384,6 +1384,24 @@ html, body, #root {
 .speak-btn { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; margin-left: -6px; padding: 0; background: none; border: none; border-radius: 50%; color: var(--paper-dim); opacity: 0.7; cursor: pointer; }
 .speak-btn:hover, .speak-btn:focus-visible { opacity: 1; background: var(--bg-raised); color: var(--paper); }
 .speak-btn.active { opacity: 1; color: var(--paper); }
+
+/* The track under a reply being read aloud: play, skip, drag, time, stop. */
+.speech-player { display: flex; align-items: center; gap: 4px; width: min(100%, 560px); box-sizing: border-box; margin: 4px 0 2px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-raised); color: var(--paper); }
+.speech-btn { flex: 0 0 auto; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; background: none; border: none; border-radius: 50%; color: var(--paper-dim); cursor: pointer; }
+.speech-btn:hover, .speech-btn:focus-visible { color: var(--paper); background: var(--bg); }
+.speech-btn:disabled { opacity: 0.4; cursor: default; }
+.speech-play { color: var(--paper); }
+.speech-time { flex: 0 0 auto; font-size: 11.5px; color: var(--paper-dim); font-variant-numeric: tabular-nums; min-width: 72px; text-align: center; }
+/* The bar: the played part in paper, the rest in the line colour; a round thumb big enough for a finger. */
+.speech-range { flex: 1 1 auto; min-width: 60px; height: 30px; margin: 0; padding: 0; background: none; -webkit-appearance: none; appearance: none; cursor: pointer; touch-action: none; }
+.speech-range:disabled { cursor: default; opacity: 0.5; }
+.speech-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--paper) var(--pct, 0%), var(--line) var(--pct, 0%)); }
+.speech-range::-moz-range-track { height: 4px; border-radius: 2px; background: var(--line); }
+.speech-range::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--paper); }
+.speech-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--paper); border: none; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
+.speech-range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--paper); border: none; }
+.speech-progress { flex: 1 1 auto; min-width: 60px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.speech-progress i { display: block; height: 100%; background: var(--paper-dim); transition: width 0.3s ease; }
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

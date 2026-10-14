@@ -1,7 +1,7 @@
 import { Suspense, lazy, memo, useState } from 'react'
 import { Maximize2 } from 'lucide-react'
 import type { MessageImage, MessageRole, ReplyStats } from '../types.ts'
-import SpeakButton from './SpeakButton'
+import SpeakButton, { SpeechPlayer } from './SpeakButton'
 import CopyButton from './CopyButton'
 import SaveButton from './SaveButton'
 import ReaderView from './ReaderView'
@@ -81,7 +81,7 @@ function MessageBubble({
       )}
       {role === 'assistant' && !streaming && (model || (id && text)) && (
         <div className="msg-foot">
-          {id && text && <SpeakButton id={id} text={text} />}
+          {id && text && <SpeakButton id={id} text={text} title={title} />}
           {text && <CopyButton text={text} label="Copy reply" />}
           {text && <SaveButton text={text} />}
           {text && (
@@ -98,6 +98,9 @@ function MessageBubble({
             </div>
           )}
         </div>
+      )}
+      {role === 'assistant' && !streaming && id && text && (
+        <SpeechPlayer id={id} />
       )}
     </div>
   )

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import fs from 'node:fs'
 import path from 'node:path'
 import { gzipSync } from 'node:zlib'
 import type { Plugin } from 'vite'
@@ -11,7 +12,7 @@ import { MemoryInputError, Memories } from './memory.ts'
 import { ToolCatalogCache } from './tools.ts'
 import { readModelConfig } from './model-config.ts'
 import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
-import { SpeechError, readSpeakRequest, synthesize } from './speech.ts'
+import { SpeechError, Tracks, readSpeakRequest, synthesize, trackType } from './speech.ts'
 import { isVoice, speedOf } from '../src/lib/speech.ts'
 import { metaOf } from '../src/types.ts'
 import type { Conversation, ConversationStore, ImageUpload, ServerConfig } from '../src/types.ts'
@@ -51,6 +52,8 @@ export interface ApiOptions {
   memoryDb?: string
   /** The MCP tool catalog; injectable so tests needn't start real servers. */
   toolCatalog?: ToolCatalogCache
+  /** How tracks are shrunk for the phone; null keeps WAV (tests), absent uses afconvert. */
+  trackEncoder?: import('./speech.ts').TrackEncoder | null
 }
 
 /**
@@ -68,6 +71,44 @@ function sameOrigin(req: IncomingMessage): boolean {
   } catch {
     return false
   }
+}
+
+/** A reply's whole text, for a track; the body limit guards memory, this guards the voice's patience. */
+const MAX_TRACK_CHARS = 200_000
+
+/**
+ * A file with HTTP ranges, which is what lets a phone scrub a track and
+ * play it on with the screen off. One range at a time, as browsers ask.
+ */
+function serveRange(req: IncomingMessage, res: ServerResponse, file: string, size: number, type: string): void {
+  res.setHeader('Content-Type', type)
+  res.setHeader('Accept-Ranges', 'bytes')
+  // The name carries a hash of the contents, so a cached copy is never stale.
+  res.setHeader('Cache-Control', 'private, max-age=86400')
+  const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''))
+  let start = 0
+  let end = size - 1
+  if (range && (range[1] || range[2])) {
+    if (range[1]) {
+      start = Number(range[1])
+      if (range[2]) end = Math.min(Number(range[2]), size - 1)
+    } else {
+      start = Math.max(0, size - Number(range[2]))
+    }
+    if (start > end || start >= size) {
+      res.statusCode = 416
+      res.setHeader('Content-Range', `bytes */${size}`)
+      res.end()
+      return
+    }
+    res.statusCode = 206
+    res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
+  } else {
+    res.statusCode = 200
+  }
+  res.setHeader('Content-Length', String(end - start + 1))
+  if (req.method === 'HEAD') { res.end(); return }
+  fs.createReadStream(file, { start, end }).on('error', () => res.destroy()).pipe(res)
 }
 
 function json(res: ServerResponse, code: number, body: unknown): void {
@@ -154,6 +195,8 @@ export function createApiState(options: ApiOptions = {}): ApiState {
 export function createApi(options: ApiOptions = {}, state: ApiState = createApiState(options)) {
   const { store, bus } = state
   const memories = new Memories(options.memoryDb)
+  /** Replies rendered as one audio file each, beside the database. */
+  const tracks = new Tracks(path.join(path.resolve(options.dir ?? '.data'), 'speech'), { encoder: options.trackEncoder })
   const engine = new Engine(store, bus, undefined, state.engine, memories)
   const toolCatalog = options.toolCatalog ?? new ToolCatalogCache()
 
@@ -212,6 +255,30 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     // --- speech -------------------------------------------------------------
     // One piece of a reply, read aloud. The page splits a reply into pieces
     // (src/lib/speech.ts) and asks for the next while the last one plays.
+    // A whole reply as one track: ask for it (again, to poll), then play the
+    // file it names. See Tracks in speech.ts.
+    if (url === '/api/speech/tracks' && method === 'POST') {
+      void readBody(req).then((body) => {
+        const { id, text, voice, speed } = (body ?? {}) as { id?: unknown; text?: unknown; voice?: unknown; speed?: unknown }
+        if (typeof id !== 'string' || !id) return json(res, 400, { error: 'id is required' })
+        if (typeof text !== 'string' || !text.trim()) return json(res, 400, { error: 'Nothing to say.' })
+        if (text.length > MAX_TRACK_CHARS) return json(res, 400, { error: `At most ${MAX_TRACK_CHARS} characters.` })
+        const config = store.getPublicConfig()
+        const chosen = readSpeakRequest({ text: 'x', voice, speed }, { voice: config.speechVoice, speed: config.speechSpeed })
+        return json(res, 200, tracks.prepare(id, text, chosen.voice, chosen.speed))
+      }).catch((err: Error) => json(res, err instanceof SpeechError ? err.status : 400, { error: err.message }))
+      return undefined
+    }
+    const track = /^\/api\/speech\/tracks\/([^/]+)$/.exec(url)
+    if (track && (method === 'GET' || method === 'HEAD')) {
+      const file = tracks.path(decodeURIComponent(track[1]!))
+      let size: number
+      try { size = file ? fs.statSync(file).size : -1 } catch { size = -1 }
+      if (!file || size < 0) return json(res, 404, { error: 'no such track' })
+      serveRange(req, res, file, size, trackType(file))
+      return undefined
+    }
+
     if (url === '/api/speech' && method === 'POST') {
       void readBody(req).then(async (body) => {
         const config = store.getPublicConfig()

@@ -156,26 +156,36 @@ describe('MessageBubble', () => {
     expect(screen.queryByRole('button', { name: 'Read aloud' })).not.toBeInTheDocument()
   })
 
-  it('turns the speaker into pause and resume while a reply is read, with a stop beside it', async () => {
+  it('turns the speaker into pause and resume while a reply is read, with a track to drag and a stop beside it', async () => {
     const { Speaker } = await import('../lib/speaker.ts')
-    const { default: SpeakButton } = await import('./SpeakButton')
+    const { default: SpeakButton, SpeechPlayer } = await import('./SpeakButton')
     const { act, fireEvent } = await import('@testing-library/react')
-    const audio = { src: '', ended: false, play: () => Promise.resolve(), pause: () => {}, onended: null, onerror: null }
+    const audio = { src: '', loop: false, currentTime: 0, duration: 0, play: () => Promise.resolve(), pause: () => {}, onended: null, onerror: null, ontimeupdate: null, ondurationchange: null }
+    const track = { name: 't.wav', ready: true, done: 1, total: 1, url: '/api/speech/tracks/t.wav', seconds: 90 }
     const player = new Speaker(
-      (async () => new Response(new Blob(['RIFF'.repeat(40)]))) as unknown as typeof fetch,
-      () => audio as unknown as HTMLAudioElement,
+      (async () => new Response(JSON.stringify(track))) as unknown as typeof fetch,
+      () => audio as unknown as HTMLAudioElement, () => {}, null, 0,
     )
-    URL.createObjectURL = () => 'blob:x'
-    URL.revokeObjectURL = () => {}
-    render(<SpeakButton id="m1" text="Hello there." player={player} />)
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Read aloud' })); await new Promise((r) => setTimeout(r, 0)) })
-    expect(screen.getByRole('button', { name: 'Pause reading aloud' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Stop reading aloud' })).toBeInTheDocument()
-    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Pause reading aloud' })) })
-    expect(screen.getByRole('button', { name: 'Resume reading aloud' })).toBeInTheDocument()
+    render(<><SpeakButton id="m1" text="Hello there." player={player} /><SpeechPlayer id="m1" player={player} /></>)
+    expect(screen.queryByRole('slider')).not.toBeInTheDocument()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Read aloud' })); await new Promise((r) => setTimeout(r, 10)) })
+    expect(screen.getAllByRole('button', { name: 'Pause reading aloud' })).toHaveLength(2)
+    expect(screen.getByText('0:00 / 1:30')).toBeInTheDocument()
+    // Dragging the bar shows where it will go, and seeks once the finger lifts.
+    const slider = screen.getByRole('slider', { name: 'Position in the reading' })
+    act(() => { fireEvent.change(slider, { target: { value: '45' } }) })
+    expect(screen.getByText('0:45 / 1:30')).toBeInTheDocument()
+    expect(audio.currentTime).toBe(0)
+    act(() => { fireEvent.pointerUp(slider) })
+    expect(audio.currentTime).toBe(45)
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Forward 15 seconds' })) })
+    expect(audio.currentTime).toBe(60)
+    expect(screen.getByText('1:00 / 1:30')).toBeInTheDocument()
+    act(() => { fireEvent.click(screen.getAllByRole('button', { name: 'Pause reading aloud' })[0]!) })
+    expect(screen.getAllByRole('button', { name: 'Resume reading aloud' })).toHaveLength(2)
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Stop reading aloud' })) })
     expect(screen.getByRole('button', { name: 'Read aloud' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Stop reading aloud' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('slider')).not.toBeInTheDocument()
   })
 
   it('copies a reply as Markdown, and says so for a moment', async () => {

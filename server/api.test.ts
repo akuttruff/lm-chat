@@ -7,6 +7,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { createApi } from './api.ts'
 import { ToolCatalogCache } from './tools.ts'
+import { wavOf } from './speech.ts'
 import type { Conversation, ConversationStore, PublicConfig } from '../src/types.ts'
 import transitChart from '../src/test/fixtures/transit-chart.json?raw'
 
@@ -24,7 +25,7 @@ beforeEach(async () => {
   vi.unstubAllGlobals()
   realFetch = globalThis.fetch.bind(globalThis)
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-api-'))
-  api = createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite') })
+  api = createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null })
   server = http.createServer((req, res) => {
     api.middleware(req, res, () => { res.statusCode = 404; res.end('not api') })
   })
@@ -141,6 +142,44 @@ describe('speech', () => {
     expect((await res.arrayBuffer()).byteLength).toBe(2000)
     expect(calls[0]!.url).toBe('http://127.0.0.1:8020/v1/audio/speech')
     expect(calls[0]!.body).toMatchObject({ input: 'Hello there.', voice: 'bf_emma', speed: 1.1, lang_code: 'b', response_format: 'wav' })
+  })
+
+  it('renders a reply as one track and serves it with ranges', async () => {
+    api.store.setConfig({ speechVoice: 'bf_emma' })
+    const calls = stubVoice(async () => new Response(new Uint8Array(wavOf(Buffer.alloc(2000, 5), 24000, 1, 16))))
+    const first = await send('/api/speech/tracks', 'POST', { id: 'a1', text: 'Hello **there**. ' + 'And more. '.repeat(200) })
+    expect(first.status).toBe(200)
+    const started = await first.json() as { name: string; ready: boolean; total: number }
+    expect(started.ready).toBe(false)
+    expect(started.total).toBeGreaterThan(1)
+    // Polled the same way the page polls: the same request, until it is ready.
+    let ready: { ready: boolean; url?: string; seconds?: number; error?: string } = { ready: false }
+    for (let i = 0; i < 100 && !ready.ready; i++) {
+      ready = await (await send('/api/speech/tracks', 'POST', { id: 'a1', text: 'Hello **there**. ' + 'And more. '.repeat(200) })).json() as typeof ready
+      if (ready.error) throw new Error(ready.error)
+      if (!ready.ready) await new Promise((r) => setTimeout(r, 20))
+    }
+    expect(ready.ready).toBe(true)
+    expect(ready.url).toBe(`/api/speech/tracks/${started.name}.wav`)
+    expect(ready.seconds).toBeCloseTo((1000 * started.total) / 24000, 3)
+    expect(calls[0]!.body).toMatchObject({ voice: 'bf_emma' })
+    // The whole file, then a range of it.
+    const whole = await get(ready.url!)
+    expect(whole.status).toBe(200)
+    expect(whole.headers.get('accept-ranges')).toBe('bytes')
+    const size = 44 + 2000 * started.total
+    expect((await whole.arrayBuffer()).byteLength).toBe(size)
+    const part = await realFetch(`${base}${ready.url}`, { headers: { Range: 'bytes=44-143' } })
+    expect(part.status).toBe(206)
+    expect(part.headers.get('content-range')).toBe(`bytes 44-143/${size}`)
+    expect((await part.arrayBuffer()).byteLength).toBe(100)
+    const tail = await realFetch(`${base}${ready.url}`, { headers: { Range: 'bytes=-10' } })
+    expect(tail.headers.get('content-range')).toBe(`bytes ${size - 10}-${size - 1}/${size}`)
+    expect((await realFetch(`${base}${ready.url}`, { headers: { Range: `bytes=${size + 5}-` } })).status).toBe(416)
+    expect((await get('/api/speech/tracks/../secret.wav')).status).toBe(404)
+    expect((await get('/api/speech/tracks/nope-0123456789.wav')).status).toBe(404)
+    expect((await send('/api/speech/tracks', 'POST', { id: 'a1', text: '  ' })).status).toBe(400)
+    expect((await send('/api/speech/tracks', 'POST', { text: 'no id' })).status).toBe(400)
   })
 
   it('takes a voice from the request instead, for a preview, but only a real one', async () => {
