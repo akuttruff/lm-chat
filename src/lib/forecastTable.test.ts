@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { KEY_ROWS, keyTransits, looksLikeForecast, parseForecast, periodText } from './forecastTable.ts'
+import { KEY_WEIGHT, keyTransits, looksLikeForecast, parseForecast, periodText } from './forecastTable.ts'
 import { windowText } from './transitTable.ts'
 import week from '../test/fixtures/forecast-week.json?raw'
 import month from '../test/fixtures/forecast-month.json?raw'
@@ -23,18 +23,27 @@ describe('a forecast as rows', () => {
     const exact = t.rows.map((r) => Boolean(r.exact))
     expect(exact.indexOf(false)).toBeGreaterThan(0)
     expect(exact.slice(exact.indexOf(false))).not.toContain(true)
-    expect(keyTransits(t)).toEqual(t.rows.slice(0, KEY_ROWS.week))
+    expect(keyTransits(t)).toEqual(t.rows.filter((r) => r.weight >= KEY_WEIGHT.week))
+    // The week's events make the table: Mars, the Sun and Venus do, Mercury not unless on a key point.
+    expect(keyTransits(t).some((r) => r.from === 'Mars' && r.exact)).toBe(true)
+    const mercury = { ...t.rows[0]!, from: 'Mercury', weight: 0.5 }
+    expect(keyTransits({ ...t, rows: [mercury, { ...mercury, weight: 1 }] })).toEqual([{ ...mercury, weight: 1 }])
   })
 
-  it('keeps only the top of a month and a year, in the tool\'s order', () => {
+  it('keeps the weighty contacts of a month and a year, in the tool\'s order', () => {
     const m = parseForecast(month)!
-    expect(m.rows.length).toBeGreaterThan(KEY_ROWS.month)
-    expect(keyTransits(m)).toHaveLength(KEY_ROWS.month)
-    const weights = keyTransits(m).map((r) => r.weight)
+    const keyM = keyTransits(m)
+    expect(keyM.length).toBeGreaterThan(0)
+    expect(keyM.length).toBeLessThan(m.rows.length)
+    expect(keyM.every((r) => r.weight >= KEY_WEIGHT.month)).toBe(true)
+    expect(m.rows.filter((r) => r.weight < KEY_WEIGHT.month).length).toBe(m.rows.length - keyM.length)
+    // The month's bar is the slow planets: Mars alone never reaches it.
+    expect(keyM.some((r) => r.from === 'Mars')).toBe(false)
+    const weights = keyM.map((r) => r.weight)
     expect(weights).toEqual(weights.slice().sort((a, b) => b - a))
     const y = parseForecast(year)!
-    expect(y.rows.length).toBeGreaterThan(KEY_ROWS.year)
-    expect(keyTransits(y)).toHaveLength(KEY_ROWS.year)
+    expect(keyTransits(y).length).toBeLessThan(y.rows.length)
+    expect(keyTransits({ ...y, rows: y.rows.map((r) => ({ ...r, weight: 2.9 })) })).toEqual([])
     expect(y.rows.some((r) => r.pass && / of /.test(r.pass))).toBe(true)
     expect(y.rows.some((r) => r.fromRetrograde)).toBe(true)
   })

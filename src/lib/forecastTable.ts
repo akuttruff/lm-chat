@@ -4,9 +4,9 @@
  * forecast_week, forecast_month and forecast_year each return
  * `headline_transits`: the contacts of the period ranked by how much they
  * shape it (slow planet, central natal point, hard aspect; for a week, the
- * contacts exact within it first). The table under the result keeps only
- * the top of that ranking, in the tool's order, so what is drawn is what
- * the reply leads with. TransitTable.tsx draws it.
+ * contacts exact within it first). The table under the result keeps the
+ * ones whose weight reaches the horizon's bar, in the tool's order, so
+ * what is drawn is what the reply leads with. TransitTable.tsx draws it.
  */
 
 export type Horizon = 'week' | 'month' | 'year'
@@ -37,8 +37,18 @@ export interface ForecastTable {
   rows: ForecastRow[]
 }
 
-/** How many of the ranked headlines the table shows: the week's few, the top of a month, the top of a year. */
-export const KEY_ROWS: Record<Horizon, number> = { week: 8, month: 8, year: 12 }
+/**
+ * A contact is key when its weight reaches this: Amie's rule, by weight
+ * and not by count. The tool's weight is the transiting planet's slowness
+ * (Mercury 0.5, Venus 0.7, Sun 0.8, Mars 1, Jupiter and Chiron 3, Saturn
+ * and Uranus 4, Neptune and Pluto 5), doubled on the Sun, Moon, Asc, MC
+ * or chart ruler, times the aspect (conjunction and opposition 1, square
+ * 0.9, trine 0.7, sextile 0.5). Three keeps the slow planets' hard
+ * aspects and trines in a month or a year. A week's events are the fast
+ * planets, which never reach three, so its bar is lower: Sun, Venus and
+ * Mars contacts, and Mercury only on a key point.
+ */
+export const KEY_WEIGHT: Record<Horizon, number> = { week: 0.7, month: 3, year: 3 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v)
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
@@ -80,8 +90,8 @@ export function parseForecast(text: string): ForecastTable | null {
   return { horizon, start, end, rows }
 }
 
-/** The rows the table shows: the top of the ranking, as many as the horizon allows. */
-export const keyTransits = (table: ForecastTable): ForecastRow[] => table.rows.slice(0, KEY_ROWS[table.horizon])
+/** The rows the table shows: the headlines that reach KEY_WEIGHT, in the tool's order. */
+export const keyTransits = (table: ForecastTable): ForecastRow[] => table.rows.filter((r) => r.weight >= KEY_WEIGHT[table.horizon])
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 

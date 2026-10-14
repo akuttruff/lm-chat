@@ -65,10 +65,11 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
 }
 
 /**
- * The key transits of a forecast, under the result: the top of the tool's
- * ranking in its order, each with when it is exact (or the days it is in
- * orb, dimmed, when it never is within the period), both ends, the natal
- * house, and which pass it is when a retrograde brings it back.
+ * The key transits of a forecast, under the result: the headlines that reach
+ * KEY_WEIGHT, in the tool's order, each with when it is exact (or the
+ * days it is in orb, dimmed, when it never is within the period), both
+ * ends, the natal house, and which pass it is when a retrograde brings it
+ * back.
  */
 export function ForecastTransits({ table }: { table: ForecastTable }) {
   const rows = keyTransits(table)

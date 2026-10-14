@@ -41,13 +41,13 @@ describe('ChartWheel in a tool card', () => {
     expect(w.container.querySelector('.wheel')).toBeNull()
     const table = w.container.querySelector('table.tt')!
     expect(table.querySelector('caption')?.textContent).toBe('Key transits · Oct 14–20')
-    expect(table.querySelectorAll('tbody tr').length).toBeLessThanOrEqual(8)
+    expect(table.querySelectorAll('tbody tr').length).toBe(JSON.parse(week).headline_transits.filter((h: { weight: number }) => h.weight >= 0.7).length)
     expect(table.querySelector('tbody tr')?.textContent).toMatch(/Oct 19 22:56.*Mars.*square.*Saturn · 1st/)
     expect(table.querySelector('thead')?.textContent).not.toContain('Pass')
     const y = render(<ToolCard name="forecast_year" plugin="mcp/astrology-v2" output={year} />)
     const yt = y.container.querySelectorAll('table.tt')[0]!
     expect(yt.querySelector('caption')?.textContent).toBe('Key transits · Oct 14, 2026 – Oct 14, 2027')
-    expect(yt.querySelectorAll('tbody tr')).toHaveLength(12)
+    expect(yt.querySelectorAll('tbody tr')).toHaveLength(JSON.parse(year).headline_transits.filter((h: { weight: number }) => h.weight >= 3).length)
     expect(yt.querySelector('thead')?.textContent).toContain('Pass')
     expect(yt.textContent).toMatch(/\d of \d/)
     expect(yt.querySelector('tbody')?.textContent).not.toMatch(/\d\d:\d\d/)
