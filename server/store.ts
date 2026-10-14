@@ -283,6 +283,13 @@ function migrateSchema(db: DatabaseSync): void {
     if (!has('conversations', 'recap')) db.exec('ALTER TABLE conversations ADD COLUMN recap TEXT')
     db.exec('PRAGMA user_version = 14')
   }
+  if (version < 15) {
+    const has = (table: string, column: string): boolean =>
+      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
+    // A transit chart's readings, one per aspect, as JSON.
+    if (!has('messages', 'readings')) db.exec('ALTER TABLE messages ADD COLUMN readings TEXT')
+    db.exec('PRAGMA user_version = 15')
+  }
 }
 
 interface ConversationRow {
@@ -340,6 +347,7 @@ interface MessageRow {
   stats: string | null
   images: string | null
   args: string | null
+  readings: string | null
 }
 
 interface ConfigRow {
@@ -434,8 +442,8 @@ function configParams(c: ServerConfig): SQLInputValue[] {
 }
 
 const MESSAGE_COLUMNS =
-  'conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id,stats,images,args'
-const MESSAGE_PLACEHOLDERS = Array(17).fill('?').join(',')
+  'conversation_id,position,id,role,text,streaming,model,instance,elapsed,name,plugin,output,failed,response_id,stats,images,args,readings'
+const MESSAGE_PLACEHOLDERS = Array(18).fill('?').join(',')
 
 /** A tool call's parameters, stored as JSON; a corrupt value, or anything but an object, reads as none. */
 function parseArgs(raw: string | null): Record<string, unknown> | undefined {
@@ -443,6 +451,19 @@ function parseArgs(raw: string | null): Record<string, unknown> | undefined {
   try {
     const parsed: unknown = JSON.parse(raw)
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** A chart's readings stored as JSON: a map of strings, or none. */
+function parseReadings(raw: string | null): Record<string, string> | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+    const entries = Object.entries(parsed as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === 'string')
+    return entries.length ? Object.fromEntries(entries) : undefined
   } catch {
     return undefined
   }
@@ -494,6 +515,8 @@ function messageFromRow(row: MessageRow): Message {
   if (images) m.images = images
   const args = parseArgs(row.args)
   if (args) m.args = args
+  const readings = parseReadings(row.readings)
+  if (readings) m.readings = readings
   return m
 }
 
@@ -516,6 +539,7 @@ function messageParams(conversationId: string, position: number, m: Message): SQ
     m.stats ? JSON.stringify(m.stats) : null,
     m.images?.length ? JSON.stringify(m.images) : null,
     m.args ? JSON.stringify(m.args) : null,
+    m.readings ? JSON.stringify(m.readings) : null,
   ]
 }
 

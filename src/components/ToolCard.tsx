@@ -13,6 +13,8 @@ interface ToolCardProps {
   args?: Record<string, unknown>
   output?: string
   failed?: boolean
+  /** A transit chart's readings, one per aspect, once the server has written them. */
+  readings?: Record<string, string>
 }
 
 /** Output this short is shown whole; anything longer collapses to one line. */
@@ -25,7 +27,7 @@ const SHORT = 120
  * own scrolling panel, JSON indented. A chart from the astrology server is
  * also drawn as a wheel (see ChartWheel), shown either way.
  */
-function ToolCard({ name, plugin, args, output, failed }: ToolCardProps) {
+function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProps) {
   const [open, setOpen] = useState(false)
   const text = output ?? ''
   const short = text.length > 0 && text.length <= SHORT
@@ -74,7 +76,7 @@ function ToolCard({ name, plugin, args, output, failed }: ToolCardProps) {
             ))}
           </dl>
         )}
-        {wheel && <ChartWheel wheel={wheel} />}
+        {wheel && <ChartWheel wheel={wheel} readings={readings} />}
         {short && <div className="tc-short">{text}</div>}
         {text.length > SHORT && !open && <div className="tc-preview">{text.replace(/\s+/g, ' ').slice(0, 300)}</div>}
         {text.length > SHORT && open && <pre className="tc-output">{full}</pre>}

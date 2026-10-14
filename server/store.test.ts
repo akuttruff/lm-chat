@@ -630,6 +630,13 @@ describe('temporary chats', () => {
       const upgraded = new Store({ dir: oldDir })
       upgraded.setMessages(id, [{ id: 't1', role: 'tool', name: 'create_natal_chart', args: { city: 'Culver City', year: 1984 }, output: 'ok' }])
       expect(new Store({ dir: oldDir }).get(id)!.messages[0]!.args).toEqual({ city: 'Culver City', year: 1984 })
+      // A transit chart's readings travel the same way; a corrupt value reads as none.
+      upgraded.setMessages(id, [{ id: 't2', role: 'tool', name: 'create_transit_chart', output: '{}', readings: { 'Sun|Square|Moon': 'A day to be gentle.' } }])
+      expect(new Store({ dir: oldDir }).get(id)!.messages[0]!.readings).toEqual({ 'Sun|Square|Moon': 'A day to be gentle.' })
+      const raw = new DatabaseSync(path.join(oldDir, 'lm-chat.sqlite'))
+      raw.exec("UPDATE messages SET readings = '[not json' WHERE id = 't2'")
+      raw.close()
+      expect(new Store({ dir: oldDir }).get(id)!.messages[0]!.readings).toBeUndefined()
     } finally {
       fs.rmSync(oldDir, { recursive: true, force: true })
     }

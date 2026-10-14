@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState, type Ref } from 'react'
+import { memo, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { Download } from 'lucide-react'
 import WheelViewer from './WheelViewer'
@@ -8,6 +8,8 @@ import {
   type AspectFamily, type Element as ZodiacElement, type Ring as RingName, type Wheel, type WheelPoint,
 } from '../lib/chartWheel.ts'
 import { downloadBlob } from '../lib/export.ts'
+import { readingFor } from '../lib/readings.ts'
+import { placeTip, type Placement, type Point, type Subject } from '../lib/tipPlacement.ts'
 
 /**
  * A chart wheel: the zodiac round the outside, the houses, the natal
@@ -175,57 +177,102 @@ const sameHover = (a: Hover, b: Hover): boolean =>
 
 /**
  * The popup for what is pointed at, in words: a planet with its position
- * and the aspects it makes, or one aspect. Fixed on the page beside the
- * point, so it reads the same in the card and in the zoomed viewer.
+ * and the aspects it makes, or one aspect -- and, on a transit wheel, the
+ * reading written for each aspect (see lib/readings.ts), when it has
+ * arrived. Fixed on the page, so it reads the same in the card and in the
+ * zoomed viewer, and placed so that it never covers what it describes:
+ * outside the wheel where the page has room, else clear of the planet or
+ * line itself (see lib/tipPlacement.ts).
  */
-function WheelTip({ wheel, hover, svg }: { wheel: Wheel; hover: Hover; svg: SVGSVGElement | null }) {
+function WheelTip({ wheel, hover, svg, readings }: { wheel: Wheel; hover: Hover; svg: SVGSVGElement | null; readings?: Record<string, string> }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [spot, setSpot] = useState<Placement | null>(null)
+  const rings = layout(wheel.kind)
+  const asc = wheel.angles.Asc
+
+  /** What the popup must keep clear of, in page pixels: the planet, or the aspect line from glyph to glyph. */
+  const subject = useMemo((): Subject | null => {
+    if (!svg) return null
+    const box = svg.getBoundingClientRect()
+    const toPage = (x: number, y: number): Point => ({ x: box.left + (x / SIZE) * box.width, y: box.top + (y / SIZE) * box.height })
+    if (hover.kind === 'point') return { kind: 'point', at: toPage(hover.x, hover.y) }
+    const a = wheel.aspects[hover.index]!
+    const from = fromLongitude(wheel, a.from)
+    const to = natalLongitude(wheel, a.to)
+    if (from === null || to === null) return { kind: 'point', at: toPage(hover.x, hover.y) }
+    const [x1, y1] = polar(C, C, (rings.outer ?? rings.inner).outer - 17, screenAngle(from, asc))
+    const [x2, y2] = polar(C, C, rings.inner.outer - 17, screenAngle(to, asc))
+    return { kind: 'line', from: toPage(x1, y1), to: toPage(x2, y2) }
+  }, [hover, svg, wheel, rings, asc])
+
+  // Placed once drawn, from its measured size; again whenever its words or its subject change.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || !svg || !subject) return
+    const next = placeTip(
+      subject, { width: el.offsetWidth, height: el.offsetHeight }, svg.getBoundingClientRect(),
+      { width: window.innerWidth, height: window.innerHeight }, hover.held,
+    )
+    setSpot((cur) => (cur && cur.left === next.left && cur.top === next.top && cur.side === next.side ? cur : next))
+  }, [subject, svg, hover, wheel, readings])
+
   if (!svg || typeof document === 'undefined') return null
-  const box = svg.getBoundingClientRect()
-  const px = box.left + (hover.x / SIZE) * box.width
-  const py = box.top + (hover.y / SIZE) * box.height
-  const width = 280
-  let placement: 'side' | 'above' | 'below'
-  let style: React.CSSProperties
-  if (hover.held) {
-    // A finger is on the point: well above it, so both the point and the
-    // words can be seen; below it when there is no room above.
-    const gap = 64
-    placement = py - gap - 120 < 0 ? 'below' : 'above'
-    const left = Math.min(Math.max(px, 8 + width / 2), window.innerWidth - 8 - width / 2)
-    style = { left, top: placement === 'above' ? py - gap : py + gap, width }
-  } else {
-    // A mouse: beside the point, on whichever side has the room.
-    placement = 'side'
-    const gap = 36
-    const left = px + gap + width > window.innerWidth ? Math.max(8, px - gap - width) : px + gap
-    style = { left, top: py, maxWidth: width }
-  }
   let body: React.ReactNode
+  /** With a reading to show, the popup takes a paragraph's width. */
+  let wide: boolean
   if (hover.kind === 'point') {
     const d = describePoint(wheel, hover.ring, hover.point)
+    const indexes = aspectsOfPoint(wheel, hover.ring, hover.point.name)
+    // Each aspect with its reading -- unless there are many, when the sentences alone keep the popup a popup.
+    const withReadings = indexes.length <= 3
+    const lines = indexes.map((i) => {
+      const a = wheel.aspects[i]!
+      return { sentence: aspectSentence(wheel, a), reading: withReadings ? readingFor(readings, a) : null }
+    })
+    wide = lines.some((line) => line.reading !== null)
     body = (
       <>
         <div className="wheel-tip-title">{d.title}</div>
         <div className="wheel-tip-sub">{d.position}</div>
-        {d.aspects.length > 0
-          ? <ul>{d.aspects.map((line) => <li key={line}>{line}</li>)}</ul>
+        {lines.length > 0
+          ? (
+            <ul>
+              {lines.map((line) => (
+                <li key={line.sentence}>
+                  {line.sentence}
+                  {line.reading && <p className="wheel-tip-reading">{line.reading}</p>}
+                </li>
+              ))}
+            </ul>
+          )
           : <div className="wheel-tip-sub">{wheel.kind === 'transit' && hover.ring === 'outer' ? 'No aspects to your chart right now' : 'No aspects'}</div>}
       </>
     )
   } else {
     const a = wheel.aspects[hover.index]!
+    const reading = readingFor(readings, a)
+    wide = reading !== null
     body = (
       <>
         <div className="wheel-tip-title">{aspectSentence(wheel, a)}</div>
         <div className="wheel-tip-sub">{aspectDetail(a)}</div>
+        {reading
+          ? <p className="wheel-tip-reading">{reading}</p>
+          : wheel.kind === 'transit' && !readings && <p className="wheel-tip-reading pending">A reading for this transit is on its way.</p>}
       </>
     )
   }
-  return createPortal(<div className={`wheel-tip ${placement}`} role="tooltip" style={style}>{body}</div>, document.body)
+  const style: React.CSSProperties = spot
+    ? { left: spot.left, top: spot.top, width: wide ? 300 : undefined, maxWidth: wide ? 300 : 280 }
+    : { left: 0, top: 0, width: wide ? 300 : undefined, maxWidth: wide ? 300 : 280, visibility: 'hidden' }
+  return createPortal(
+    <div ref={ref} className={`wheel-tip ${spot?.side ?? 'placing'}`} role="tooltip" style={style}>{body}</div>,
+    document.body,
+  )
 }
 
 /** The picture itself; drawn in the card, and again full screen in the viewer. */
-function WheelSvg({ wheel, title, svgRef }: { wheel: Wheel; title: string; svgRef?: Ref<SVGSVGElement> }) {
+function WheelSvg({ wheel, title, svgRef, readings }: { wheel: Wheel; title: string; svgRef?: Ref<SVGSVGElement>; readings?: Record<string, string> }) {
   const asc = wheel.angles.Asc
   const rings = layout(wheel.kind)
   const ownRef = useRef<SVGSVGElement>(null)
@@ -281,7 +328,7 @@ function WheelSvg({ wheel, title, svgRef }: { wheel: Wheel; title: string; svgRe
 
   return (
     <>
-      {hover && <WheelTip wheel={wheel} hover={hover} svg={ownRef.current} />}
+      {hover && <WheelTip wheel={wheel} hover={hover} svg={ownRef.current} readings={readings} />}
       <svg
         ref={setRef}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
@@ -399,7 +446,7 @@ function WheelSvg({ wheel, title, svgRef }: { wheel: Wheel; title: string; svgRe
   )
 }
 
-function ChartWheel({ wheel }: { wheel: Wheel }) {
+function ChartWheel({ wheel, readings }: { wheel: Wheel; readings?: Record<string, string> }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [open, setOpen] = useState(false)
   const title = wheel.kind === 'transit'
@@ -411,11 +458,11 @@ function ChartWheel({ wheel }: { wheel: Wheel }) {
   return (
     <figure className="wheel">
       <button type="button" className="wheel-open" aria-label="Open the wheel full screen to zoom" title="Tap to zoom" onClick={() => setOpen(true)}>
-        <WheelSvg wheel={wheel} title={title} svgRef={svgRef} />
+        <WheelSvg wheel={wheel} title={title} svgRef={svgRef} readings={readings} />
       </button>
       {open && (
         <WheelViewer title={title} onSave={save} onClose={() => setOpen(false)}>
-          <WheelSvg wheel={wheel} title={title} />
+          <WheelSvg wheel={wheel} title={title} readings={readings} />
         </WheelViewer>
       )}
       <figcaption className="wheel-caption">

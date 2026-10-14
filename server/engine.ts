@@ -8,6 +8,8 @@ import { Slots, parallelLimit } from './slots.ts'
 import { AUTO_LOADED, MEMORY_PLUGIN, Memories } from './memory.ts'
 import { metaOf } from '../src/types.ts'
 import { parseIntegrations } from '../src/lib/integrations.ts'
+import { looksLikeChart, parseWheel } from '../src/lib/chartWheel.ts'
+import { READINGS_PROMPT, aspectKey, parseReadings, readingsInput, readingsTokenCap } from '../src/lib/readings.ts'
 import type { ChatEvent, ContextSummary, ImageUpload, Message, MessageImage, ReplyStats, ServerConfig } from '../src/types.ts'
 
 /**
@@ -480,6 +482,8 @@ export interface EngineState {
   compacting: Set<string>
   /** Chats a title is being written for right now. */
   titling?: Set<string>
+  /** Tool messages (by id) whose transit readings are being written right now. */
+  reading?: Set<string>
   /** The latest in-progress status per chat, for clients that connect mid-reply. */
   statuses: Map<string, StatusPayload>
   /** Created by the first Engine, which knows where the limit is configured. */
@@ -501,6 +505,7 @@ export class Engine {
   private running: Map<string, TurnState>
   private compacting: Set<string>
   private titling: Set<string>
+  private reading: Set<string>
   private statuses: Map<string, StatusPayload>
   readonly slots: Slots
 
@@ -517,6 +522,7 @@ export class Engine {
     this.compacting = state.compacting
     // ??= : state kept from before a code change may predate a field.
     this.titling = state.titling ??= new Set()
+    this.reading = state.reading ??= new Set()
     this.statuses = state.statuses ??= new Map()
     this.slots = state.slots ??= new Slots(() => parallelLimit(this.store.getConfig().parallel))
   }
@@ -1081,6 +1087,85 @@ export class Engine {
     if (succeeded) {
       await this.compact(conversationId)
       await this.title(conversationId)
+      await this.readingsFor(conversationId)
+    }
+  }
+
+  /**
+   * A one-off backfill: readings for every transit chart drawn before
+   * readings existed, chat by chat in the background. Returns at once with
+   * how many charts it will try; each chart's readings arrive as a `tail`.
+   */
+  readingsAll({ all = false }: { all?: boolean } = {}): { candidates: number } {
+    const candidates = this.store.getConversations().items
+      .filter((c) => !c.temporary)
+      .flatMap((c) => c.messages.filter((m) => wantsReadings(m, all)).map((m) => [c.id, m.id] as const))
+    if (candidates.length) {
+      void (async () => {
+        for (const [conversationId, messageId] of candidates) await this.readings(conversationId, messageId, { force: all })
+      })()
+    }
+    return { candidates: candidates.length }
+  }
+
+  /** Readings for every transit chart in a chat that has none yet, one after another. */
+  private async readingsFor(conversationId: string): Promise<void> {
+    const conv = this.store.get(conversationId)
+    if (!conv || conv.temporary) return
+    for (const m of conv.messages.filter((x) => wantsReadings(x, false))) await this.readings(conversationId, m.id)
+  }
+
+  /**
+   * After a transit chart lands: one short reading per aspect on its wheel,
+   * written by the model and kept on the tool message, for the popup over
+   * each aspect. One request covers the whole wheel. Best effort, like a
+   * title: a failure leaves the popup with its positions alone.
+   */
+  async readings(conversationId: string, messageId: string | number, { force = false }: { force?: boolean } = {}): Promise<Record<string, string> | null> {
+    const key = `${conversationId}/${messageId}`
+    if (this.reading.has(key)) return null
+    const conv = this.store.get(conversationId)
+    const config = this.store.getConfig()
+    const message = conv?.messages.find((m) => m.id === messageId)
+    if (!conv || conv.temporary || !message || !wantsReadings(message, force) || !config.model) return null
+    const wheel = parseWheel(message.output ?? '')
+    const input = wheel && readingsInput(wheel)
+    if (!wheel || !input) return null
+
+    this.reading.add(key)
+    let releaseSlot: (() => void) | undefined
+    try {
+      releaseSlot = await this.slots.acquire('background')
+      const model = config.backgroundModel.trim() || config.model
+      const body: Record<string, unknown> = {
+        model, system_prompt: READINGS_PROMPT, input, stream: true, max_output_tokens: readingsTokenCap(wheel.aspects.length),
+      }
+      const reasoning = cheapestReasoning((await this.capabilities({ ...config, model })) ?? manifestCapability(model))
+      if (reasoning) body.reasoning = reasoning
+      const res = await fetch(`${config.lmStudioUrl.replace(/\/+$/, '')}/api/v1/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}) },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(READINGS_TIMEOUT_MS),
+      })
+      if (!res.ok || !res.body) throw new Error(await describeHttpError(res))
+      const readings = parseReadings(await collectMessage(res.body), wheel.aspects.map(aspectKey))
+      if (!readings) throw new Error('no readings in the answer')
+
+      // The chat may have moved on while we waited: find the message again.
+      const current = this.store.get(conversationId)
+      const index = current?.messages.findIndex((m) => m.id === messageId) ?? -1
+      if (!current || index < 0) return null
+      const messages = current.messages.map((m, i) => (i === index ? { ...m, readings } : m))
+      this.store.setMessages(conversationId, messages, { touch: false, from: index })
+      this.publishTail(conversationId, index)
+      return readings
+    } catch (err) {
+      console.log(`[engine] readings skipped: ${(err as Error).message}`)
+      return null
+    } finally {
+      releaseSlot?.()
+      this.reading.delete(key)
     }
   }
 
@@ -1286,6 +1371,14 @@ export class Engine {
 function historyLimit(raw: string): number {
   const limit = Number.parseInt(raw, 10)
   return Number.isFinite(limit) ? limit : 24000
+}
+
+/** The whole wheel's readings in one answer: a slow model with a dozen aspects needs a while. */
+const READINGS_TIMEOUT_MS = 3 * 60 * 1000
+
+/** A tool message holding a transit chart with no readings yet (or any such chart, when rewriting). */
+function wantsReadings(m: Message, force: boolean): boolean {
+  return m.role === 'tool' && !m.failed && !!m.output && m.output.includes('"natal"') && looksLikeChart(m.output) && (force || !m.readings)
 }
 
 /** Read an /api/v1/chat stream and return just the reply text, reasoning excluded. */

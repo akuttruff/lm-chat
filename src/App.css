@@ -355,14 +355,15 @@ html, body, #root {
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   font-size: 13px; line-height: 1.4;
 }
-/* Beside the mouse pointer; above or below a finger, centred on the point. */
-.wheel-tip.side { transform: translateY(-50%); }
-.wheel-tip.above { transform: translate(-50%, -100%); }
-.wheel-tip.below { transform: translateX(-50%); }
+/* Placed by lib/tipPlacement.ts once measured, clear of the planet or line it describes. */
 .wheel-tip-title { font-weight: 600; }
 .wheel-tip-sub { color: var(--paper-dim); font-size: 12px; margin-top: 2px; }
 .wheel-tip ul { margin: 6px 0 0; padding-left: 16px; }
 .wheel-tip li { margin: 2px 0; }
+/* The transit's reading: what it means for you that day. */
+.wheel-tip-reading { margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--paper); }
+.wheel-tip li .wheel-tip-reading { margin: 2px 0 6px; color: var(--paper-dim); }
+.wheel-tip-reading.pending { color: var(--paper-dim); font-style: italic; }
 
 /* ====== Wheel viewer: the wheel full screen, under the fingers ====== */
 .wheel-viewer { height: 100%; }

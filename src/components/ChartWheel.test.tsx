@@ -87,7 +87,7 @@ describe('ChartWheel in a tool card', () => {
     fireEvent.pointerLeave(sun, { pointerType: 'touch', pointerId: 1 })
     const tip = screen.getByRole('tooltip')
     expect(tip).toHaveTextContent('Your Sun')
-    expect(tip.className).toMatch(/above|below/)
+    expect(tip.className).toMatch(/above|below|left|right/)
     // The click that follows the tap did not open the viewer.
     fireEvent.click(sun)
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -100,8 +100,26 @@ describe('ChartWheel in a tool card', () => {
     const { container } = render(<ToolCard name="create_transit_chart" output={transit} />)
     const sun = [...container.querySelectorAll('.wheel-point')].find((g) => g.textContent?.includes('20°38'))!
     fireEvent.pointerEnter(sun, { pointerType: 'mouse' })
-    expect(screen.getByRole('tooltip').className).toContain('side')
+    expect(screen.getByRole('tooltip').className).toMatch(/above|below|left|right/)
     fireEvent.pointerLeave(sun, { pointerType: 'mouse' })
     expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
+  it("shows the transit's reading in the popup once written, and says it is coming until then", () => {
+    const readings = { 'Mercury|Sextile|MC': 'Say the quiet thing out loud today.' }
+    const { container, rerender } = render(<ToolCard name="create_transit_chart" output={transit} />)
+    const line = container.querySelectorAll('.wheel-aspect')[0]!
+    fireEvent.pointerEnter(line, { pointerType: 'mouse' })
+    expect(screen.getByRole('tooltip')).toHaveTextContent('A reading for this transit is on its way.')
+    rerender(<ToolCard name="create_transit_chart" output={transit} readings={readings} />)
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Say the quiet thing out loud today.')
+    expect(screen.getByRole('tooltip')).not.toHaveTextContent('on its way')
+    fireEvent.pointerLeave(line, { pointerType: 'mouse' })
+    // The planet's popup carries the reading under its aspect line.
+    const mercury = [...container.querySelectorAll('.wheel-point')].find((g) => g.textContent?.includes('15°11'))!
+    fireEvent.pointerEnter(mercury, { pointerType: 'mouse' })
+    const tip = screen.getByRole('tooltip')
+    expect(tip).toHaveTextContent('Transiting Mercury')
+    expect(tip.querySelector('li .wheel-tip-reading')).toHaveTextContent('Say the quiet thing out loud today.')
   })
 })

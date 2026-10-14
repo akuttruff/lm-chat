@@ -8,6 +8,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { createApi } from './api.ts'
 import { ToolCatalogCache } from './tools.ts'
 import type { Conversation, ConversationStore, PublicConfig } from '../src/types.ts'
+import transitChart from '../src/test/fixtures/transit-chart.json?raw'
 
 let server: Server
 let base: string
@@ -543,6 +544,39 @@ describe('turns', () => {
     expect(await bad([{ name: 'big.png', mime: 'image/png', dataUrl: `data:image/png;base64,${'A'.repeat(11 * 1024 * 1024)}` }])).toMatch(/larger than 8 MB/)
     expect(await bad('nope')).toMatch(/must be a list/)
     expect(api.store.get(id)!.messages).toHaveLength(0)
+  })
+
+  it('writes a reading for each aspect of a transit chart, keeps them on the tool message, and can backfill', async () => {
+    api.store.setConfig({ model: 'qwen' })
+    const id = api.store.getConversations().activeId!
+    api.store.setMessages(id, [
+      { id: 'u1', role: 'user', text: 'transits today?' },
+      { id: 't1', role: 'tool', name: 'create_transit_chart', plugin: 'mcp/astrology-v2', output: transitChart },
+      { id: 'a1', role: 'assistant', text: 'Here they are.' },
+    ])
+    const answer = '```json\n{"Mercury|Sextile|MC": "Say the quiet thing out loud today.", "Nothing|Square|Nobody": "dropped"}\n```'
+    const stream = (text: string) => new ReadableStream({ start(c) { for (const f of [`data: {"type":"message.delta","content":${JSON.stringify(text)}}\n\n`, 'data: {"type":"chat.end","result":{}}\n\n']) c.enqueue(new TextEncoder().encode(f)); c.close() } })
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: { body?: string }) => {
+      if (!String(url).endsWith('/api/v1/chat')) return Promise.resolve(new Response('{}', { status: 404 }))
+      calls.push(init?.body ?? '')
+      return Promise.resolve(new Response(stream(answer), { status: 200 }))
+    }))
+    const readings = await api.engine.readings(id, 't1')
+    expect(readings).toEqual({ 'Mercury|Sextile|MC': 'Say the quiet thing out loud today.' })
+    expect(api.store.get(id)!.messages[1]!.readings).toEqual({ 'Mercury|Sextile|MC': 'Say the quiet thing out loud today.' })
+    expect(api.store.get(id)!.messages).toHaveLength(3)
+    const body = JSON.parse(calls[0]!) as { input: string; system_prompt: string }
+    expect(body.input).toContain('- key: Mercury|Sextile|MC')
+    expect(body.system_prompt).toMatch(/JSON object/)
+    // Written already: not asked again, unless rewriting everything.
+    expect(await api.engine.readings(id, 't1')).toBeNull()
+    expect(calls).toHaveLength(1)
+    const res = await send('/api/chats/readings', 'POST')
+    expect(res.status).toBe(202)
+    expect(await res.json()).toEqual({ candidates: 0 })
+    expect(await (await send('/api/chats/readings?all=1', 'POST')).json()).toEqual({ candidates: 1 })
+    await vi.waitFor(() => expect(calls).toHaveLength(2))
   })
 
   it('refuses a second turn while one is in flight', async () => {

@@ -400,6 +400,12 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     if (url === '/api/chats/recap' && method === 'POST') {
       return json(res, 202, engine.recapAll({ all: /(^|&)all=1(&|$)/.test(query) }))
     }
+    // And for transit readings: every chart drawn before readings existed
+    // gets its popups' sentences. `curl -X POST localhost:8010/api/chats/readings`.
+    // `?all=1` rewrites the readings that exist too.
+    if (url === '/api/chats/readings' && method === 'POST') {
+      return json(res, 202, engine.readingsAll({ all: /(^|&)all=1(&|$)/.test(query) }))
+    }
     // Several chats at once, from the drawer's select mode. Each is kept for
     // Undo exactly as a single delete keeps it; ids that no longer exist are
     // skipped rather than failing the batch.

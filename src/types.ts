@@ -45,6 +45,12 @@ export interface Message {
   output?: string
   failed?: boolean
   /**
+   * Tool messages holding a transit chart: a short reading per aspect on
+   * the wheel, by its key (see lib/readings.ts), written by the model after
+   * the turn. Absent until then, or when none could be written.
+   */
+  readings?: Record<string, string>
+  /**
    * LM Studio's handle for this reply. Kept per message, not just per
    * conversation, so one failed turn cannot sever the whole context chain.
    */
