@@ -25,7 +25,7 @@ beforeEach(async () => {
   vi.unstubAllGlobals()
   realFetch = globalThis.fetch.bind(globalThis)
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-api-'))
-  api = createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null })
+  api = createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null, resume: false })
   server = http.createServer((req, res) => {
     api.middleware(req, res, () => { res.statusCode = 404; res.end('not api') })
   })
@@ -616,6 +616,27 @@ describe('turns', () => {
     expect(await res.json()).toEqual({ candidates: 0 })
     expect(await (await send('/api/chats/readings?all=1', 'POST')).json()).toEqual({ candidates: 1 })
     await vi.waitFor(() => expect(calls).toHaveLength(2))
+  })
+
+  it('reports what a restart would cut off, and resumes readings a restart did cut off', async () => {
+    api.store.setConfig({ model: 'qwen' })
+    const id = api.store.getConversations().activeId!
+    api.store.setMessages(id, [
+      { id: 'u1', role: 'user', text: 'transits today?' },
+      { id: 't1', role: 'tool', name: 'create_transit_chart', plugin: 'mcp/astrology-v2', output: transitChart },
+    ])
+    expect(await (await send('/api/busy', 'GET')).json()).toEqual({ replies: 0, background: 0 })
+    let calls = 0
+    vi.stubGlobal('fetch', vi.fn(() => { calls++; return new Promise(() => { /* the model is slow */ }) }))
+    void api.engine.readings(id, 't1')
+    await vi.waitFor(() => expect(calls).toBe(1))
+    expect(await (await send('/api/busy', 'GET')).json()).toEqual({ replies: 0, background: 1 })
+    // The server restarts with the reading unwritten: the new one picks it up.
+    vi.useFakeTimers()
+    createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null, resume: true })
+    await vi.advanceTimersByTimeAsync(2500)
+    vi.useRealTimers()
+    await vi.waitFor(() => expect(calls).toBe(2))
   })
 
   it('refuses a second turn while one is in flight', async () => {

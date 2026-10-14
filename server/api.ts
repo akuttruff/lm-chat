@@ -54,6 +54,8 @@ export interface ApiOptions {
   toolCatalog?: ToolCatalogCache
   /** How tracks are shrunk for the phone; null keeps WAV (tests), absent uses afconvert. */
   trackEncoder?: import('./speech.ts').TrackEncoder | null
+  /** Write the transit readings a restart cut off, at boot; false keeps a test's fetch quiet. */
+  resume?: boolean
 }
 
 /**
@@ -152,6 +154,8 @@ export function listView(s: ConversationStore): ConversationStore {
 
 /** How long, and how many, deleted chats the server keeps for Undo -- enough for a whole selection deleted at once. */
 const UNDO_MS = 30 * 60_000
+/** Readings cut off by a restart are resumed this long after boot, once the server answers. */
+const RESUME_DELAY_MS = 2000
 const UNDO_MAX = 300
 
 /** The largest body a request may carry: a full set of images as base64, plus room for the words. */
@@ -199,6 +203,9 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
   const tracks = new Tracks(path.join(path.resolve(options.dir ?? '.data'), 'speech'), { encoder: options.trackEncoder })
   const engine = new Engine(store, bus, undefined, state.engine, memories)
   const toolCatalog = options.toolCatalog ?? new ToolCatalogCache()
+  // A chart whose readings were being written when the server last stopped
+  // would say "on its way" for good: pick those up once the server is up.
+  if (options.resume !== false) setTimeout(() => engine.readingsAll(), RESUME_DELAY_MS).unref()
 
   /** Recently deleted chats, whole, so Undo can restore one the client only held in outline. */
   const deleted = new Map<string, { conv: Conversation; at: number }>()
@@ -215,6 +222,13 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     if (!sameOrigin(req)) return json(res, 403, { error: 'cross-origin write refused' })
     const url = rawUrl.replace(/\/+$/, '') || rawUrl
     const method = req.method || 'GET'
+
+    // What a restart would cut off: replies being written and the jobs
+    // that follow them (summary, title, readings). scripts/deploy.sh waits
+    // for both to be zero.
+    if (url === '/api/busy' && method === 'GET') {
+      return json(res, 200, { replies: engine.activeStatuses().length, background: engine.backgroundJobs() })
+    }
 
     // --- live updates -------------------------------------------------
     if (url === '/api/events' && method === 'GET') {

@@ -547,6 +547,15 @@ export class Engine {
     this.slots = state.slots ??= new Slots(() => parallelLimit(this.store.getConfig().parallel))
   }
 
+  /**
+   * Work going on after replies are released: summaries, titles and transit
+   * readings. A restart cuts these off silently (a chart would keep saying
+   * its reading is on its way), so the deploy script waits for zero.
+   */
+  backgroundJobs(): number {
+    return this.compacting.size + this.titling.size + this.reading.size
+  }
+
   /** Every chat currently waiting on or receiving a reply. */
   activeStatuses(): StatusPayload[] {
     return [...this.statuses.values()]
@@ -880,8 +889,9 @@ export class Engine {
     if (succeeded) {
       await this.compact(conversationId)
       await this.title(conversationId)
-      await this.readingsFor(conversationId)
     }
+    // Even after a stopped or failed turn: the chart it drew is there to read.
+    await this.readingsFor(conversationId)
   }
 
   /**
@@ -1011,6 +1021,7 @@ export class Engine {
       const messages = current.messages.map((m, i) => (i === index ? { ...m, readings } : m))
       this.store.setMessages(conversationId, messages, { touch: false, from: index })
       this.publishTail(conversationId, index)
+      console.log(`[engine] readings written for ${Object.keys(readings).length} of ${wheel.aspects.length} aspects`)
       return readings
     } catch (err) {
       console.log(`[engine] readings skipped: ${(err as Error).message}`)
