@@ -342,6 +342,8 @@ html, body, #root {
 .wheel-legend i { display: inline-block; width: 14px; height: 2px; margin-left: 6px; border-radius: 1px; }
 .wheel-legend i:first-child, .wheel-legend b:first-child { margin-left: 0; }
 .wheel-legend b { font-weight: 400; font-size: 10px; margin-left: 6px; }
+/* The aspect's glyph before its words, in the popup and the legend. */
+.wheel-glyph { display: inline-block; min-width: 1.1em; margin-right: 4px; font-size: 1.05em; line-height: 1; color: var(--paper-dim); }
 .wheel-save { flex: 0 0 auto; }
 /* The wheel in the card is a button: a tap opens it full screen to pinch into. */
 .wheel-open { display: block; width: 100%; padding: 0; margin: 0; border: none; background: none; cursor: zoom-in; }

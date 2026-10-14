@@ -5,8 +5,7 @@ import WheelViewer from './WheelViewer'
 import {
   aspectDetail, aspectFamily, aspectSentence, aspectsOfPoint, describePoint, elementOf, fromLongitude, natalLongitude,
   polar, screenAngle, signDegrees, spread, SIGN_GLYPHS, SIGN_NAMES,
-  type AspectFamily, type Element as ZodiacElement, type Ring as RingName, type Wheel, type WheelPoint,
-} from '../lib/chartWheel.ts'
+  type AspectFamily, type Element as ZodiacElement, type Ring as RingName, type Wheel, type WheelPoint, aspectGlyph } from '../lib/chartWheel.ts'
 import { downloadBlob } from '../lib/export.ts'
 import { readingFor } from '../lib/readings.ts'
 import { placeTip, type Placement, type Point, type Subject } from '../lib/tipPlacement.ts'
@@ -227,7 +226,7 @@ function WheelTip({ wheel, hover, svg, readings }: { wheel: Wheel; hover: Hover;
     const withReadings = indexes.length <= 3
     const lines = indexes.map((i) => {
       const a = wheel.aspects[i]!
-      return { sentence: aspectSentence(wheel, a), reading: withReadings ? readingFor(readings, a) : null }
+      return { glyph: aspectGlyph(a.type), sentence: aspectSentence(wheel, a), reading: withReadings ? readingFor(readings, a) : null }
     })
     wide = lines.some((line) => line.reading !== null)
     body = (
@@ -239,6 +238,7 @@ function WheelTip({ wheel, hover, svg, readings }: { wheel: Wheel; hover: Hover;
             <ul>
               {lines.map((line) => (
                 <li key={line.sentence}>
+                  {line.glyph && <span className="wheel-glyph" aria-hidden="true">{line.glyph}</span>}
                   {line.sentence}
                   {line.reading && <p className="wheel-tip-reading">{line.reading}</p>}
                 </li>
@@ -254,7 +254,10 @@ function WheelTip({ wheel, hover, svg, readings }: { wheel: Wheel; hover: Hover;
     wide = reading !== null
     body = (
       <>
-        <div className="wheel-tip-title">{aspectSentence(wheel, a)}</div>
+        <div className="wheel-tip-title">
+          {aspectGlyph(a.type) && <span className="wheel-glyph" aria-hidden="true">{aspectGlyph(a.type)}</span>}
+          {aspectSentence(wheel, a)}
+        </div>
         <div className="wheel-tip-sub">{aspectDetail(a)}</div>
         {reading
           ? <p className="wheel-tip-reading">{reading}</p>
@@ -475,9 +478,9 @@ function ChartWheel({ wheel, readings }: { wheel: Wheel; readings?: Record<strin
               <b style={{ color: PALETTE.natal }}>●</b> natal
             </>
           )}
-          <i style={{ background: ASPECT_COLOR.hard }} /> square, opposition
-          <i style={{ background: ASPECT_COLOR.soft }} /> trine, sextile
-          <i style={{ background: ASPECT_COLOR.conjunction }} /> conjunction
+          <i style={{ background: ASPECT_COLOR.hard }} /> {aspectGlyph('square')} square, {aspectGlyph('opposition')} opposition
+          <i style={{ background: ASPECT_COLOR.soft }} /> {aspectGlyph('trine')} trine, {aspectGlyph('sextile')} sextile
+          <i style={{ background: ASPECT_COLOR.conjunction }} /> {aspectGlyph('conjunction')} conjunction
         </span>
         <button
           type="button"

@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   aspectDetail, aspectFamily, aspectSentence, aspectsOfPoint, describePoint, elementOf, looksLikeChart, parseWheel, polar,
-  screenAngle, signDegrees, spread,
-} from './chartWheel.ts'
+  screenAngle, signDegrees, spread, aspectGlyph } from './chartWheel.ts'
 // The astro server's own output for one birth chart and one transit moment, as text, the way a tool card gets it.
 import transit from '../test/fixtures/transit-chart.json?raw'
 import natal from '../test/fixtures/natal-chart.json?raw'
@@ -182,5 +181,18 @@ describe('in words', () => {
     // Neptune transits natal Neptune; the outer Neptune is the moving end, the inner one the fixed end.
     expect(aspectsOfPoint(w, 'outer', 'Neptune').map((i) => w.aspects[i]!.to)).toEqual(['Chiron', 'Asc', 'Neptune'])
     expect(aspectsOfPoint(w, 'inner', 'Neptune').map((i) => w.aspects[i]!.from)).toEqual(['Neptune'])
+  })
+})
+
+describe('aspectGlyph', () => {
+  it('gives each aspect its standard symbol, whatever the casing, and nothing for one it does not know', () => {
+    expect(aspectGlyph('Conjunction')).toBe('\u260c')
+    expect(aspectGlyph('opposition')).toBe('\u260d')
+    expect(aspectGlyph('SQUARE')).toBe('\u25a1')
+    expect(aspectGlyph('trine')).toBe('\u25b3')
+    expect(aspectGlyph('Sextile')).toBe('\u26b9')
+    expect(aspectGlyph('quincunx')).toBe('\u26bb')
+    expect(aspectGlyph('semi-sextile')).toBe('\u26ba')
+    expect(aspectGlyph('mystery')).toBe('')
   })
 })

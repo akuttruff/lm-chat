@@ -251,6 +251,16 @@ export function displayName(name: string): string {
   }
 }
 
+/** The standard glyph for each aspect: what the chart tool sends in `symbol`, and what the popup shows. */
+const ASPECT_GLYPHS: Record<string, string> = {
+  conjunction: '\u260c', opposition: '\u260d', square: '\u25a1', trine: '\u25b3', sextile: '\u26b9',
+  quincunx: '\u26bb', semisextile: '\u26ba', 'semi-sextile': '\u26ba', semisquare: '\u2220', 'semi-square': '\u2220',
+  sesquiquadrate: '\u26bc', quintile: 'Q', biquintile: 'bQ', septile: 'S', novile: 'N', parallel: '\u2225', contraparallel: '\u22d5',
+}
+
+/** "☌" for a conjunction, "⚹" for a sextile; '' for an aspect without a glyph. */
+export const aspectGlyph = (type: string): string => ASPECT_GLYPHS[type.toLowerCase()] ?? ''
+
 const VERBS: Record<string, string> = {
   conjunction: 'conjunct', opposition: 'opposing', square: 'squaring', trine: 'trine', sextile: 'sextile',
   quincunx: 'quincunx', semisextile: 'semi-sextile', 'semi-sextile': 'semi-sextile',
