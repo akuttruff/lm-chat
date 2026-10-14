@@ -1,5 +1,5 @@
 import { type Wheel, ordinal } from '../lib/chartWheel.ts'
-import { activeTransits, aspectCell, bodyCell, dayOnly, dayText, orbText, windowText } from '../lib/transitTable.ts'
+import { activeTransits, aspectCell, bodyCell, dayText, orbText, windowText } from '../lib/transitTable.ts'
 import { type ForecastTable, keyTransits, periodText } from '../lib/forecastTable.ts'
 
 function Body({ name, retrograde }: { name: string; retrograde: boolean }) {
@@ -66,35 +66,43 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
 
 /**
  * The key transits of a forecast, under the result: the headlines that reach
- * KEY_WEIGHT, in the tool's order, each with when it is exact (or the
- * days it is in orb, dimmed, when it never is within the period), both
- * ends, the natal house, and which pass it is when a retrograde brings it
- * back.
+ * KEY_WEIGHT in date order. Four columns, each with a dim second line so the
+ * table fits a phone: the moment it is exact over the days it is in orb (a
+ * dash when it never is within the period), each body over its position,
+ * and the aspect over its orb and, when a retrograde brings the contact
+ * back, which pass this is.
  */
 export function ForecastTransits({ table }: { table: ForecastTable }) {
   const rows = keyTransits(table)
   if (rows.length === 0) return null
-  const when = table.horizon === 'week' ? dayText : dayOnly
-  const passes = rows.some((r) => r.pass)
   return (
     <div className="tt-wrap">
       <table className="tt">
         <caption>Key transits · {periodText(table)}</caption>
         <thead>
-          <tr><th>When</th><th>Transit</th><th>Aspect</th><th>Natal</th>{passes && <th>Pass</th>}</tr>
+          <tr><th>When</th><th>Transit</th><th>Aspect</th><th>Natal</th></tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={`${r.from}|${r.type}|${r.to}|${r.start}|${i}`}>
               <td className="tt-when">
                 {r.exact
-                  ? when(r.exact)
-                  : <span className="tt-house" title={`in orb ${windowText(r.start, r.end)}, not exact in the period`}>{windowText(r.start, r.end)}</span>}
+                  ? <span className="tt-exact">{dayText(r.exact)}</span>
+                  : <span className="tt-house" title="in orb through these days, not exact within the period">—</span>}
+                <div className="tt-pos">{r.exact ? 'in orb ' : ''}{windowText(r.start, r.end)}</div>
               </td>
-              <td><Body name={r.from} retrograde={r.fromRetrograde} /></td>
-              <td><Aspect type={r.type} /></td>
-              <td><Natal name={r.to} house={r.toHouse} /></td>
-              {passes && <td className="tt-num">{r.pass ?? ''}</td>}
+              <td>
+                <Body name={r.from} retrograde={r.fromRetrograde} />
+                {r.fromPosition && <div className="tt-pos">{r.fromPosition}</div>}
+              </td>
+              <td>
+                <Aspect type={r.type} />
+                <div className="tt-pos">orb {orbText(r.orb)}{r.pass && ` · pass ${r.pass}`}</div>
+              </td>
+              <td>
+                <Natal name={r.to} house={r.toHouse} />
+                {r.toPosition && <div className="tt-pos">{r.toPosition}</div>}
+              </td>
             </tr>
           ))}
         </tbody>

@@ -5,8 +5,8 @@
  * `headline_transits`: the contacts of the period ranked by how much they
  * shape it (slow planet, central natal point, hard aspect; for a week, the
  * contacts exact within it first). The table under the result keeps the
- * ones whose weight reaches the horizon's bar, in the tool's order, so
- * what is drawn is what the reply leads with. TransitTable.tsx draws it.
+ * ones whose weight reaches the horizon's bar, in date order, with the
+ * moment each is exact and both positions. TransitTable.tsx draws it.
  */
 
 export type Horizon = 'week' | 'month' | 'year'
@@ -23,6 +23,9 @@ export interface ForecastRow {
   /** The first and last day in orb. */
   start: string
   end: string
+  /** "21°50′ Leo": where each body is at the exact moment (or the tightest day). */
+  fromPosition: string | null
+  toPosition: string | null
   orb: number
   /** "2 of 3" when a retrograde brings the same contact back. */
   pass: string | null
@@ -53,6 +56,8 @@ export const KEY_WEIGHT: Record<Horizon, number> = { week: 0.7, month: 3, year: 
 const isRecord = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v)
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+/** The tool writes minutes with a straight quote; the table uses the prime. */
+const position = (v: unknown): string | null => str(v)?.replace(/'/g, '\u2032') ?? null
 
 /** Whether a tool result is a forecast: a horizon and its ranked headlines. */
 export const looksLikeForecast = (text: string): boolean => text.includes('"forecast"') && text.includes('"headline_transits"')
@@ -82,6 +87,8 @@ export function parseForecast(text: string): ForecastTable | null {
       toHouse: num(h.natal_house),
       exact: str(h.exact),
       start: first, end: last,
+      fromPosition: position(h.from_position),
+      toPosition: position(h.to_position),
       orb: num(h.orb) ?? 0,
       pass: str(h.pass),
       weight: num(h.weight) ?? 0,
@@ -90,8 +97,14 @@ export function parseForecast(text: string): ForecastTable | null {
   return { horizon, start, end, rows }
 }
 
-/** The rows the table shows: the headlines that reach KEY_WEIGHT, in the tool's order. */
-export const keyTransits = (table: ForecastTable): ForecastRow[] => table.rows.filter((r) => r.weight >= KEY_WEIGHT[table.horizon])
+/** When a row happens, for ordering: the exact moment, or the first day in orb when it is never exact in the period. */
+const moment = (r: ForecastRow): string => r.exact ?? r.start
+
+/** The rows the table shows: the headlines that reach KEY_WEIGHT, in date order, the weightier first on the same moment. */
+export const keyTransits = (table: ForecastTable): ForecastRow[] =>
+  table.rows
+    .filter((r) => r.weight >= KEY_WEIGHT[table.horizon])
+    .sort((a, b) => moment(a).localeCompare(moment(b)) || b.weight - a.weight)
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 

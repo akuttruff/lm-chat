@@ -42,15 +42,18 @@ describe('ChartWheel in a tool card', () => {
     const table = w.container.querySelector('table.tt')!
     expect(table.querySelector('caption')?.textContent).toBe('Key transits · Oct 14–20')
     expect(table.querySelectorAll('tbody tr').length).toBe(JSON.parse(week).headline_transits.filter((h: { weight: number }) => h.weight >= 0.7).length)
-    expect(table.querySelector('tbody tr')?.textContent).toMatch(/Oct 19 22:56.*Mars.*square.*Saturn · 1st/)
-    expect(table.querySelector('thead')?.textContent).not.toContain('Pass')
+    // Date order, with the in-orb days, the exact moment, both positions and the orb.
+    const rows = Array.from(table.querySelectorAll('tbody tr')).map((r) => r.textContent ?? '')
+    expect(rows.find((r) => /Mars.*square.*Saturn/.test(r))).toMatch(/^Oct 19 22:56in orb Oct 1\d–\d+.*Mars12°30′ Leo.*squareorb 0°0\d′.*Saturn · 1st12°30′ Scorpio$/)
+    expect(rows.indexOf(rows.find((r) => /Mars.*square.*Venus/.test(r))!)).toBeLessThan(rows.indexOf(rows.find((r) => /Mars.*square.*Saturn/.test(r))!))
+    expect(table.querySelector('thead')?.textContent).toBe('WhenTransitAspectNatal')
+    expect(table.textContent).not.toContain('pass ')
     const y = render(<ToolCard name="forecast_year" plugin="mcp/astrology-v2" output={year} />)
     const yt = y.container.querySelectorAll('table.tt')[0]!
     expect(yt.querySelector('caption')?.textContent).toBe('Key transits · Oct 14, 2026 – Oct 14, 2027')
     expect(yt.querySelectorAll('tbody tr')).toHaveLength(JSON.parse(year).headline_transits.filter((h: { weight: number }) => h.weight >= 3).length)
-    expect(yt.querySelector('thead')?.textContent).toContain('Pass')
-    expect(yt.textContent).toMatch(/\d of \d/)
-    expect(yt.querySelector('tbody')?.textContent).not.toMatch(/\d\d:\d\d/)
+    expect(yt.textContent).toMatch(/pass \d of \d/)
+    expect(yt.querySelector('tbody')?.textContent).toContain('—') // a contact in orb all year without an exact moment in it
   })
 
   it('draws nothing for a result that is not a chart', () => {

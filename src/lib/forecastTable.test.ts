@@ -19,11 +19,15 @@ describe('a forecast as rows', () => {
     const t = parseForecast(week)!
     expect(t).toMatchObject({ horizon: 'week', start: '2026-10-14', end: '2026-10-20' })
     expect(t.rows.length).toBeGreaterThan(4)
-    expect(t.rows[0]).toMatchObject({ from: 'Mars', to: 'Saturn', type: 'Square', exact: '2026-10-19 22:56', toHouse: 1, fromRetrograde: false, pass: null })
+    expect(t.rows[0]).toMatchObject({ from: 'Mars', to: 'Saturn', type: 'Square', exact: '2026-10-19 22:56', toHouse: 1, fromRetrograde: false, pass: null, fromPosition: '12°30′ Leo', toPosition: '12°30′ Scorpio' })
     const exact = t.rows.map((r) => Boolean(r.exact))
     expect(exact.indexOf(false)).toBeGreaterThan(0)
     expect(exact.slice(exact.indexOf(false))).not.toContain(true)
-    expect(keyTransits(t)).toEqual(t.rows.filter((r) => r.weight >= KEY_WEIGHT.week))
+    expect(new Set(keyTransits(t))).toEqual(new Set(t.rows.filter((r) => r.weight >= KEY_WEIGHT.week)))
+    // In date order: the exact moment, or the first day in orb; the weightier first on the same moment.
+    const moments = keyTransits(t).map((r) => r.exact ?? r.start)
+    expect(moments).toEqual(moments.slice().sort())
+    expect(keyTransits(t).at(-1)).toMatchObject({ from: 'Sun', to: 'Mercury', exact: '2026-10-20 14:21' })
     // The week's events make the table: Mars, the Sun and Venus do, Mercury not unless on a key point.
     expect(keyTransits(t).some((r) => r.from === 'Mars' && r.exact)).toBe(true)
     const mercury = { ...t.rows[0]!, from: 'Mercury', weight: 0.5 }
@@ -39,8 +43,8 @@ describe('a forecast as rows', () => {
     expect(m.rows.filter((r) => r.weight < KEY_WEIGHT.month).length).toBe(m.rows.length - keyM.length)
     // The month's bar is the slow planets: Mars alone never reaches it.
     expect(keyM.some((r) => r.from === 'Mars')).toBe(false)
-    const weights = keyM.map((r) => r.weight)
-    expect(weights).toEqual(weights.slice().sort((a, b) => b - a))
+    const moments = keyM.map((r) => r.exact ?? r.start)
+    expect(moments).toEqual(moments.slice().sort())
     const y = parseForecast(year)!
     expect(keyTransits(y).length).toBeLessThan(y.rows.length)
     expect(keyTransits({ ...y, rows: y.rows.map((r) => ({ ...r, weight: 2.9 })) })).toEqual([])

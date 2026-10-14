@@ -75,9 +75,6 @@ export function windowText(start: string | null, end: string | null): string {
   return a.month === b.month ? `${MONTHS[a.month]} ${a.day}–${b.day}` : `${MONTHS[a.month]} ${a.day}–${MONTHS[b.month]} ${b.day}`
 }
 
-/** "Oct 15", the day alone of "2026-10-15 16:59". */
-export const dayOnly = (iso: string): string => dayText(iso.slice(0, 10))
-
 /** What a cell shows for a body: its glyph, its name, and ℞ when it is retrograde. */
 export interface BodyCell { glyph: string; name: string; retrograde: boolean }
 export const bodyCell = (name: string, retrograde: boolean): BodyCell => ({ glyph: GLYPHS[name] ?? '', name: displayName(name), retrograde })
