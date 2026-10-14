@@ -1,1 +1,786 @@
-{"chart_type":"transit","date_time":"2026-10-13 05:58","house_system":"whole_sign","objects":{"Asc":{"longitude":186.9188,"position":"06°55'08\" Libra","house":11},"Desc":{"longitude":6.9188,"position":"06°55'08\" Aries","house":5},"MC":{"longitude":97.5393,"position":"07°32'21\" Cancer","house":8},"IC":{"longitude":277.5393,"position":"07°32'21\" Capricorn","house":2},"True North Node":{"longitude":328.4525,"position":"28°27'09\" Aquarius","house":3},"True South Node":{"longitude":148.4525,"position":"28°27'09\" Leo","house":9},"Vertex":{"longitude":24.1211,"position":"24°07'16\" Aries","house":5},"Part of Fortune":{"longitude":153.2776,"position":"03°16'39\" Virgo","house":10},"True Lilith":{"longitude":279.6307,"position":"09°37'51\" Capricorn","house":2},"Sun":{"longitude":200.2108,"position":"20°12'39\" Libra","house":11,"speed":0.99},"Moon":{"longitude":233.852,"position":"23°51'07\" Scorpio","house":12,"speed":12.33},"Mercury":{"longitude":225.176,"position":"15°10'34\" Scorpio","house":12,"speed":0.93},"Venus":{"longitude":216.4321,"position":"06°25'56\" Scorpio","house":12,"speed":-0.4},"Mars":{"longitude":128.8295,"position":"08°49'46\" Leo","house":9,"speed":0.56},"Jupiter":{"longitude":141.7173,"position":"21°43'02\" Leo","house":9,"speed":0.16},"Saturn":{"longitude":10.5973,"position":"10°35'50\" Aries","house":5,"speed":-0.08},"Uranus":{"longitude":65.2574,"position":"05°15'27\" Gemini","house":7,"speed":-0.03},"Neptune":{"longitude":2.5232,"position":"02°31'24\" Aries","house":5,"speed":-0.03},"Pluto":{"longitude":303.0702,"position":"03°04'13\" Aquarius","house":3,"speed":-0.0},"Chiron":{"longitude":28.9319,"position":"28°55'55\" Aries","house":5}},"houses":{"1":{"cusp":240.0,"position":"00°00'00\" Sagittarius"},"10":{"cusp":150.0,"position":"00°00'00\" Virgo"},"11":{"cusp":180.0,"position":"00°00'00\" Libra"},"12":{"cusp":210.0,"position":"00°00'00\" Scorpio"},"2":{"cusp":270.0,"position":"00°00'00\" Capricorn"},"3":{"cusp":300.0,"position":"00°00'00\" Aquarius"},"4":{"cusp":330.0,"position":"00°00'00\" Pisces"},"5":{"cusp":0.0,"position":"00°00'00\" Aries"},"6":{"cusp":30.0,"position":"00°00'00\" Taurus"},"7":{"cusp":60.0,"position":"00°00'00\" Gemini"},"8":{"cusp":90.0,"position":"00°00'00\" Cancer"},"9":{"cusp":120.0,"position":"00°00'00\" Leo"}},"aspects":[{"from_object":"Mercury","to_object":"MC","type":"Sextile","orb":0.39,"movement":"Applicative","exact_at":"2026-10-13 16:16","from_sign":"Scorpio","from_position":"15°11' Scorpio","to_sign":"Virgo","to_position":"15°34' Virgo","to_house":10,"label":"transiting Mercury 15°11' Scorpio sextile natal MC 15°34' Virgo (natal house 10), applying, exact 2026-10-13 16:16"},{"from_object":"Neptune","to_object":"Chiron","type":"Sextile","orb":0.46,"movement":"Applicative","exact_at":null,"from_sign":"Aries","from_position":"2°31' Aries","to_sign":"Gemini","to_position":"2°04' Gemini","to_house":7,"label":"transiting Neptune 2°31' Aries sextile natal Chiron 2°04' Gemini (natal house 7), applying, exact more than 180 days away"},{"from_object":"Pluto","to_object":"Asc","type":"Sextile","orb":0.71,"movement":"Separative","exact_at":null,"from_sign":"Aquarius","from_position":"3°04' Aquarius","to_sign":"Sagittarius","to_position":"3°47' Sagittarius","to_house":1,"label":"transiting Pluto 3°04' Aquarius sextile natal Asc 3°47' Sagittarius (natal house 1), separating, exact more than 180 days away"},{"from_object":"Jupiter","to_object":"Mars","type":"Square","orb":0.8,"movement":"Separative","exact_at":"2026-10-08 08:55","from_sign":"Leo","from_position":"21°43' Leo","to_sign":"Scorpio","to_position":"20°55' Scorpio","to_house":12,"label":"transiting Jupiter 21°43' Leo square natal Mars 20°55' Scorpio (natal house 12), separating, exact 2026-10-08 08:55"},{"from_object":"Pluto","to_object":"Chiron","type":"Trine","orb":1.01,"movement":"Applicative","exact_at":null,"from_sign":"Aquarius","from_position":"3°04' Aquarius","to_sign":"Gemini","to_position":"2°04' Gemini","to_house":7,"label":"transiting Pluto 3°04' Aquarius trine natal Chiron 2°04' Gemini (natal house 7), applying, exact more than 180 days away"},{"from_object":"Jupiter","to_object":"Sun","type":"Square","orb":1.08,"movement":"Separative","exact_at":"2026-10-06 16:36","from_sign":"Leo","from_position":"21°43' Leo","to_sign":"Taurus","to_position":"20°38' Taurus","to_house":6,"label":"transiting Jupiter 21°43' Leo square natal Sun 20°38' Taurus (natal house 6), separating, exact 2026-10-06 16:36"},{"from_object":"Chiron","to_object":"Pluto","type":"Opposition","orb":1.25,"movement":"Separative","exact_at":null,"from_sign":"Aries","from_position":"28°56' Aries","to_sign":"Scorpio","to_position":"0°11' Scorpio","to_house":12,"label":"transiting Chiron 28°56' Aries opposition natal Pluto 0°11' Scorpio (natal house 12), separating, exact more than 180 days away"},{"from_object":"Neptune","to_object":"Asc","type":"Trine","orb":1.26,"movement":"Separative","exact_at":null,"from_sign":"Aries","from_position":"2°31' Aries","to_sign":"Sagittarius","to_position":"3°47' Sagittarius","to_house":1,"label":"transiting Neptune 2°31' Aries trine natal Asc 3°47' Sagittarius (natal house 1), separating, exact more than 180 days away"},{"from_object":"Uranus","to_object":"True North Node","type":"Conjunction","orb":1.4,"movement":"Separative","exact_at":null,"from_sign":"Gemini","from_position":"5°15' Gemini","to_sign":"Gemini","to_position":"6°39' Gemini","to_house":7,"label":"transiting Uranus 5°15' Gemini conjunction natal True North Node 6°39' Gemini (natal house 7), separating, exact more than 180 days away"},{"from_object":"Chiron","to_object":"Mercury","type":"Conjunction","orb":1.43,"movement":"Applicative","exact_at":null,"from_sign":"Aries","from_position":"28°56' Aries","to_sign":"Aries","to_position":"27°30' Aries","to_house":5,"label":"transiting Chiron 28°56' Aries conjunction natal Mercury 27°30' Aries (natal house 5), applying, exact more than 180 days away"},{"from_object":"Uranus","to_object":"Asc","type":"Opposition","orb":1.48,"movement":"Applicative","exact_at":null,"from_sign":"Gemini","from_position":"5°15' Gemini","to_sign":"Sagittarius","to_position":"3°47' Sagittarius","to_house":1,"label":"transiting Uranus 5°15' Gemini opposition natal Asc 3°47' Sagittarius (natal house 1), applying, exact more than 180 days away"},{"from_object":"Neptune","to_object":"Neptune","type":"Square","orb":1.48,"movement":"Applicative","exact_at":null,"from_sign":"Aries","from_position":"2°31' Aries","to_sign":"Capricorn","to_position":"1°02' Capricorn","to_house":2,"label":"transiting Neptune 2°31' Aries square natal Neptune 1°02' Capricorn (natal house 2), applying, exact more than 180 days away"}],"aspect_patterns":{"t_square":[[["Chiron","Desc","Mercury","True North Node","Asc","Moon","Venus","Vertex","Uranus","Neptune","Pluto","Mars","True Lilith","Saturn","Sun","IC","Jupiter"],["Chiron","Desc","Mercury","True North Node","Asc","Moon","Venus","Vertex","Uranus","Neptune","Pluto","Mars","True Lilith","Saturn","Sun","IC","Jupiter"],["Part of Fortune"]]],"grand_trine":[[["Chiron","Desc","Mercury","True North Node","Asc","Moon","Venus","Vertex","Uranus","Neptune","Pluto","Mars","True Lilith","Saturn","Sun","IC","Jupiter"],["True South Node"],["Chiron","Desc","Mercury","True North Node","Asc","Moon","Venus","Vertex","Uranus","Neptune","Pluto","Mars","True Lilith","Saturn","Sun","IC","Jupiter"]],[["Part of Fortune"],["Chiron","Desc","Mercury","True North Node","Asc","Moon","Venus","Vertex","Uranus","Neptune","Pluto","Mars","True Lilith","Saturn","Sun","IC","Jupiter"],["Chiron","Desc","Mercury","True North Node","Asc","Moon","Venus","Vertex","Uranus","Neptune","Pluto","Mars","True Lilith","Saturn","Sun","IC","Jupiter"]]],"yod":[],"grand_cross":[[["Chiron","Desc","Mercury","True North Node","Asc","Moon","Venus","Vertex","Uranus","Neptune","Pluto","Mars","True Lilith","Saturn","Sun","IC","Jupiter"],["Chiron","Desc","Mercury","True North Node","Asc","Moon","Venus","Vertex","Uranus","Neptune","Pluto","Mars","True Lilith","Saturn","Sun","IC","Jupiter"],["Chiron","Desc","Mercury","True North Node","Asc","Moon","Venus","Vertex","Uranus","Neptune","Pluto","Mars","True Lilith","Saturn","Sun","IC","Jupiter"],["Part of Fortune"]]],"kite":[],"mystic_rectangle":[],"cradle":[],"grand_sextile":[],"grand_quintile":[]},"diurnal":false,"moon_phase":{"new_moon":false,"waxing_crescent":true,"first_quarter":false,"waxing_gibbous":false,"full_moon":false,"disseminating":false,"third_quarter":false,"balsamic":false,"formatted":"Waxing Crescent","phase":"Waxing Crescent","waxing":true,"elongation":33.64,"illumination":0.084},"natal":{"date_time":"1984-05-10 20:44","house_system":"whole_sign","positions":{"Asc":{"longitude":243.7787,"sign":"Sagittarius","position":"3°47' Sagittarius","house":1},"MC":{"longitude":165.5699,"sign":"Virgo","position":"15°34' Virgo","house":10},"True North Node":{"longitude":66.6564,"sign":"Gemini","position":"6°39' Gemini","house":7},"Sun":{"longitude":50.6369,"sign":"Taurus","position":"20°38' Taurus","house":6},"Moon":{"longitude":176.2608,"sign":"Virgo","position":"26°16' Virgo","house":10},"Mercury":{"longitude":27.5019,"sign":"Aries","position":"27°30' Aries","house":5},"Venus":{"longitude":41.0091,"sign":"Taurus","position":"11°01' Taurus","house":6},"Mars":{"longitude":230.9205,"sign":"Scorpio","position":"20°55' Scorpio","house":12},"Jupiter":{"longitude":282.7593,"sign":"Capricorn","position":"12°46' Capricorn","house":2},"Saturn":{"longitude":222.4951,"sign":"Scorpio","position":"12°30' Scorpio","house":12},"Uranus":{"longitude":252.435,"sign":"Sagittarius","position":"12°26' Sagittarius","house":1},"Neptune":{"longitude":271.0416,"sign":"Capricorn","position":"1°02' Capricorn","house":2},"Pluto":{"longitude":210.1867,"sign":"Scorpio","position":"0°11' Scorpio","house":12},"Chiron":{"longitude":62.0625,"sign":"Gemini","position":"2°04' Gemini","house":7}}},"note":"This chart reflects the single moment 2026-10-13 05:58. 'objects' are the transiting bodies (in the natal chart's houses); 'natal.positions' are the natal points, angles included, that 'aspects' are measured against -- quote both ends from from_position/to_position. Each aspect's 'exact_at' is the local moment it is (or was) exact - null when that moment lies more than 180 days from the snapshot. For 'what is coming up / how long does it last', call list_upcoming_transits with start_date/end_date instead of estimating timing from this chart."}
+{
+  "chart_type": "transit",
+  "date_time": "2026-10-13 05:58",
+  "house_system": "whole_sign",
+  "objects": {
+    "Asc": {
+      "longitude": 186.9188,
+      "position": "06°55'08\" Libra",
+      "house": 11
+    },
+    "Desc": {
+      "longitude": 6.9188,
+      "position": "06°55'08\" Aries",
+      "house": 5
+    },
+    "MC": {
+      "longitude": 97.5393,
+      "position": "07°32'21\" Cancer",
+      "house": 8
+    },
+    "IC": {
+      "longitude": 277.5393,
+      "position": "07°32'21\" Capricorn",
+      "house": 2
+    },
+    "True North Node": {
+      "longitude": 328.4525,
+      "position": "28°27'09\" Aquarius",
+      "house": 3
+    },
+    "True South Node": {
+      "longitude": 148.4525,
+      "position": "28°27'09\" Leo",
+      "house": 9
+    },
+    "Vertex": {
+      "longitude": 24.1211,
+      "position": "24°07'16\" Aries",
+      "house": 5
+    },
+    "Part of Fortune": {
+      "longitude": 153.2776,
+      "position": "03°16'39\" Virgo",
+      "house": 10
+    },
+    "True Lilith": {
+      "longitude": 279.6307,
+      "position": "09°37'51\" Capricorn",
+      "house": 2
+    },
+    "Sun": {
+      "longitude": 200.2108,
+      "position": "20°12'39\" Libra",
+      "house": 11,
+      "speed": 0.99,
+      "retrograde": false
+    },
+    "Moon": {
+      "longitude": 233.852,
+      "position": "23°51'07\" Scorpio",
+      "house": 12,
+      "speed": 12.33,
+      "retrograde": false
+    },
+    "Mercury": {
+      "longitude": 225.176,
+      "position": "15°10'34\" Scorpio",
+      "house": 12,
+      "speed": 0.93,
+      "retrograde": false
+    },
+    "Venus": {
+      "longitude": 216.4321,
+      "position": "06°25'56\" Scorpio",
+      "house": 12,
+      "speed": -0.4,
+      "retrograde": true
+    },
+    "Mars": {
+      "longitude": 128.8295,
+      "position": "08°49'46\" Leo",
+      "house": 9,
+      "speed": 0.56,
+      "retrograde": false
+    },
+    "Jupiter": {
+      "longitude": 141.7173,
+      "position": "21°43'02\" Leo",
+      "house": 9,
+      "speed": 0.16,
+      "retrograde": false
+    },
+    "Saturn": {
+      "longitude": 10.5973,
+      "position": "10°35'50\" Aries",
+      "house": 5,
+      "speed": -0.08,
+      "retrograde": true
+    },
+    "Uranus": {
+      "longitude": 65.2574,
+      "position": "05°15'27\" Gemini",
+      "house": 7,
+      "speed": -0.03,
+      "retrograde": true
+    },
+    "Neptune": {
+      "longitude": 2.5232,
+      "position": "02°31'24\" Aries",
+      "house": 5,
+      "speed": -0.03,
+      "retrograde": true
+    },
+    "Pluto": {
+      "longitude": 303.0702,
+      "position": "03°04'13\" Aquarius",
+      "house": 3,
+      "speed": -0.0,
+      "retrograde": true
+    },
+    "Chiron": {
+      "longitude": 28.9319,
+      "position": "28°55'55\" Aries",
+      "house": 5,
+      "speed": -0.05,
+      "retrograde": true
+    }
+  },
+  "houses": {
+    "1": {
+      "cusp": 240.0,
+      "position": "00°00'00\" Sagittarius"
+    },
+    "10": {
+      "cusp": 150.0,
+      "position": "00°00'00\" Virgo"
+    },
+    "11": {
+      "cusp": 180.0,
+      "position": "00°00'00\" Libra"
+    },
+    "12": {
+      "cusp": 210.0,
+      "position": "00°00'00\" Scorpio"
+    },
+    "2": {
+      "cusp": 270.0,
+      "position": "00°00'00\" Capricorn"
+    },
+    "3": {
+      "cusp": 300.0,
+      "position": "00°00'00\" Aquarius"
+    },
+    "4": {
+      "cusp": 330.0,
+      "position": "00°00'00\" Pisces"
+    },
+    "5": {
+      "cusp": 0.0,
+      "position": "00°00'00\" Aries"
+    },
+    "6": {
+      "cusp": 30.0,
+      "position": "00°00'00\" Taurus"
+    },
+    "7": {
+      "cusp": 60.0,
+      "position": "00°00'00\" Gemini"
+    },
+    "8": {
+      "cusp": 90.0,
+      "position": "00°00'00\" Cancer"
+    },
+    "9": {
+      "cusp": 120.0,
+      "position": "00°00'00\" Leo"
+    }
+  },
+  "aspects": [
+    {
+      "from_object": "Mercury",
+      "to_object": "MC",
+      "type": "Sextile",
+      "symbol": "⚹",
+      "orb": 0.39,
+      "movement": "Applicative",
+      "exact_at": "2026-10-13 16:16",
+      "passes": [
+        "2026-10-13 16:16",
+        "2026-11-01 14:40",
+        "2026-11-26 00:43"
+      ],
+      "pass": "1 of 3",
+      "from_sign": "Scorpio",
+      "from_position": "15°11' Scorpio",
+      "to_sign": "Virgo",
+      "to_position": "15°34' Virgo",
+      "to_house": 10,
+      "from_retrograde": false,
+      "to_retrograde": false,
+      "label": "transiting Mercury 15°11' Scorpio sextile natal MC 15°34' Virgo (natal house 10), applying, exact 2026-10-13 16:16; pass 1 of 3 of this contact, also exact 2026-11-01 14:40, 2026-11-26 00:43"
+    },
+    {
+      "from_object": "Neptune",
+      "to_object": "Chiron",
+      "type": "Sextile",
+      "symbol": "⚹",
+      "orb": 0.46,
+      "movement": "Applicative",
+      "exact_at": "2026-11-01 16:51",
+      "passes": [
+        "2025-06-14 06:02",
+        "2025-07-25 06:50",
+        "2026-03-27 22:44",
+        "2026-11-01 16:51",
+        "2027-01-21 08:50"
+      ],
+      "pass": "4 of 5",
+      "from_sign": "Aries",
+      "from_position": "2°31' Aries",
+      "to_sign": "Gemini",
+      "to_position": "2°04' Gemini",
+      "to_house": 7,
+      "from_retrograde": true,
+      "to_retrograde": false,
+      "label": "transiting Neptune 2°31' Aries sextile natal Chiron 2°04' Gemini (natal house 7), retrograde, applying, exact 2026-11-01 16:51; pass 4 of 5 of this contact, also exact 2025-06-14 06:02, 2025-07-25 06:50, 2026-03-27 22:44, 2027-01-21 08:50"
+    },
+    {
+      "from_object": "Pluto",
+      "to_object": "Asc",
+      "type": "Sextile",
+      "symbol": "⚹",
+      "orb": 0.71,
+      "movement": "Separative",
+      "exact_at": "2026-08-18 06:50",
+      "passes": [
+        "2025-04-21 08:23",
+        "2025-05-17 12:50",
+        "2026-02-03 05:55",
+        "2026-08-18 06:50",
+        "2026-12-10 11:59"
+      ],
+      "pass": "4 of 5",
+      "from_sign": "Aquarius",
+      "from_position": "3°04' Aquarius",
+      "to_sign": "Sagittarius",
+      "to_position": "3°47' Sagittarius",
+      "to_house": 1,
+      "from_retrograde": true,
+      "to_retrograde": false,
+      "label": "transiting Pluto 3°04' Aquarius sextile natal Asc 3°47' Sagittarius (natal house 1), retrograde, separating, exact 2026-08-18 06:50; pass 4 of 5 of this contact, also exact 2025-04-21 08:23, 2025-05-17 12:50, 2026-02-03 05:55, 2026-12-10 11:59"
+    },
+    {
+      "from_object": "Jupiter",
+      "to_object": "Mars",
+      "type": "Square",
+      "symbol": "□",
+      "orb": 0.8,
+      "movement": "Separative",
+      "exact_at": "2026-10-08 08:55",
+      "passes": [
+        "2026-10-08 08:55",
+        "2027-02-19 04:57",
+        "2027-06-04 11:21"
+      ],
+      "pass": "1 of 3",
+      "from_sign": "Leo",
+      "from_position": "21°43' Leo",
+      "to_sign": "Scorpio",
+      "to_position": "20°55' Scorpio",
+      "to_house": 12,
+      "from_retrograde": false,
+      "to_retrograde": true,
+      "label": "transiting Jupiter 21°43' Leo square natal Mars 20°55' Scorpio (natal house 12), separating, exact 2026-10-08 08:55; pass 1 of 3 of this contact, also exact 2027-02-19 04:57, 2027-06-04 11:21"
+    },
+    {
+      "from_object": "Pluto",
+      "to_object": "Chiron",
+      "type": "Trine",
+      "symbol": "△",
+      "orb": 1.01,
+      "movement": "Applicative",
+      "exact_at": "2025-12-07 16:36",
+      "passes": [
+        "2025-01-31 22:56",
+        "2025-08-17 02:28",
+        "2025-12-07 16:36"
+      ],
+      "pass": "3 of 3",
+      "from_sign": "Aquarius",
+      "from_position": "3°04' Aquarius",
+      "to_sign": "Gemini",
+      "to_position": "2°04' Gemini",
+      "to_house": 7,
+      "from_retrograde": true,
+      "to_retrograde": false,
+      "label": "transiting Pluto 3°04' Aquarius trine natal Chiron 2°04' Gemini (natal house 7), retrograde, applying, exact 2025-12-07 16:36; pass 3 of 3 of this contact, also exact 2025-01-31 22:56, 2025-08-17 02:28"
+    },
+    {
+      "from_object": "Jupiter",
+      "to_object": "Sun",
+      "type": "Square",
+      "symbol": "□",
+      "orb": 1.08,
+      "movement": "Separative",
+      "exact_at": "2026-10-06 16:36",
+      "passes": [
+        "2026-10-06 16:36",
+        "2027-02-21 10:07",
+        "2027-06-02 09:19"
+      ],
+      "pass": "1 of 3",
+      "from_sign": "Leo",
+      "from_position": "21°43' Leo",
+      "to_sign": "Taurus",
+      "to_position": "20°38' Taurus",
+      "to_house": 6,
+      "from_retrograde": false,
+      "to_retrograde": false,
+      "label": "transiting Jupiter 21°43' Leo square natal Sun 20°38' Taurus (natal house 6), separating, exact 2026-10-06 16:36; pass 1 of 3 of this contact, also exact 2027-02-21 10:07, 2027-06-02 09:19"
+    },
+    {
+      "from_object": "Chiron",
+      "to_object": "Pluto",
+      "type": "Opposition",
+      "symbol": "☍",
+      "orb": 1.25,
+      "movement": "Separative",
+      "exact_at": "2026-09-12 08:34",
+      "passes": [
+        "2026-06-24 22:14",
+        "2026-09-12 08:34",
+        "2027-04-17 09:39",
+        "2027-12-22 07:00",
+        "2028-01-28 15:34"
+      ],
+      "pass": "2 of 5",
+      "from_sign": "Aries",
+      "from_position": "28°56' Aries",
+      "to_sign": "Scorpio",
+      "to_position": "0°11' Scorpio",
+      "to_house": 12,
+      "from_retrograde": true,
+      "to_retrograde": true,
+      "label": "transiting Chiron 28°56' Aries opposition natal Pluto 0°11' Scorpio (natal house 12), retrograde, separating, exact 2026-09-12 08:34; pass 2 of 5 of this contact, also exact 2026-06-24 22:14, 2027-04-17 09:39, 2027-12-22 07:00, 2028-01-28 15:34"
+    },
+    {
+      "from_object": "Neptune",
+      "to_object": "Asc",
+      "type": "Trine",
+      "symbol": "△",
+      "orb": 1.26,
+      "movement": "Separative",
+      "exact_at": "2026-08-26 23:27",
+      "passes": [
+        "2026-05-18 23:10",
+        "2026-08-26 23:27",
+        "2027-03-16 14:06"
+      ],
+      "pass": "2 of 3",
+      "from_sign": "Aries",
+      "from_position": "2°31' Aries",
+      "to_sign": "Sagittarius",
+      "to_position": "3°47' Sagittarius",
+      "to_house": 1,
+      "from_retrograde": true,
+      "to_retrograde": false,
+      "label": "transiting Neptune 2°31' Aries trine natal Asc 3°47' Sagittarius (natal house 1), retrograde, separating, exact 2026-08-26 23:27; pass 2 of 3 of this contact, also exact 2026-05-18 23:10, 2027-03-16 14:06"
+    },
+    {
+      "from_object": "Uranus",
+      "to_object": "True North Node",
+      "type": "Conjunction",
+      "symbol": "☌",
+      "orb": 1.4,
+      "movement": "Separative",
+      "exact_at": "2027-06-11 08:19",
+      "passes": [
+        "2027-06-11 08:19",
+        "2028-01-01 19:33",
+        "2028-03-24 17:12"
+      ],
+      "pass": "1 of 3",
+      "from_sign": "Gemini",
+      "from_position": "5°15' Gemini",
+      "to_sign": "Gemini",
+      "to_position": "6°39' Gemini",
+      "to_house": 7,
+      "from_retrograde": true,
+      "to_retrograde": false,
+      "label": "transiting Uranus 5°15' Gemini conjunction natal True North Node 6°39' Gemini (natal house 7), retrograde, separating, exact 2027-06-11 08:19; pass 1 of 3 of this contact, also exact 2028-01-01 19:33, 2028-03-24 17:12"
+    },
+    {
+      "from_object": "Chiron",
+      "to_object": "Mercury",
+      "type": "Conjunction",
+      "symbol": "☌",
+      "orb": 1.43,
+      "movement": "Applicative",
+      "exact_at": "2026-11-13 16:26",
+      "passes": [
+        "2026-04-30 18:25",
+        "2026-11-13 16:26",
+        "2027-02-27 13:22"
+      ],
+      "pass": "2 of 3",
+      "from_sign": "Aries",
+      "from_position": "28°56' Aries",
+      "to_sign": "Aries",
+      "to_position": "27°30' Aries",
+      "to_house": 5,
+      "from_retrograde": true,
+      "to_retrograde": false,
+      "label": "transiting Chiron 28°56' Aries conjunction natal Mercury 27°30' Aries (natal house 5), retrograde, applying, exact 2026-11-13 16:26; pass 2 of 3 of this contact, also exact 2026-04-30 18:25, 2027-02-27 13:22"
+    },
+    {
+      "from_object": "Uranus",
+      "to_object": "Asc",
+      "type": "Opposition",
+      "symbol": "☍",
+      "orb": 1.48,
+      "movement": "Applicative",
+      "exact_at": "2026-11-23 03:37",
+      "passes": [
+        "2026-07-02 03:21",
+        "2026-11-23 03:37",
+        "2027-04-21 17:16"
+      ],
+      "pass": "2 of 3",
+      "from_sign": "Gemini",
+      "from_position": "5°15' Gemini",
+      "to_sign": "Sagittarius",
+      "to_position": "3°47' Sagittarius",
+      "to_house": 1,
+      "from_retrograde": true,
+      "to_retrograde": false,
+      "label": "transiting Uranus 5°15' Gemini opposition natal Asc 3°47' Sagittarius (natal house 1), retrograde, applying, exact 2026-11-23 03:37; pass 2 of 3 of this contact, also exact 2026-07-02 03:21, 2027-04-21 17:16"
+    },
+    {
+      "from_object": "Neptune",
+      "to_object": "Neptune",
+      "type": "Square",
+      "symbol": "□",
+      "orb": 1.48,
+      "movement": "Applicative",
+      "exact_at": "2026-02-28 14:25",
+      "passes": [
+        "2025-04-28 23:12",
+        "2025-09-12 22:08",
+        "2026-02-28 14:25"
+      ],
+      "pass": "3 of 3",
+      "from_sign": "Aries",
+      "from_position": "2°31' Aries",
+      "to_sign": "Capricorn",
+      "to_position": "1°02' Capricorn",
+      "to_house": 2,
+      "from_retrograde": true,
+      "to_retrograde": true,
+      "label": "transiting Neptune 2°31' Aries square natal Neptune 1°02' Capricorn (natal house 2), retrograde, applying, exact 2026-02-28 14:25; pass 3 of 3 of this contact, also exact 2025-04-28 23:12, 2025-09-12 22:08"
+    }
+  ],
+  "aspect_patterns": {
+    "t_square": [
+      [
+        [
+          "Chiron",
+          "Desc",
+          "Mercury",
+          "True North Node",
+          "Asc",
+          "Moon",
+          "Venus",
+          "Vertex",
+          "Uranus",
+          "Neptune",
+          "Pluto",
+          "Mars",
+          "True Lilith",
+          "Saturn",
+          "Sun",
+          "IC",
+          "Jupiter"
+        ],
+        [
+          "Chiron",
+          "Desc",
+          "Mercury",
+          "True North Node",
+          "Asc",
+          "Moon",
+          "Venus",
+          "Vertex",
+          "Uranus",
+          "Neptune",
+          "Pluto",
+          "Mars",
+          "True Lilith",
+          "Saturn",
+          "Sun",
+          "IC",
+          "Jupiter"
+        ],
+        [
+          "Part of Fortune"
+        ]
+      ]
+    ],
+    "grand_trine": [
+      [
+        [
+          "Chiron",
+          "Desc",
+          "Mercury",
+          "True North Node",
+          "Asc",
+          "Moon",
+          "Venus",
+          "Vertex",
+          "Uranus",
+          "Neptune",
+          "Pluto",
+          "Mars",
+          "True Lilith",
+          "Saturn",
+          "Sun",
+          "IC",
+          "Jupiter"
+        ],
+        [
+          "True South Node"
+        ],
+        [
+          "Chiron",
+          "Desc",
+          "Mercury",
+          "True North Node",
+          "Asc",
+          "Moon",
+          "Venus",
+          "Vertex",
+          "Uranus",
+          "Neptune",
+          "Pluto",
+          "Mars",
+          "True Lilith",
+          "Saturn",
+          "Sun",
+          "IC",
+          "Jupiter"
+        ]
+      ],
+      [
+        [
+          "Part of Fortune"
+        ],
+        [
+          "Chiron",
+          "Desc",
+          "Mercury",
+          "True North Node",
+          "Asc",
+          "Moon",
+          "Venus",
+          "Vertex",
+          "Uranus",
+          "Neptune",
+          "Pluto",
+          "Mars",
+          "True Lilith",
+          "Saturn",
+          "Sun",
+          "IC",
+          "Jupiter"
+        ],
+        [
+          "Chiron",
+          "Desc",
+          "Mercury",
+          "True North Node",
+          "Asc",
+          "Moon",
+          "Venus",
+          "Vertex",
+          "Uranus",
+          "Neptune",
+          "Pluto",
+          "Mars",
+          "True Lilith",
+          "Saturn",
+          "Sun",
+          "IC",
+          "Jupiter"
+        ]
+      ]
+    ],
+    "yod": [],
+    "grand_cross": [
+      [
+        [
+          "Chiron",
+          "Desc",
+          "Mercury",
+          "True North Node",
+          "Asc",
+          "Moon",
+          "Venus",
+          "Vertex",
+          "Uranus",
+          "Neptune",
+          "Pluto",
+          "Mars",
+          "True Lilith",
+          "Saturn",
+          "Sun",
+          "IC",
+          "Jupiter"
+        ],
+        [
+          "Chiron",
+          "Desc",
+          "Mercury",
+          "True North Node",
+          "Asc",
+          "Moon",
+          "Venus",
+          "Vertex",
+          "Uranus",
+          "Neptune",
+          "Pluto",
+          "Mars",
+          "True Lilith",
+          "Saturn",
+          "Sun",
+          "IC",
+          "Jupiter"
+        ],
+        [
+          "Chiron",
+          "Desc",
+          "Mercury",
+          "True North Node",
+          "Asc",
+          "Moon",
+          "Venus",
+          "Vertex",
+          "Uranus",
+          "Neptune",
+          "Pluto",
+          "Mars",
+          "True Lilith",
+          "Saturn",
+          "Sun",
+          "IC",
+          "Jupiter"
+        ],
+        [
+          "Part of Fortune"
+        ]
+      ]
+    ],
+    "kite": [],
+    "mystic_rectangle": [],
+    "cradle": [],
+    "grand_sextile": [],
+    "grand_quintile": []
+  },
+  "diurnal": false,
+  "moon_phase": {
+    "new_moon": false,
+    "waxing_crescent": true,
+    "first_quarter": false,
+    "waxing_gibbous": false,
+    "full_moon": false,
+    "disseminating": false,
+    "third_quarter": false,
+    "balsamic": false,
+    "formatted": "Waxing Crescent",
+    "phase": "Waxing Crescent",
+    "waxing": true,
+    "elongation": 33.64,
+    "illumination": 0.084
+  },
+  "natal": {
+    "date_time": "1984-05-10 20:44",
+    "house_system": "whole_sign",
+    "positions": {
+      "Asc": {
+        "longitude": 243.7787,
+        "sign": "Sagittarius",
+        "position": "3°47' Sagittarius",
+        "house": 1
+      },
+      "MC": {
+        "longitude": 165.5699,
+        "sign": "Virgo",
+        "position": "15°34' Virgo",
+        "house": 10
+      },
+      "True North Node": {
+        "longitude": 66.6564,
+        "sign": "Gemini",
+        "position": "6°39' Gemini",
+        "house": 7
+      },
+      "Sun": {
+        "longitude": 50.6369,
+        "sign": "Taurus",
+        "position": "20°38' Taurus",
+        "house": 6,
+        "retrograde": false
+      },
+      "Moon": {
+        "longitude": 176.2608,
+        "sign": "Virgo",
+        "position": "26°16' Virgo",
+        "house": 10,
+        "retrograde": false
+      },
+      "Mercury": {
+        "longitude": 27.5019,
+        "sign": "Aries",
+        "position": "27°30' Aries",
+        "house": 5,
+        "retrograde": false
+      },
+      "Venus": {
+        "longitude": 41.0091,
+        "sign": "Taurus",
+        "position": "11°01' Taurus",
+        "house": 6,
+        "retrograde": false
+      },
+      "Mars": {
+        "longitude": 230.9205,
+        "sign": "Scorpio",
+        "position": "20°55' Scorpio",
+        "house": 12,
+        "retrograde": true
+      },
+      "Jupiter": {
+        "longitude": 282.7593,
+        "sign": "Capricorn",
+        "position": "12°46' Capricorn",
+        "house": 2,
+        "retrograde": true
+      },
+      "Saturn": {
+        "longitude": 222.4951,
+        "sign": "Scorpio",
+        "position": "12°30' Scorpio",
+        "house": 12,
+        "retrograde": true
+      },
+      "Uranus": {
+        "longitude": 252.435,
+        "sign": "Sagittarius",
+        "position": "12°26' Sagittarius",
+        "house": 1,
+        "retrograde": true
+      },
+      "Neptune": {
+        "longitude": 271.0416,
+        "sign": "Capricorn",
+        "position": "1°02' Capricorn",
+        "house": 2,
+        "retrograde": true
+      },
+      "Pluto": {
+        "longitude": 210.1867,
+        "sign": "Scorpio",
+        "position": "0°11' Scorpio",
+        "house": 12,
+        "retrograde": true
+      },
+      "Chiron": {
+        "longitude": 62.0625,
+        "sign": "Gemini",
+        "position": "2°04' Gemini",
+        "house": 7,
+        "retrograde": false
+      }
+    }
+  },
+  "note": "This chart reflects the single moment 2026-10-13 05:58. 'objects' are the transiting bodies (in the natal chart's houses); 'natal.positions' are the natal points, angles included, that 'aspects' are measured against -- quote both ends from from_position/to_position. Each aspect's 'exact_at' is the local moment it is (or was) exact - null when that moment lies more than 366 days from the snapshot. 'passes' lists every exact moment of the contact's current run (a retrograde loop's passes, searched two years either way) and 'pass' says which of them 'exact_at' is, so quote the whole run when there is one. For 'what is coming up / how long does it last', call list_upcoming_transits with start_date/end_date instead of estimating timing from this chart."
+}

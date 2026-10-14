@@ -9,8 +9,9 @@ describe('what the model is asked', () => {
     const wheel = parseWheel(transit)!
     const input = readingsInput(wheel)!
     expect(input).toMatch(/^Day: 2026-10-13 05:58\. Birth chart of 1984-05-10 20:44\.\nTransits:\n/)
-    expect(input).toContain('- key: Mercury|Sextile|MC\n  transiting Mercury in Scorpio, 12th house sextile natal Midheaven in Virgo; exact 2026-10-13 16:16, orb 0°23′, applying')
-    expect(input).toContain('- key: Neptune|Sextile|Chiron\n  transiting Neptune in Aries, 5th house, retrograde sextile natal Chiron in Gemini, 7th house; orb 0°28′, applying')
+    expect(input).toContain('- key: Mercury|Sextile|MC\n  transiting Mercury in Scorpio, 12th house sextile natal Midheaven in Virgo; exact 2026-10-13 16:16, pass 1 of 3 (also 2026-11-01 14:40, 2026-11-26 00:43), orb 0°23′, applying')
+    // A retrograde's whole run goes to the model, so a reading can say the contact returns.
+    expect(input).toContain('- key: Neptune|Sextile|Chiron\n  transiting Neptune in Aries, 5th house, retrograde sextile natal Chiron in Gemini, 7th house; exact 2026-11-01 16:51, pass 4 of 5 (also 2025-06-14 06:02, 2025-07-25 06:50, 2026-03-27 22:44, 2027-01-21 08:50), orb 0°28′, applying')
     expect(input.split('\n- key: ').length - 1).toBe(wheel.aspects.length)
     expect(readingsTokenCap(wheel.aspects.length)).toBeGreaterThan(90 * wheel.aspects.length)
   })

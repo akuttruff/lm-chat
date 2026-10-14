@@ -14,6 +14,9 @@ describe('transits as rows', () => {
     expect(rows.slice(dated.length).map((r) => r.orb)).toEqual(rows.slice(dated.length).map((r) => r.orb).sort((a, b) => a - b))
     const jupiter = rows.find((r) => r.from === 'Jupiter' && r.to === 'Sun')!
     expect(jupiter).toMatchObject({ type: 'Square', toHouse: 6, fromRetrograde: false, movement: 'separating', toPosition: '20°38′ Taurus' })
+    // Jupiter's 2026-27 loop squares the Sun three times: this is the first.
+    expect(jupiter).toMatchObject({ exact: '2026-10-06 16:36', pass: '1 of 3', passes: ['2026-10-06 16:36', '2027-02-21 10:07', '2027-06-02 09:19'] })
+    expect(rows.every((r) => r.passes.includes(r.exact!) && (r.pass === null) === (r.passes.length === 1))).toBe(true)
     expect(jupiter.fromPosition).toMatch(/^2\d°\d\d′ Leo$/)
     expect(activeTransits({ ...parseWheel(transit)!, kind: 'natal' })).toEqual([])
   })

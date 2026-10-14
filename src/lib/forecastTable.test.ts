@@ -19,7 +19,12 @@ describe('a forecast as rows', () => {
     const t = parseForecast(week)!
     expect(t).toMatchObject({ horizon: 'week', start: '2026-10-12', end: '2026-10-18' })
     expect(t.rows.length).toBeGreaterThan(4)
-    expect(t.rows[0]).toMatchObject({ from: 'Mars', to: 'Venus', type: 'Square', exact: '2026-10-17 05:04', toHouse: 7, fromRetrograde: false, pass: null, fromPosition: '11°01′ Leo', toPosition: '11°01′ Taurus', movement: null })
+    expect(t.rows[0]).toMatchObject({ from: 'Mars', to: 'Venus', type: 'Square', exact: '2026-10-17 05:04', toHouse: 6, fromRetrograde: false, pass: null, passes: ['2026-10-17 05:04'], fromPosition: '11°01′ Leo', toPosition: '11°01′ Taurus', movement: null })
+    // The slow planets' contacts are runs: every pass of each, with the one nearest the week among them.
+    const runs = t.rows.filter((r) => r.pass)
+    expect(runs.length).toBeGreaterThan(2)
+    expect(runs.every((r) => r.passes.length >= 2 && r.passes.includes(r.nearestExact!) && r.pass!.endsWith(`of ${r.passes.length}`))).toBe(true)
+    expect(runs.find((r) => r.from === 'Jupiter' && r.to === 'Sun')).toMatchObject({ pass: '1 of 3', passes: ['2026-10-06 16:36', '2027-02-21 10:07', '2027-06-02 09:19'] })
     const exact = t.rows.map((r) => Boolean(r.exact))
     expect(exact.indexOf(false)).toBeGreaterThan(0)
     expect(exact.slice(exact.indexOf(false))).not.toContain(true)
@@ -46,7 +51,7 @@ describe('a forecast as rows', () => {
     const moments = keyM.map((r) => r.exact ?? r.start)
     expect(moments).toEqual(moments.slice().sort())
     const y = parseForecast(year)!
-    expect(keyTransits(y).length).toBeLessThan(y.rows.length)
+    expect(keyTransits(y).length).toBeLessThanOrEqual(y.rows.length) // a year's headlines are all slow planets, so all may be key
     expect(keyTransits({ ...y, rows: y.rows.map((r) => ({ ...r, weight: 2.9 })) })).toEqual([])
     expect(y.rows.some((r) => r.pass && / of /.test(r.pass))).toBe(true)
     expect(y.rows.some((r) => r.fromRetrograde)).toBe(true)

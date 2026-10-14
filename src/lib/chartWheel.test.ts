@@ -169,8 +169,9 @@ describe('in words', () => {
   it('gives the orb, direction and exact moment when known', () => {
     const w = parseWheel(transit)!
     const a = w.aspects.find((x) => x.from === 'Mercury' && x.to === 'MC')!
-    expect(aspectDetail(a)).toBe('exact 2026-10-13 16:16, orb 0°23′, applying')
-    expect(aspectDetail({ ...a, movement: null, exactAt: null })).toBe('orb 0°23′')
+    expect(aspectDetail(a)).toBe('exact 2026-10-13 16:16, pass 1 of 3 (also 2026-11-01 14:40, 2026-11-26 00:43), orb 0°23′, applying')
+    expect(aspectDetail({ ...a, movement: null, exactAt: null, pass: null, passes: [] })).toBe('orb 0°23′')
+    expect(aspectDetail({ ...a, movement: null, pass: null, passes: [a.exactAt!] })).toBe('exact 2026-10-13 16:16, orb 0°23′')
   })
 
   it('describes a planet with its position, house and aspects', () => {

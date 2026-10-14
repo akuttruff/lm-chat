@@ -33,6 +33,9 @@ export interface WheelAspect {
   movement: string | null
   /** The local moment it is or was exact, when the tool says. */
   exactAt: string | null
+  /** Every exact moment of the contact's run (a retrograde's passes), and which of them exactAt is: "1 of 3". */
+  passes: string[]
+  pass: string | null
 }
 
 export interface Wheel {
@@ -118,6 +121,8 @@ function aspectsOf(raw: unknown): WheelAspect[] {
       from, to, type, orb: num(a.orb) ?? 0,
       movement: typeof a.movement === 'string' ? a.movement : null,
       exactAt: typeof a.exact_at === 'string' ? a.exact_at : null,
+      passes: Array.isArray(a.passes) ? a.passes.filter((p): p is string => typeof p === 'string') : [],
+      pass: typeof a.pass === 'string' ? a.pass : null,
     })
   }
   return out
@@ -299,12 +304,16 @@ export function aspectSentence(wheel: Wheel, a: WheelAspect): string {
   return `${fromText} ${verb} ${wheel.kind === 'transit' ? 'your ' : ''}${toText}`
 }
 
-/** "exact 2026-10-12 23:43, orb 0°23′, applying" -- whatever of it is known. */
+/** "exact 2026-10-12 23:43, pass 1 of 3 (also 2027-02-21 10:07, 2027-06-02 09:19), orb 0°23′, applying" -- whatever of it is known. */
 export function aspectDetail(a: WheelAspect): string {
   const deg = Math.floor(a.orb)
   const min = Math.round((a.orb - deg) * 60)
   const parts: string[] = []
   if (a.exactAt) parts.push(`exact ${a.exactAt}`)
+  if (a.pass) {
+    const others = a.passes.filter((p) => p !== a.exactAt)
+    parts.push(`pass ${a.pass}${others.length ? ` (also ${others.join(', ')})` : ''}`)
+  }
   parts.push(`orb ${deg}°${String(min).padStart(2, '0')}′`)
   if (a.movement) parts.push(a.movement.toLowerCase().startsWith('app') ? 'applying' : 'separating')
   return parts.join(', ')

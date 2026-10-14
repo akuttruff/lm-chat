@@ -1,1 +1,845 @@
-{"forecast":"year","range":{"start":"2026-10-14","end":"2027-10-14"},"natal":{"date_time":"1984-05-10 20:44","house_system":"whole_sign","chart_ruler":"Mars","positions":{"Asc":{"longitude":238.6694,"sign":"Scorpio","position":"28°40' Scorpio","house":1},"MC":{"longitude":161.2413,"sign":"Virgo","position":"11°14' Virgo","house":11},"True North Node":{"longitude":66.6564,"sign":"Gemini","position":"6°39' Gemini","house":8},"Sun":{"longitude":50.6369,"sign":"Taurus","position":"20°38' Taurus","house":7,"retrograde":false},"Moon":{"longitude":176.2608,"sign":"Virgo","position":"26°16' Virgo","house":11,"retrograde":false},"Mercury":{"longitude":27.5019,"sign":"Aries","position":"27°30' Aries","house":6,"retrograde":false},"Venus":{"longitude":41.0091,"sign":"Taurus","position":"11°01' Taurus","house":7,"retrograde":false},"Mars":{"longitude":230.9205,"sign":"Scorpio","position":"20°55' Scorpio","house":1,"retrograde":true},"Jupiter":{"longitude":282.7593,"sign":"Capricorn","position":"12°46' Capricorn","house":3,"retrograde":true},"Saturn":{"longitude":222.4951,"sign":"Scorpio","position":"12°30' Scorpio","house":1,"retrograde":true},"Uranus":{"longitude":252.435,"sign":"Sagittarius","position":"12°26' Sagittarius","house":2,"retrograde":true},"Neptune":{"longitude":271.0416,"sign":"Capricorn","position":"1°02' Capricorn","house":3,"retrograde":true},"Pluto":{"longitude":210.1867,"sign":"Scorpio","position":"0°11' Scorpio","house":1,"retrograde":true},"Chiron":{"longitude":62.0625,"sign":"Gemini","position":"2°04' Gemini","house":8,"retrograde":false}}},"headline_transits":[{"transiting":"Uranus","natal":"MC","aspect":"Square","start":"2027-08-24","end":"2027-10-07","exact":null,"nearest_exact":"2028-06-20 11:59","movement":"separating","orb":1.29,"pass":null,"from_position":"9°57' Gemini","to_position":"11°14' Virgo","natal_house":11,"retrograde":false,"weight":7.2,"label":"tightest 2027-09-11: transiting Uranus 9°57' Gemini square natal MC 11°14' Virgo (natal house 11); not exact in the period, exact 2028-06-20 11:59, separating"},{"transiting":"Jupiter","natal":"MC","aspect":"Conjunction","start":"2027-09-10","end":"2027-09-23","exact":"2027-09-16 09:57","nearest_exact":"2027-09-16 09:57","movement":null,"orb":0.09,"pass":null,"from_position":"11°14' Virgo","to_position":"11°14' Virgo","natal_house":11,"retrograde":false,"weight":6.0,"label":"exact 2027-09-16 09:57: transiting Jupiter 11°14' Virgo conjunction natal MC 11°14' Virgo (natal house 11)"},{"transiting":"Jupiter","natal":"Mars","aspect":"Square","start":"2027-02-08","end":"2027-03-03","exact":"2027-02-19 04:57","nearest_exact":"2027-02-19 04:57","movement":null,"orb":0.03,"pass":"2 of 3","from_position":"20°55' Leo","to_position":"20°55' Scorpio","natal_house":1,"retrograde":true,"weight":5.4,"label":"exact 2027-02-19 04:57: transiting Jupiter 20°55' Leo square natal Mars 20°55' Scorpio (natal house 1) -- pass 2 of 3 of this contact in the period, retrograde"},{"transiting":"Jupiter","natal":"Sun","aspect":"Square","start":"2027-02-10","end":"2027-03-06","exact":"2027-02-21 10:07","nearest_exact":"2027-02-21 10:07","movement":null,"orb":0.05,"pass":"2 of 3","from_position":"20°38' Leo","to_position":"20°38' Taurus","natal_house":7,"retrograde":true,"weight":5.4,"label":"exact 2027-02-21 10:07: transiting Jupiter 20°38' Leo square natal Sun 20°38' Taurus (natal house 7) -- pass 2 of 3 of this contact in the period, retrograde"},{"transiting":"Jupiter","natal":"Sun","aspect":"Square","start":"2027-05-21","end":"2027-06-12","exact":"2027-06-02 09:19","nearest_exact":"2027-06-02 09:19","movement":null,"orb":0.05,"pass":"3 of 3","from_position":"20°38' Leo","to_position":"20°38' Taurus","natal_house":7,"retrograde":false,"weight":5.4,"label":"exact 2027-06-02 09:19: transiting Jupiter 20°38' Leo square natal Sun 20°38' Taurus (natal house 7) -- pass 3 of 3 of this contact in the period"},{"transiting":"Jupiter","natal":"Asc","aspect":"Square","start":"2027-07-12","end":"2027-07-26","exact":"2027-07-19 07:41","nearest_exact":"2027-07-19 07:41","movement":null,"orb":0.06,"pass":null,"from_position":"28°40' Leo","to_position":"28°40' Scorpio","natal_house":1,"retrograde":false,"weight":5.4,"label":"exact 2027-07-19 07:41: transiting Jupiter 28°40' Leo square natal Asc 28°40' Scorpio (natal house 1)"},{"transiting":"Jupiter","natal":"Mars","aspect":"Square","start":"2027-05-24","end":"2027-06-14","exact":"2027-06-04 11:21","nearest_exact":"2027-06-04 11:21","movement":null,"orb":0.07,"pass":"3 of 3","from_position":"20°55' Leo","to_position":"20°55' Scorpio","natal_house":1,"retrograde":false,"weight":5.4,"label":"exact 2027-06-04 11:21: transiting Jupiter 20°55' Leo square natal Mars 20°55' Scorpio (natal house 1) -- pass 3 of 3 of this contact in the period"},{"transiting":"Jupiter","natal":"Mars","aspect":"Square","start":"2026-10-14","end":"2026-10-17","exact":null,"nearest_exact":"2026-10-08 08:55","movement":"separating","orb":0.92,"pass":"1 of 3","from_position":"21°50' Leo","to_position":"20°55' Scorpio","natal_house":1,"retrograde":false,"weight":5.4,"label":"tightest 2026-10-14: transiting Jupiter 21°50' Leo square natal Mars 20°55' Scorpio (natal house 1) -- pass 1 of 3 of this contact in the period; not exact in the period, exact 2026-10-08 08:55, separating"},{"transiting":"Jupiter","natal":"Sun","aspect":"Square","start":"2026-10-14","end":"2026-10-15","exact":null,"nearest_exact":"2026-10-06 16:36","movement":"separating","orb":1.2,"pass":"1 of 3","from_position":"21°50' Leo","to_position":"20°38' Taurus","natal_house":7,"retrograde":false,"weight":5.4,"label":"tightest 2026-10-14: transiting Jupiter 21°50' Leo square natal Sun 20°38' Taurus (natal house 7) -- pass 1 of 3 of this contact in the period; not exact in the period, exact 2026-10-06 16:36, separating"},{"transiting":"Neptune","natal":"Neptune","aspect":"Square","start":"2026-10-14","end":"2027-02-08","exact":null,"nearest_exact":"2026-02-28 14:25","movement":"separating","orb":0.57,"pass":null,"from_position":"1°37' Aries","to_position":"1°02' Capricorn","natal_house":3,"retrograde":true,"weight":4.5,"label":"tightest 2026-12-09: transiting Neptune 1°37' Aries square natal Neptune 1°02' Capricorn (natal house 3), retrograde; not exact in the period, exact 2026-02-28 14:25, separating"},{"transiting":"Uranus","natal":"Chiron","aspect":"Conjunction","start":"2026-11-29","end":"2027-04-17","exact":"2027-01-09 08:20","nearest_exact":"2027-01-09 08:20","movement":null,"orb":0.01,"pass":null,"from_position":"2°04' Gemini","to_position":"2°04' Gemini","natal_house":8,"retrograde":true,"weight":4.0,"label":"exact 2027-01-09 08:20: transiting Uranus 2°04' Gemini conjunction natal Chiron 2°04' Gemini (natal house 8), retrograde"},{"transiting":"Uranus","natal":"True North Node","aspect":"Conjunction","start":"2027-05-17","end":"2027-07-09","exact":"2027-06-11 08:19","nearest_exact":"2027-06-11 08:19","movement":null,"orb":0.02,"pass":"2 of 2","from_position":"6°39' Gemini","to_position":"6°39' Gemini","natal_house":8,"retrograde":false,"weight":4.0,"label":"exact 2027-06-11 08:19: transiting Uranus 6°39' Gemini conjunction natal True North Node 6°39' Gemini (natal house 8) -- pass 2 of 2 of this contact in the period"},{"transiting":"Saturn","natal":"Mercury","aspect":"Conjunction","start":"2027-06-23","end":"2027-09-27","exact":"2027-07-19 12:32","nearest_exact":"2027-07-19 12:32","movement":null,"orb":0.02,"pass":null,"from_position":"27°30' Aries","to_position":"27°30' Aries","natal_house":6,"retrograde":false,"weight":4.0,"label":"exact 2027-07-19 12:32: transiting Saturn 27°30' Aries conjunction natal Mercury 27°30' Aries (natal house 6)"},{"transiting":"Uranus","natal":"True North Node","aspect":"Conjunction","start":"2026-10-14","end":"2026-10-17","exact":null,"nearest_exact":"2027-06-11 08:19","movement":"separating","orb":1.42,"pass":"1 of 2","from_position":"5°14' Gemini","to_position":"6°39' Gemini","natal_house":8,"retrograde":true,"weight":4.0,"label":"tightest 2026-10-14: transiting Uranus 5°14' Gemini conjunction natal True North Node 6°39' Gemini (natal house 8) -- pass 1 of 2 of this contact in the period, retrograde; not exact in the period, exact 2027-06-11 08:19, separating"},{"transiting":"Saturn","natal":"Jupiter","aspect":"Square","start":"2027-02-12","end":"2027-03-10","exact":"2027-02-25 20:10","nearest_exact":"2027-02-25 20:10","movement":null,"orb":0.02,"pass":null,"from_position":"12°46' Aries","to_position":"12°46' Capricorn","natal_house":3,"retrograde":false,"weight":3.6,"label":"exact 2027-02-25 20:10: transiting Saturn 12°46' Aries square natal Jupiter 12°46' Capricorn (natal house 3)"},{"transiting":"Pluto","natal":"True North Node","aspect":"Trine","start":"2027-01-27","end":"2027-09-04","exact":"2027-03-21 03:26","nearest_exact":"2027-03-21 03:26","movement":null,"orb":0.0,"pass":null,"from_position":"6°39' Aquarius","to_position":"6°39' Gemini","natal_house":8,"retrograde":false,"weight":3.5,"label":"exact 2027-03-21 03:26: transiting Pluto 6°39' Aquarius trine natal True North Node 6°39' Gemini (natal house 8)"},{"transiting":"Pluto","natal":"Chiron","aspect":"Trine","start":"2026-10-14","end":"2026-12-01","exact":null,"nearest_exact":"2025-12-07 16:36","movement":"separating","orb":1.01,"pass":null,"from_position":"3°04' Aquarius","to_position":"2°04' Gemini","natal_house":8,"retrograde":true,"weight":3.5,"label":"tightest 2026-10-14: transiting Pluto 3°04' Aquarius trine natal Chiron 2°04' Gemini (natal house 8), retrograde; not exact in the period, exact 2025-12-07 16:36, separating"},{"transiting":"Chiron","natal":"Mercury","aspect":"Conjunction","start":"2026-10-14","end":"2027-03-28","exact":"2026-11-13 17:26","nearest_exact":"2026-11-13 17:26","movement":null,"orb":0.01,"pass":null,"from_position":"27°30' Aries","to_position":"27°30' Aries","natal_house":6,"retrograde":true,"weight":3.0,"label":"exact 2026-11-13 17:26: transiting Chiron 27°30' Aries conjunction natal Mercury 27°30' Aries (natal house 6), retrograde"},{"transiting":"Chiron","natal":"Pluto","aspect":"Opposition","start":"2027-03-23","end":"2027-05-12","exact":"2027-04-17 09:39","nearest_exact":"2027-04-17 09:39","movement":null,"orb":0.02,"pass":"2 of 2","from_position":"0°11' Taurus","to_position":"0°11' Scorpio","natal_house":1,"retrograde":false,"weight":3.0,"label":"exact 2027-04-17 09:39: transiting Chiron 0°11' Taurus opposition natal Pluto 0°11' Scorpio (natal house 1) -- pass 2 of 2 of this contact in the period"},{"transiting":"Chiron","natal":"Pluto","aspect":"Opposition","start":"2026-10-14","end":"2026-10-18","exact":null,"nearest_exact":"2026-09-12 08:34","movement":"separating","orb":1.29,"pass":"1 of 2","from_position":"28°54' Aries","to_position":"0°11' Scorpio","natal_house":1,"retrograde":true,"weight":3.0,"label":"tightest 2026-10-14: transiting Chiron 28°54' Aries opposition natal Pluto 0°11' Scorpio (natal house 1) -- pass 1 of 2 of this contact in the period, retrograde; not exact in the period, exact 2026-09-12 08:34, separating"},{"transiting":"Saturn","natal":"Uranus","aspect":"Trine","start":"2027-02-09","end":"2027-03-08","exact":"2027-02-22 21:01","nearest_exact":"2027-02-22 21:01","movement":null,"orb":0.01,"pass":null,"from_position":"12°26' Aries","to_position":"12°26' Sagittarius","natal_house":2,"retrograde":false,"weight":2.8,"label":"exact 2027-02-22 21:01: transiting Saturn 12°26' Aries trine natal Uranus 12°26' Sagittarius (natal house 2)"},{"transiting":"Jupiter","natal":"Uranus","aspect":"Square","start":"2027-09-15","end":"2027-09-29","exact":"2027-09-22 00:04","nearest_exact":"2027-09-22 00:04","movement":null,"orb":0.0,"pass":null,"from_position":"12°26' Virgo","to_position":"12°26' Sagittarius","natal_house":2,"retrograde":false,"weight":2.7,"label":"exact 2027-09-22 00:04: transiting Jupiter 12°26' Virgo square natal Uranus 12°26' Sagittarius (natal house 2)"},{"transiting":"Jupiter","natal":"Chiron","aspect":"Square","start":"2027-07-29","end":"2027-08-11","exact":"2027-08-04 20:04","nearest_exact":"2027-08-04 20:04","movement":null,"orb":0.03,"pass":null,"from_position":"2°04' Virgo","to_position":"2°04' Gemini","natal_house":8,"retrograde":false,"weight":2.7,"label":"exact 2027-08-04 20:04: transiting Jupiter 2°04' Virgo square natal Chiron 2°04' Gemini (natal house 8)"},{"transiting":"Jupiter","natal":"True North Node","aspect":"Square","start":"2027-08-20","end":"2027-09-02","exact":"2027-08-26 05:57","nearest_exact":"2027-08-26 05:57","movement":null,"orb":0.05,"pass":null,"from_position":"6°39' Virgo","to_position":"6°39' Gemini","natal_house":8,"retrograde":false,"weight":2.7,"label":"exact 2027-08-26 05:57: transiting Jupiter 6°39' Virgo square natal True North Node 6°39' Gemini (natal house 8)"},{"transiting":"Neptune","natal":"True North Node","aspect":"Sextile","start":"2027-04-23","end":"2027-10-01","exact":"2027-07-06 06:27","nearest_exact":"2027-07-06 06:27","movement":null,"orb":0.0,"pass":null,"from_position":"6°39' Aries","to_position":"6°39' Gemini","natal_house":8,"retrograde":false,"weight":2.5,"label":"exact 2027-07-06 06:27: transiting Neptune 6°39' Aries sextile natal True North Node 6°39' Gemini (natal house 8)"}],"headline_note":"The 25 weightiest of 35 contacts within 1.5° in the period, ranked by how slow the transiting planet is, how central the natal point is (Sun, Moon, Asc, MC and the chart ruler Mars count double) and the aspect. Positions are at the exact moment. A contact listed with 'pass n of m' recurs as the planet retrogrades. 'exact' is the exact moment when it falls in the period; 'nearest_exact' is that moment, or otherwise the nearest one before or after the period, with 'movement' saying whether the orb closes (applying) or opens (separating) across the period.","eclipses":[{"event":"annular solar eclipse","exact":"2027-02-06 08:00","position":"17°38' Aquarius","natal_house":4,"contacts":[],"label":"2027-02-06: annular solar eclipse at 17°38' Aquarius in natal house 4"},{"event":"penumbral lunar eclipse","exact":"2027-02-20 15:13","position":"1°59' Virgo","natal_house":11,"contacts":[],"label":"2027-02-20: penumbral lunar eclipse at 1°59' Virgo in natal house 11"},{"event":"penumbral lunar eclipse","exact":"2027-07-18 09:03","position":"25°58' Capricorn","natal_house":3,"contacts":["square natal Mercury (1.5°)"],"label":"2027-07-18: penumbral lunar eclipse at 25°58' Capricorn in natal house 3, touching square natal Mercury (1.5°)"},{"event":"total solar eclipse","exact":"2027-08-02 03:07","position":"9°55' Leo","natal_house":10,"contacts":["square natal Venus (1.1°)","square natal Saturn (2.6°)"],"label":"2027-08-02: total solar eclipse at 9°55' Leo in natal house 10, touching square natal Venus (1.1°), square natal Saturn (2.6°)"},{"event":"penumbral lunar eclipse","exact":"2027-08-17 00:14","position":"24°04' Aquarius","natal_house":4,"contacts":[],"label":"2027-08-17: penumbral lunar eclipse at 24°04' Aquarius in natal house 4"}],"ingresses":[{"planet":"Mars","enters":"Virgo","exact":"2026-11-25 15:37","retrograde":false,"natal_house":11,"label":"2026-11-25: Mars enters Virgo, natal house 11"},{"planet":"Mars","enters":"Leo","exact":"2027-02-21 06:13","retrograde":true,"natal_house":10,"label":"2027-02-21: Mars enters Leo (retrograde, backing in), natal house 10"},{"planet":"Chiron","enters":"Taurus","exact":"2027-04-14 07:58","retrograde":false,"natal_house":7,"label":"2027-04-14: Chiron enters Taurus, natal house 7"},{"planet":"Mars","enters":"Virgo","exact":"2027-05-14 07:47","retrograde":false,"natal_house":11,"label":"2027-05-14: Mars enters Virgo, natal house 11"},{"planet":"Mars","enters":"Libra","exact":"2027-07-14 22:40","retrograde":false,"natal_house":12,"label":"2027-07-14: Mars enters Libra, natal house 12"},{"planet":"Jupiter","enters":"Virgo","exact":"2027-07-25 21:49","retrograde":false,"natal_house":11,"label":"2027-07-25: Jupiter enters Virgo, natal house 11"},{"planet":"Mars","enters":"Scorpio","exact":"2027-09-01 18:52","retrograde":false,"natal_house":1,"label":"2027-09-01: Mars enters Scorpio, natal house 1"}],"stations":[{"planet":"Pluto","station":"direct","exact":"2026-10-15 19:40","position":"3°04' Aquarius","natal_house":4,"label":"2026-10-15: Pluto stations direct at 3°04' Aquarius (natal house 4)"},{"planet":"Saturn","station":"direct","exact":"2026-12-10 15:31","position":"7°56' Aries","natal_house":6,"label":"2026-12-10: Saturn stations direct at 7°56' Aries (natal house 6)"},{"planet":"Neptune","station":"direct","exact":"2026-12-12 14:17","position":"1°37' Aries","natal_house":6,"label":"2026-12-12: Neptune stations direct at 1°37' Aries (natal house 6)"},{"planet":"Jupiter","station":"retrograde","exact":"2026-12-12 16:57","position":"27°01' Leo","natal_house":10,"label":"2026-12-12: Jupiter stations retrograde at 27°01' Leo (natal house 10)"},{"planet":"Chiron","station":"direct","exact":"2027-01-06 03:01","position":"26°16' Aries","natal_house":6,"label":"2027-01-06: Chiron stations direct at 26°16' Aries (natal house 6)"},{"planet":"Mars","station":"retrograde","exact":"2027-01-10 04:59","position":"10°26' Virgo","natal_house":11,"label":"2027-01-10: Mars stations retrograde at 10°26' Virgo (natal house 11)"},{"planet":"Uranus","station":"direct","exact":"2027-02-08 04:29","position":"1°41' Gemini","natal_house":8,"label":"2027-02-08: Uranus stations direct at 1°41' Gemini (natal house 8)"},{"planet":"Mars","station":"direct","exact":"2027-04-01 07:08","position":"20°56' Leo","natal_house":10,"label":"2027-04-01: Mars stations direct at 20°56' Leo (natal house 10)"},{"planet":"Jupiter","station":"direct","exact":"2027-04-12 19:11","position":"17°00' Leo","natal_house":10,"label":"2027-04-12: Jupiter stations direct at 17°00' Leo (natal house 10)"},{"planet":"Pluto","station":"retrograde","exact":"2027-05-08 05:54","position":"7°11' Aquarius","natal_house":4,"label":"2027-05-08: Pluto stations retrograde at 7°11' Aquarius (natal house 4)"},{"planet":"Neptune","station":"retrograde","exact":"2027-07-09 15:41","position":"6°40' Aries","natal_house":6,"label":"2027-07-09: Neptune stations retrograde at 6°40' Aries (natal house 6)"},{"planet":"Chiron","station":"retrograde","exact":"2027-08-07 19:55","position":"4°40' Taurus","natal_house":7,"label":"2027-08-07: Chiron stations retrograde at 4°40' Taurus (natal house 7)"},{"planet":"Saturn","station":"retrograde","exact":"2027-08-09 11:06","position":"27°53' Aries","natal_house":6,"label":"2027-08-09: Saturn stations retrograde at 27°53' Aries (natal house 6)"},{"planet":"Uranus","station":"retrograde","exact":"2027-09-15 02:09","position":"9°57' Gemini","natal_house":8,"label":"2027-09-15: Uranus stations retrograde at 9°57' Gemini (natal house 8)"}],"by_month":{"2026-10":["2026-10-15: Pluto stations direct at 3°04' Aquarius (natal house 4)","tightest 2026-10-14: transiting Jupiter 21°50' Leo square natal Mars 20°55' Scorpio (natal house 1) -- pass 1 of 3 of this contact in the period; not exact in the period, exact 2026-10-08 08:55, separating","tightest 2026-10-14: transiting Jupiter 21°50' Leo square natal Sun 20°38' Taurus (natal house 7) -- pass 1 of 3 of this contact in the period; not exact in the period, exact 2026-10-06 16:36, separating"],"2026-11":["exact 2026-11-13 17:26: transiting Chiron 27°30' Aries conjunction natal Mercury 27°30' Aries (natal house 6), retrograde"],"2026-12":["2026-12-12: Neptune stations direct at 1°37' Aries (natal house 6)","2026-12-10: Saturn stations direct at 7°56' Aries (natal house 6)","2026-12-12: Jupiter stations retrograde at 27°01' Leo (natal house 10)"],"2027-01":["exact 2027-01-09 08:20: transiting Uranus 2°04' Gemini conjunction natal Chiron 2°04' Gemini (natal house 8), retrograde","2027-01-06: Chiron stations direct at 26°16' Aries (natal house 6)","2027-01-10: Mars stations retrograde at 10°26' Virgo (natal house 11)"],"2027-02":["2027-02-06: annular solar eclipse at 17°38' Aquarius in natal house 4","2027-02-20: penumbral lunar eclipse at 1°59' Virgo in natal house 11","exact 2027-02-19 04:57: transiting Jupiter 20°55' Leo square natal Mars 20°55' Scorpio (natal house 1) -- pass 2 of 3 of this contact in the period, retrograde"],"2027-03":["exact 2027-03-21 03:26: transiting Pluto 6°39' Aquarius trine natal True North Node 6°39' Gemini (natal house 8)"],"2027-04":["2027-04-12: Jupiter stations direct at 17°00' Leo (natal house 10)","exact 2027-04-17 09:39: transiting Chiron 0°11' Taurus opposition natal Pluto 0°11' Scorpio (natal house 1) -- pass 2 of 2 of this contact in the period","2027-04-01: Mars stations direct at 20°56' Leo (natal house 10)"],"2027-05":["2027-05-08: Pluto stations retrograde at 7°11' Aquarius (natal house 4)"],"2027-06":["exact 2027-06-02 09:19: transiting Jupiter 20°38' Leo square natal Sun 20°38' Taurus (natal house 7) -- pass 3 of 3 of this contact in the period","exact 2027-06-04 11:21: transiting Jupiter 20°55' Leo square natal Mars 20°55' Scorpio (natal house 1) -- pass 3 of 3 of this contact in the period","exact 2027-06-11 08:19: transiting Uranus 6°39' Gemini conjunction natal True North Node 6°39' Gemini (natal house 8) -- pass 2 of 2 of this contact in the period"],"2027-07":["2027-07-18: penumbral lunar eclipse at 25°58' Capricorn in natal house 3, touching square natal Mercury (1.5°)","2027-07-09: Neptune stations retrograde at 6°40' Aries (natal house 6)","exact 2027-07-19 07:41: transiting Jupiter 28°40' Leo square natal Asc 28°40' Scorpio (natal house 1)"],"2027-08":["tightest 2027-09-11: transiting Uranus 9°57' Gemini square natal MC 11°14' Virgo (natal house 11); not exact in the period, exact 2028-06-20 11:59, separating","2027-08-02: total solar eclipse at 9°55' Leo in natal house 10, touching square natal Venus (1.1°), square natal Saturn (2.6°)","2027-08-17: penumbral lunar eclipse at 24°04' Aquarius in natal house 4"],"2027-09":["exact 2027-09-16 09:57: transiting Jupiter 11°14' Virgo conjunction natal MC 11°14' Virgo (natal house 11)","2027-09-15: Uranus stations retrograde at 9°57' Gemini (natal house 8)","exact 2027-09-22 00:04: transiting Jupiter 12°26' Virgo square natal Uranus 12°26' Sagittarius (natal house 2)"],"2027-10":[]},"themes":{"natal house 1":["Chiron","Jupiter"],"natal house 2":["Jupiter","Saturn"],"natal house 3":["Neptune","Saturn"],"natal house 6":["Chiron","Saturn"],"natal house 7":["Jupiter"],"natal house 8":["Jupiter","Neptune","Pluto","Uranus"],"natal house 11":["Jupiter","Uranus"]},"left_out":{"objects":["Moon","Sun","Mercury","Venus","Mars (aspects)"],"why":"fast movers aspect something every few days; for a particular month use forecast_month"},"how_to_read":"Quote the labels; every date and degree here comes from the ephemeris. Lead with the headline transits in order, then the lunations/eclipses, stations and ingresses that fall in the period. Do not add transits that are not listed -- check any you want to mention with verify_claim."}
+{
+  "forecast": "year",
+  "range": {
+    "start": "2026-10-14",
+    "end": "2027-10-14"
+  },
+  "natal": {
+    "date_time": "1984-05-10 20:44",
+    "house_system": "whole_sign",
+    "chart_ruler": "Jupiter",
+    "positions": {
+      "Asc": {
+        "longitude": 243.7787,
+        "sign": "Sagittarius",
+        "position": "3°47' Sagittarius",
+        "house": 1
+      },
+      "MC": {
+        "longitude": 165.5699,
+        "sign": "Virgo",
+        "position": "15°34' Virgo",
+        "house": 10
+      },
+      "True North Node": {
+        "longitude": 66.6564,
+        "sign": "Gemini",
+        "position": "6°39' Gemini",
+        "house": 7
+      },
+      "Sun": {
+        "longitude": 50.6369,
+        "sign": "Taurus",
+        "position": "20°38' Taurus",
+        "house": 6,
+        "retrograde": false
+      },
+      "Moon": {
+        "longitude": 176.2608,
+        "sign": "Virgo",
+        "position": "26°16' Virgo",
+        "house": 10,
+        "retrograde": false
+      },
+      "Mercury": {
+        "longitude": 27.5019,
+        "sign": "Aries",
+        "position": "27°30' Aries",
+        "house": 5,
+        "retrograde": false
+      },
+      "Venus": {
+        "longitude": 41.0091,
+        "sign": "Taurus",
+        "position": "11°01' Taurus",
+        "house": 6,
+        "retrograde": false
+      },
+      "Mars": {
+        "longitude": 230.9205,
+        "sign": "Scorpio",
+        "position": "20°55' Scorpio",
+        "house": 12,
+        "retrograde": true
+      },
+      "Jupiter": {
+        "longitude": 282.7593,
+        "sign": "Capricorn",
+        "position": "12°46' Capricorn",
+        "house": 2,
+        "retrograde": true
+      },
+      "Saturn": {
+        "longitude": 222.4951,
+        "sign": "Scorpio",
+        "position": "12°30' Scorpio",
+        "house": 12,
+        "retrograde": true
+      },
+      "Uranus": {
+        "longitude": 252.435,
+        "sign": "Sagittarius",
+        "position": "12°26' Sagittarius",
+        "house": 1,
+        "retrograde": true
+      },
+      "Neptune": {
+        "longitude": 271.0416,
+        "sign": "Capricorn",
+        "position": "1°02' Capricorn",
+        "house": 2,
+        "retrograde": true
+      },
+      "Pluto": {
+        "longitude": 210.1867,
+        "sign": "Scorpio",
+        "position": "0°11' Scorpio",
+        "house": 12,
+        "retrograde": true
+      },
+      "Chiron": {
+        "longitude": 62.0625,
+        "sign": "Gemini",
+        "position": "2°04' Gemini",
+        "house": 7,
+        "retrograde": false
+      }
+    }
+  },
+  "headline_transits": [
+    {
+      "transiting": "Uranus",
+      "natal": "Asc",
+      "aspect": "Opposition",
+      "start": "2026-10-14",
+      "end": "2027-01-01",
+      "exact": "2026-11-23 03:37",
+      "nearest_exact": "2026-11-23 03:37",
+      "movement": null,
+      "orb": 0.01,
+      "pass": "2 of 3",
+      "passes": [
+        "2026-07-02 03:21",
+        "2026-11-23 03:37",
+        "2027-04-21 17:16"
+      ],
+      "from_position": "3°47' Gemini",
+      "to_position": "3°47' Sagittarius",
+      "natal_house": 1,
+      "retrograde": true,
+      "weight": 8.0,
+      "label": "exact 2026-11-23 03:37: transiting Uranus 3°47' Gemini opposition natal Asc 3°47' Sagittarius (natal house 1) -- pass 2 of 3 of this contact, also exact 2026-07-02 03:21, 2027-04-21 17:16, retrograde"
+    },
+    {
+      "transiting": "Uranus",
+      "natal": "Asc",
+      "aspect": "Opposition",
+      "start": "2027-03-18",
+      "end": "2027-05-18",
+      "exact": "2027-04-21 17:16",
+      "nearest_exact": "2027-04-21 17:16",
+      "movement": null,
+      "orb": 0.01,
+      "pass": "3 of 3",
+      "passes": [
+        "2026-07-02 03:21",
+        "2026-11-23 03:37",
+        "2027-04-21 17:16"
+      ],
+      "from_position": "3°47' Gemini",
+      "to_position": "3°47' Sagittarius",
+      "natal_house": 1,
+      "retrograde": false,
+      "weight": 8.0,
+      "label": "exact 2027-04-21 17:16: transiting Uranus 3°47' Gemini opposition natal Asc 3°47' Sagittarius (natal house 1) -- pass 3 of 3 of this contact, also exact 2026-07-02 03:21, 2026-11-23 03:37"
+    },
+    {
+      "transiting": "Saturn",
+      "natal": "Jupiter",
+      "aspect": "Square",
+      "start": "2027-02-12",
+      "end": "2027-03-10",
+      "exact": "2027-02-25 20:10",
+      "nearest_exact": "2027-02-25 20:10",
+      "movement": null,
+      "orb": 0.02,
+      "pass": "3 of 3",
+      "passes": [
+        "2026-06-07 02:12",
+        "2026-09-15 01:32",
+        "2027-02-25 20:10"
+      ],
+      "from_position": "12°46' Aries",
+      "to_position": "12°46' Capricorn",
+      "natal_house": 2,
+      "retrograde": false,
+      "weight": 7.2,
+      "label": "exact 2027-02-25 20:10: transiting Saturn 12°46' Aries square natal Jupiter 12°46' Capricorn (natal house 2) -- pass 3 of 3 of this contact, also exact 2026-06-07 02:12, 2026-09-15 01:32"
+    },
+    {
+      "transiting": "Neptune",
+      "natal": "Asc",
+      "aspect": "Trine",
+      "start": "2027-01-31",
+      "end": "2027-04-26",
+      "exact": "2027-03-16 14:06",
+      "nearest_exact": "2027-03-16 14:06",
+      "movement": null,
+      "orb": 0.02,
+      "pass": "3 of 3",
+      "passes": [
+        "2026-05-18 23:10",
+        "2026-08-26 23:27",
+        "2027-03-16 14:06"
+      ],
+      "from_position": "3°47' Aries",
+      "to_position": "3°47' Sagittarius",
+      "natal_house": 1,
+      "retrograde": false,
+      "weight": 7.0,
+      "label": "exact 2027-03-16 14:06: transiting Neptune 3°47' Aries trine natal Asc 3°47' Sagittarius (natal house 1) -- pass 3 of 3 of this contact, also exact 2026-05-18 23:10, 2026-08-26 23:27"
+    },
+    {
+      "transiting": "Neptune",
+      "natal": "Asc",
+      "aspect": "Trine",
+      "start": "2027-09-27",
+      "end": "2027-10-14",
+      "exact": null,
+      "nearest_exact": "2027-03-16 14:06",
+      "movement": "applying",
+      "orb": 1.03,
+      "pass": "3 of 3",
+      "passes": [
+        "2026-05-18 23:10",
+        "2026-08-26 23:27",
+        "2027-03-16 14:06"
+      ],
+      "from_position": "4°49' Aries",
+      "to_position": "3°47' Sagittarius",
+      "natal_house": 1,
+      "retrograde": true,
+      "weight": 7.0,
+      "label": "tightest 2027-10-14: transiting Neptune 4°49' Aries trine natal Asc 3°47' Sagittarius (natal house 1) -- pass 3 of 3 of this contact, also exact 2026-05-18 23:10, 2026-08-26 23:27, retrograde; not exact in the period, exact 2027-03-16 14:06, applying"
+    },
+    {
+      "transiting": "Neptune",
+      "natal": "Asc",
+      "aspect": "Trine",
+      "start": "2026-10-14",
+      "end": "2026-10-23",
+      "exact": null,
+      "nearest_exact": "2026-08-26 23:27",
+      "movement": "separating",
+      "orb": 1.27,
+      "pass": "2 of 3",
+      "passes": [
+        "2026-05-18 23:10",
+        "2026-08-26 23:27",
+        "2027-03-16 14:06"
+      ],
+      "from_position": "2°30' Aries",
+      "to_position": "3°47' Sagittarius",
+      "natal_house": 1,
+      "retrograde": true,
+      "weight": 7.0,
+      "label": "tightest 2026-10-14: transiting Neptune 2°30' Aries trine natal Asc 3°47' Sagittarius (natal house 1) -- pass 2 of 3 of this contact, also exact 2026-05-18 23:10, 2027-03-16 14:06, retrograde; not exact in the period, exact 2026-08-26 23:27, separating"
+    },
+    {
+      "transiting": "Jupiter",
+      "natal": "MC",
+      "aspect": "Conjunction",
+      "start": "2027-09-30",
+      "end": "2027-10-14",
+      "exact": "2027-10-07 01:10",
+      "nearest_exact": "2027-10-07 01:10",
+      "movement": null,
+      "orb": 0.01,
+      "pass": null,
+      "passes": [
+        "2027-10-07 01:10"
+      ],
+      "from_position": "15°34' Virgo",
+      "to_position": "15°34' Virgo",
+      "natal_house": 10,
+      "retrograde": false,
+      "weight": 6.0,
+      "label": "exact 2027-10-07 01:10: transiting Jupiter 15°34' Virgo conjunction natal MC 15°34' Virgo (natal house 10)"
+    },
+    {
+      "transiting": "Jupiter",
+      "natal": "Asc",
+      "aspect": "Square",
+      "start": "2027-08-06",
+      "end": "2027-08-19",
+      "exact": "2027-08-12 21:56",
+      "nearest_exact": "2027-08-12 21:56",
+      "movement": null,
+      "orb": 0.02,
+      "pass": null,
+      "passes": [
+        "2027-08-12 21:56"
+      ],
+      "from_position": "3°47' Virgo",
+      "to_position": "3°47' Sagittarius",
+      "natal_house": 1,
+      "retrograde": false,
+      "weight": 5.4,
+      "label": "exact 2027-08-12 21:56: transiting Jupiter 3°47' Virgo square natal Asc 3°47' Sagittarius (natal house 1)"
+    },
+    {
+      "transiting": "Jupiter",
+      "natal": "Sun",
+      "aspect": "Square",
+      "start": "2027-02-10",
+      "end": "2027-03-06",
+      "exact": "2027-02-21 10:07",
+      "nearest_exact": "2027-02-21 10:07",
+      "movement": null,
+      "orb": 0.05,
+      "pass": "2 of 3",
+      "passes": [
+        "2026-10-06 16:36",
+        "2027-02-21 10:07",
+        "2027-06-02 09:19"
+      ],
+      "from_position": "20°38' Leo",
+      "to_position": "20°38' Taurus",
+      "natal_house": 6,
+      "retrograde": true,
+      "weight": 5.4,
+      "label": "exact 2027-02-21 10:07: transiting Jupiter 20°38' Leo square natal Sun 20°38' Taurus (natal house 6) -- pass 2 of 3 of this contact, also exact 2026-10-06 16:36, 2027-06-02 09:19, retrograde"
+    },
+    {
+      "transiting": "Jupiter",
+      "natal": "Sun",
+      "aspect": "Square",
+      "start": "2027-05-21",
+      "end": "2027-06-12",
+      "exact": "2027-06-02 09:19",
+      "nearest_exact": "2027-06-02 09:19",
+      "movement": null,
+      "orb": 0.05,
+      "pass": "3 of 3",
+      "passes": [
+        "2026-10-06 16:36",
+        "2027-02-21 10:07",
+        "2027-06-02 09:19"
+      ],
+      "from_position": "20°38' Leo",
+      "to_position": "20°38' Taurus",
+      "natal_house": 6,
+      "retrograde": false,
+      "weight": 5.4,
+      "label": "exact 2027-06-02 09:19: transiting Jupiter 20°38' Leo square natal Sun 20°38' Taurus (natal house 6) -- pass 3 of 3 of this contact, also exact 2026-10-06 16:36, 2027-02-21 10:07"
+    },
+    {
+      "transiting": "Jupiter",
+      "natal": "Sun",
+      "aspect": "Square",
+      "start": "2026-10-14",
+      "end": "2026-10-15",
+      "exact": null,
+      "nearest_exact": "2026-10-06 16:36",
+      "movement": "separating",
+      "orb": 1.2,
+      "pass": "1 of 3",
+      "passes": [
+        "2026-10-06 16:36",
+        "2027-02-21 10:07",
+        "2027-06-02 09:19"
+      ],
+      "from_position": "21°50' Leo",
+      "to_position": "20°38' Taurus",
+      "natal_house": 6,
+      "retrograde": false,
+      "weight": 5.4,
+      "label": "tightest 2026-10-14: transiting Jupiter 21°50' Leo square natal Sun 20°38' Taurus (natal house 6) -- pass 1 of 3 of this contact, also exact 2027-02-21 10:07, 2027-06-02 09:19; not exact in the period, exact 2026-10-06 16:36, separating"
+    },
+    {
+      "transiting": "Pluto",
+      "natal": "Asc",
+      "aspect": "Sextile",
+      "start": "2026-10-14",
+      "end": "2027-01-30",
+      "exact": "2026-12-10 11:59",
+      "nearest_exact": "2026-12-10 11:59",
+      "movement": null,
+      "orb": 0.01,
+      "pass": "5 of 5",
+      "passes": [
+        "2025-04-21 08:23",
+        "2025-05-17 12:50",
+        "2026-02-03 05:55",
+        "2026-08-18 06:50",
+        "2026-12-10 11:59"
+      ],
+      "from_position": "3°47' Aquarius",
+      "to_position": "3°47' Sagittarius",
+      "natal_house": 1,
+      "retrograde": false,
+      "weight": 5.0,
+      "label": "exact 2026-12-10 11:59: transiting Pluto 3°47' Aquarius sextile natal Asc 3°47' Sagittarius (natal house 1) -- pass 5 of 5 of this contact, also exact 2025-04-21 08:23, 2025-05-17 12:50, 2026-02-03 05:55, 2026-08-18 06:50"
+    },
+    {
+      "transiting": "Pluto",
+      "natal": "Asc",
+      "aspect": "Sextile",
+      "start": "2027-08-29",
+      "end": "2027-10-14",
+      "exact": null,
+      "nearest_exact": "2026-12-10 11:59",
+      "movement": "applying",
+      "orb": 0.97,
+      "pass": "3 of 3",
+      "passes": [
+        "2026-02-03 05:55",
+        "2026-08-18 06:50",
+        "2026-12-10 11:59"
+      ],
+      "from_position": "4°45' Aquarius",
+      "to_position": "3°47' Sagittarius",
+      "natal_house": 1,
+      "retrograde": true,
+      "weight": 5.0,
+      "label": "tightest 2027-10-14: transiting Pluto 4°45' Aquarius sextile natal Asc 3°47' Sagittarius (natal house 1) -- pass 3 of 3 of this contact, also exact 2026-02-03 05:55, 2026-08-18 06:50, retrograde; not exact in the period, exact 2026-12-10 11:59, applying"
+    },
+    {
+      "transiting": "Neptune",
+      "natal": "Neptune",
+      "aspect": "Square",
+      "start": "2026-10-14",
+      "end": "2027-02-08",
+      "exact": null,
+      "nearest_exact": "2026-02-28 14:25",
+      "movement": "separating",
+      "orb": 0.57,
+      "pass": "3 of 3",
+      "passes": [
+        "2025-04-28 23:12",
+        "2025-09-12 22:08",
+        "2026-02-28 14:25"
+      ],
+      "from_position": "1°37' Aries",
+      "to_position": "1°02' Capricorn",
+      "natal_house": 2,
+      "retrograde": true,
+      "weight": 4.5,
+      "label": "tightest 2026-12-09: transiting Neptune 1°37' Aries square natal Neptune 1°02' Capricorn (natal house 2) -- pass 3 of 3 of this contact, also exact 2025-04-28 23:12, 2025-09-12 22:08, retrograde; not exact in the period, exact 2026-02-28 14:25, separating"
+    },
+    {
+      "transiting": "Jupiter",
+      "natal": "Jupiter",
+      "aspect": "Trine",
+      "start": "2027-09-17",
+      "end": "2027-09-30",
+      "exact": "2027-09-23 12:45",
+      "nearest_exact": "2027-09-23 12:45",
+      "movement": null,
+      "orb": 0.1,
+      "pass": null,
+      "passes": [
+        "2027-09-23 12:45"
+      ],
+      "from_position": "12°46' Virgo",
+      "to_position": "12°46' Capricorn",
+      "natal_house": 2,
+      "retrograde": false,
+      "weight": 4.2,
+      "label": "exact 2027-09-23 12:45: transiting Jupiter 12°46' Virgo trine natal Jupiter 12°46' Capricorn (natal house 2)"
+    },
+    {
+      "transiting": "Uranus",
+      "natal": "Chiron",
+      "aspect": "Conjunction",
+      "start": "2026-11-29",
+      "end": "2027-04-17",
+      "exact": "2027-01-09 08:20",
+      "nearest_exact": "2027-01-09 08:20",
+      "movement": null,
+      "orb": 0.01,
+      "pass": "2 of 3",
+      "passes": [
+        "2026-05-31 16:24",
+        "2027-01-09 08:20",
+        "2027-03-09 15:28"
+      ],
+      "from_position": "2°04' Gemini",
+      "to_position": "2°04' Gemini",
+      "natal_house": 7,
+      "retrograde": true,
+      "weight": 4.0,
+      "label": "exact 2027-01-09 08:20: transiting Uranus 2°04' Gemini conjunction natal Chiron 2°04' Gemini (natal house 7) -- pass 2 of 3 of this contact, also exact 2026-05-31 16:24, 2027-03-09 15:28, retrograde"
+    },
+    {
+      "transiting": "Uranus",
+      "natal": "True North Node",
+      "aspect": "Conjunction",
+      "start": "2027-05-17",
+      "end": "2027-07-09",
+      "exact": "2027-06-11 08:19",
+      "nearest_exact": "2027-06-11 08:19",
+      "movement": null,
+      "orb": 0.02,
+      "pass": "1 of 3",
+      "passes": [
+        "2027-06-11 08:19",
+        "2028-01-01 19:33",
+        "2028-03-24 17:12"
+      ],
+      "from_position": "6°39' Gemini",
+      "to_position": "6°39' Gemini",
+      "natal_house": 7,
+      "retrograde": false,
+      "weight": 4.0,
+      "label": "exact 2027-06-11 08:19: transiting Uranus 6°39' Gemini conjunction natal True North Node 6°39' Gemini (natal house 7) -- pass 1 of 3 of this contact, also exact 2028-01-01 19:33, 2028-03-24 17:12"
+    },
+    {
+      "transiting": "Saturn",
+      "natal": "Mercury",
+      "aspect": "Conjunction",
+      "start": "2027-06-23",
+      "end": "2027-09-27",
+      "exact": "2027-07-19 12:32",
+      "nearest_exact": "2027-07-19 12:32",
+      "movement": null,
+      "orb": 0.02,
+      "pass": "1 of 3",
+      "passes": [
+        "2027-07-19 12:32",
+        "2027-08-30 12:06",
+        "2028-03-23 18:38"
+      ],
+      "from_position": "27°30' Aries",
+      "to_position": "27°30' Aries",
+      "natal_house": 5,
+      "retrograde": false,
+      "weight": 4.0,
+      "label": "exact 2027-07-19 12:32: transiting Saturn 27°30' Aries conjunction natal Mercury 27°30' Aries (natal house 5) -- pass 1 of 3 of this contact, also exact 2027-08-30 12:06, 2028-03-23 18:38"
+    }
+  ],
+  "headline_note": "The 25 weightiest of 41 contacts within 1.5° in the period, ranked by how slow the transiting planet is, how central the natal point is (Sun, Moon, Asc, MC and the chart ruler Jupiter count double) and the aspect. Positions are at the exact moment. 'passes' lists every exact moment of a contact's current run, in and out of the period (a retrograde loop's passes), and 'pass n of m' says which of them this is. 'exact' is the exact moment when it falls in the period; 'nearest_exact' is that moment, or otherwise the nearest one before or after the period, with 'movement' saying whether the orb closes (applying) or opens (separating) across the period. Some of the lowest-ranked contacts were left out to fit the response.",
+  "eclipses": [
+    {
+      "event": "annular solar eclipse",
+      "exact": "2027-02-06 08:00",
+      "position": "17°38' Aquarius",
+      "natal_house": 3,
+      "contacts": [],
+      "label": "2027-02-06: annular solar eclipse at 17°38' Aquarius in natal house 3"
+    },
+    {
+      "event": "penumbral lunar eclipse",
+      "exact": "2027-02-20 15:13",
+      "position": "1°59' Virgo",
+      "natal_house": 10,
+      "contacts": [
+        "square natal Asc (1.8°)"
+      ],
+      "label": "2027-02-20: penumbral lunar eclipse at 1°59' Virgo in natal house 10, touching square natal Asc (1.8°)"
+    },
+    {
+      "event": "penumbral lunar eclipse",
+      "exact": "2027-07-18 09:03",
+      "position": "25°58' Capricorn",
+      "natal_house": 2,
+      "contacts": [
+        "square natal Mercury (1.5°)"
+      ],
+      "label": "2027-07-18: penumbral lunar eclipse at 25°58' Capricorn in natal house 2, touching square natal Mercury (1.5°)"
+    },
+    {
+      "event": "total solar eclipse",
+      "exact": "2027-08-02 03:07",
+      "position": "9°55' Leo",
+      "natal_house": 9,
+      "contacts": [
+        "square natal Venus (1.1°)",
+        "square natal Saturn (2.6°)"
+      ],
+      "label": "2027-08-02: total solar eclipse at 9°55' Leo in natal house 9, touching square natal Venus (1.1°), square natal Saturn (2.6°)"
+    },
+    {
+      "event": "penumbral lunar eclipse",
+      "exact": "2027-08-17 00:14",
+      "position": "24°04' Aquarius",
+      "natal_house": 3,
+      "contacts": [],
+      "label": "2027-08-17: penumbral lunar eclipse at 24°04' Aquarius in natal house 3"
+    }
+  ],
+  "ingresses": [
+    {
+      "planet": "Mars",
+      "enters": "Virgo",
+      "exact": "2026-11-25 15:37",
+      "retrograde": false,
+      "natal_house": 10,
+      "label": "2026-11-25: Mars enters Virgo, natal house 10"
+    },
+    {
+      "planet": "Mars",
+      "enters": "Leo",
+      "exact": "2027-02-21 06:13",
+      "retrograde": true,
+      "natal_house": 9,
+      "label": "2027-02-21: Mars enters Leo (retrograde, backing in), natal house 9"
+    },
+    {
+      "planet": "Chiron",
+      "enters": "Taurus",
+      "exact": "2027-04-14 07:58",
+      "retrograde": false,
+      "natal_house": 6,
+      "label": "2027-04-14: Chiron enters Taurus, natal house 6"
+    },
+    {
+      "planet": "Mars",
+      "enters": "Virgo",
+      "exact": "2027-05-14 07:47",
+      "retrograde": false,
+      "natal_house": 10,
+      "label": "2027-05-14: Mars enters Virgo, natal house 10"
+    },
+    {
+      "planet": "Mars",
+      "enters": "Libra",
+      "exact": "2027-07-14 22:40",
+      "retrograde": false,
+      "natal_house": 11,
+      "label": "2027-07-14: Mars enters Libra, natal house 11"
+    },
+    {
+      "planet": "Jupiter",
+      "enters": "Virgo",
+      "exact": "2027-07-25 21:49",
+      "retrograde": false,
+      "natal_house": 10,
+      "label": "2027-07-25: Jupiter enters Virgo, natal house 10"
+    },
+    {
+      "planet": "Mars",
+      "enters": "Scorpio",
+      "exact": "2027-09-01 18:52",
+      "retrograde": false,
+      "natal_house": 12,
+      "label": "2027-09-01: Mars enters Scorpio, natal house 12"
+    }
+  ],
+  "stations": [
+    {
+      "planet": "Pluto",
+      "station": "direct",
+      "exact": "2026-10-15 19:40",
+      "position": "3°04' Aquarius",
+      "natal_house": 3,
+      "label": "2026-10-15: Pluto stations direct at 3°04' Aquarius (natal house 3)"
+    },
+    {
+      "planet": "Saturn",
+      "station": "direct",
+      "exact": "2026-12-10 15:31",
+      "position": "7°56' Aries",
+      "natal_house": 5,
+      "label": "2026-12-10: Saturn stations direct at 7°56' Aries (natal house 5)"
+    },
+    {
+      "planet": "Neptune",
+      "station": "direct",
+      "exact": "2026-12-12 14:17",
+      "position": "1°37' Aries",
+      "natal_house": 5,
+      "label": "2026-12-12: Neptune stations direct at 1°37' Aries (natal house 5)"
+    },
+    {
+      "planet": "Jupiter",
+      "station": "retrograde",
+      "exact": "2026-12-12 16:57",
+      "position": "27°01' Leo",
+      "natal_house": 9,
+      "label": "2026-12-12: Jupiter stations retrograde at 27°01' Leo (natal house 9)"
+    },
+    {
+      "planet": "Chiron",
+      "station": "direct",
+      "exact": "2027-01-06 03:01",
+      "position": "26°16' Aries",
+      "natal_house": 5,
+      "label": "2027-01-06: Chiron stations direct at 26°16' Aries (natal house 5)"
+    },
+    {
+      "planet": "Mars",
+      "station": "retrograde",
+      "exact": "2027-01-10 04:59",
+      "position": "10°26' Virgo",
+      "natal_house": 10,
+      "label": "2027-01-10: Mars stations retrograde at 10°26' Virgo (natal house 10)"
+    },
+    {
+      "planet": "Uranus",
+      "station": "direct",
+      "exact": "2027-02-08 04:29",
+      "position": "1°41' Gemini",
+      "natal_house": 7,
+      "label": "2027-02-08: Uranus stations direct at 1°41' Gemini (natal house 7)"
+    },
+    {
+      "planet": "Mars",
+      "station": "direct",
+      "exact": "2027-04-01 07:08",
+      "position": "20°56' Leo",
+      "natal_house": 9,
+      "label": "2027-04-01: Mars stations direct at 20°56' Leo (natal house 9)"
+    },
+    {
+      "planet": "Jupiter",
+      "station": "direct",
+      "exact": "2027-04-12 19:11",
+      "position": "17°00' Leo",
+      "natal_house": 9,
+      "label": "2027-04-12: Jupiter stations direct at 17°00' Leo (natal house 9)"
+    },
+    {
+      "planet": "Pluto",
+      "station": "retrograde",
+      "exact": "2027-05-08 05:54",
+      "position": "7°11' Aquarius",
+      "natal_house": 3,
+      "label": "2027-05-08: Pluto stations retrograde at 7°11' Aquarius (natal house 3)"
+    },
+    {
+      "planet": "Neptune",
+      "station": "retrograde",
+      "exact": "2027-07-09 15:41",
+      "position": "6°40' Aries",
+      "natal_house": 5,
+      "label": "2027-07-09: Neptune stations retrograde at 6°40' Aries (natal house 5)"
+    },
+    {
+      "planet": "Chiron",
+      "station": "retrograde",
+      "exact": "2027-08-07 19:55",
+      "position": "4°40' Taurus",
+      "natal_house": 6,
+      "label": "2027-08-07: Chiron stations retrograde at 4°40' Taurus (natal house 6)"
+    },
+    {
+      "planet": "Saturn",
+      "station": "retrograde",
+      "exact": "2027-08-09 11:06",
+      "position": "27°53' Aries",
+      "natal_house": 5,
+      "label": "2027-08-09: Saturn stations retrograde at 27°53' Aries (natal house 5)"
+    },
+    {
+      "planet": "Uranus",
+      "station": "retrograde",
+      "exact": "2027-09-15 02:09",
+      "position": "9°57' Gemini",
+      "natal_house": 7,
+      "label": "2027-09-15: Uranus stations retrograde at 9°57' Gemini (natal house 7)"
+    }
+  ],
+  "by_month": {
+    "2026-10": [
+      "tightest 2026-10-14: transiting Neptune 2°30' Aries trine natal Asc 3°47' Sagittarius (natal house 1) -- pass 2 of 3 of this contact, also exact 2026-05-18 23:10, 2027-03-16 14:06, retrograde; not exact in the period, exact 2026-08-26 23:27, separating",
+      "2026-10-15: Pluto stations direct at 3°04' Aquarius (natal house 3)",
+      "tightest 2026-10-14: transiting Jupiter 21°50' Leo square natal Sun 20°38' Taurus (natal house 6) -- pass 1 of 3 of this contact, also exact 2027-02-21 10:07, 2027-06-02 09:19; not exact in the period, exact 2026-10-06 16:36, separating"
+    ],
+    "2026-11": [
+      "exact 2026-11-23 03:37: transiting Uranus 3°47' Gemini opposition natal Asc 3°47' Sagittarius (natal house 1) -- pass 2 of 3 of this contact, also exact 2026-07-02 03:21, 2027-04-21 17:16, retrograde",
+      "exact 2026-11-13 16:25: transiting Chiron 27°30' Aries conjunction natal Mercury 27°30' Aries (natal house 5) -- pass 2 of 3 of this contact, also exact 2026-04-30 18:26, 2027-02-27 13:22, retrograde"
+    ],
+    "2026-12": [
+      "2026-12-12: Neptune stations direct at 1°37' Aries (natal house 5)",
+      "exact 2026-12-10 11:59: transiting Pluto 3°47' Aquarius sextile natal Asc 3°47' Sagittarius (natal house 1) -- pass 5 of 5 of this contact, also exact 2025-04-21 08:23, 2025-05-17 12:50, 2026-02-03 05:55, 2026-08-18 06:50",
+      "2026-12-10: Saturn stations direct at 7°56' Aries (natal house 5)"
+    ],
+    "2027-01": [
+      "exact 2027-01-09 08:20: transiting Uranus 2°04' Gemini conjunction natal Chiron 2°04' Gemini (natal house 7) -- pass 2 of 3 of this contact, also exact 2026-05-31 16:24, 2027-03-09 15:28, retrograde",
+      "2027-01-06: Chiron stations direct at 26°16' Aries (natal house 5)",
+      "2027-01-10: Mars stations retrograde at 10°26' Virgo (natal house 10)"
+    ],
+    "2027-02": [
+      "exact 2027-02-25 20:10: transiting Saturn 12°46' Aries square natal Jupiter 12°46' Capricorn (natal house 2) -- pass 3 of 3 of this contact, also exact 2026-06-07 02:12, 2026-09-15 01:32",
+      "2027-02-06: annular solar eclipse at 17°38' Aquarius in natal house 3",
+      "2027-02-20: penumbral lunar eclipse at 1°59' Virgo in natal house 10, touching square natal Asc (1.8°)"
+    ],
+    "2027-03": [
+      "exact 2027-03-16 14:06: transiting Neptune 3°47' Aries trine natal Asc 3°47' Sagittarius (natal house 1) -- pass 3 of 3 of this contact, also exact 2026-05-18 23:10, 2026-08-26 23:27",
+      "exact 2027-03-21 04:26: transiting Pluto 6°39' Aquarius trine natal True North Node 6°39' Gemini (natal house 7) -- pass 1 of 5 of this contact, also exact 2027-06-27 03:36, 2028-01-23 06:42, 2028-09-15 09:15, 2028-11-20 10:46"
+    ],
+    "2027-04": [
+      "exact 2027-04-21 17:16: transiting Uranus 3°47' Gemini opposition natal Asc 3°47' Sagittarius (natal house 1) -- pass 3 of 3 of this contact, also exact 2026-07-02 03:21, 2026-11-23 03:37",
+      "2027-04-12: Jupiter stations direct at 17°00' Leo (natal house 9)",
+      "exact 2027-04-17 09:39: transiting Chiron 0°11' Taurus opposition natal Pluto 0°11' Scorpio (natal house 12) -- pass 3 of 5 of this contact, also exact 2026-06-24 22:14, 2026-09-12 08:34, 2027-12-22 07:00, 2028-01-28 15:34"
+    ],
+    "2027-05": [
+      "2027-05-08: Pluto stations retrograde at 7°11' Aquarius (natal house 3)"
+    ],
+    "2027-06": [
+      "exact 2027-06-02 09:19: transiting Jupiter 20°38' Leo square natal Sun 20°38' Taurus (natal house 6) -- pass 3 of 3 of this contact, also exact 2026-10-06 16:36, 2027-02-21 10:07",
+      "exact 2027-06-11 08:19: transiting Uranus 6°39' Gemini conjunction natal True North Node 6°39' Gemini (natal house 7) -- pass 1 of 3 of this contact, also exact 2028-01-01 19:33, 2028-03-24 17:12"
+    ],
+    "2027-07": [
+      "2027-07-18: penumbral lunar eclipse at 25°58' Capricorn in natal house 2, touching square natal Mercury (1.5°)",
+      "2027-07-09: Neptune stations retrograde at 6°40' Aries (natal house 5)",
+      "exact 2027-07-19 12:32: transiting Saturn 27°30' Aries conjunction natal Mercury 27°30' Aries (natal house 5) -- pass 1 of 3 of this contact, also exact 2027-08-30 12:06, 2028-03-23 18:38"
+    ],
+    "2027-08": [
+      "2027-08-02: total solar eclipse at 9°55' Leo in natal house 9, touching square natal Venus (1.1°), square natal Saturn (2.6°)",
+      "2027-08-17: penumbral lunar eclipse at 24°04' Aquarius in natal house 3",
+      "exact 2027-08-12 21:56: transiting Jupiter 3°47' Virgo square natal Asc 3°47' Sagittarius (natal house 1)"
+    ],
+    "2027-09": [
+      "tightest 2027-10-14: transiting Neptune 4°49' Aries trine natal Asc 3°47' Sagittarius (natal house 1) -- pass 3 of 3 of this contact, also exact 2026-05-18 23:10, 2026-08-26 23:27, retrograde; not exact in the period, exact 2027-03-16 14:06, applying",
+      "2027-09-15: Uranus stations retrograde at 9°57' Gemini (natal house 7)",
+      "exact 2027-09-23 12:45: transiting Jupiter 12°46' Virgo trine natal Jupiter 12°46' Capricorn (natal house 2)"
+    ],
+    "2027-10": [
+      "exact 2027-10-07 01:10: transiting Jupiter 15°34' Virgo conjunction natal MC 15°34' Virgo (natal house 10)"
+    ]
+  },
+  "themes": {
+    "natal house 1": [
+      "Jupiter",
+      "Neptune",
+      "Pluto",
+      "Saturn",
+      "Uranus"
+    ],
+    "natal house 2": [
+      "Jupiter",
+      "Neptune",
+      "Saturn"
+    ],
+    "natal house 5": [
+      "Chiron",
+      "Saturn"
+    ],
+    "natal house 6": [
+      "Jupiter"
+    ],
+    "natal house 7": [
+      "Pluto",
+      "Uranus"
+    ],
+    "natal house 10": [
+      "Jupiter"
+    ],
+    "natal house 12": [
+      "Chiron"
+    ]
+  },
+  "left_out": {
+    "objects": [
+      "Moon",
+      "Sun",
+      "Mercury",
+      "Venus",
+      "Mars (aspects)"
+    ],
+    "why": "fast movers aspect something every few days; for a particular month use forecast_month"
+  },
+  "how_to_read": "Quote the labels; every date and degree here comes from the ephemeris. Lead with the headline transits in order, then the lunations/eclipses, stations and ingresses that fall in the period. Do not add transits that are not listed -- check any you want to mention with verify_claim."
+}

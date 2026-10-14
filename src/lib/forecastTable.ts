@@ -31,8 +31,9 @@ export interface ForecastRow {
   fromPosition: string | null
   toPosition: string | null
   orb: number
-  /** "2 of 3" when a retrograde brings the same contact back. */
+  /** "2 of 3" when a retrograde brings the same contact back, and every exact moment of that run. */
   pass: string | null
+  passes: string[]
   weight: number
 }
 
@@ -97,6 +98,7 @@ export function parseForecast(text: string): ForecastTable | null {
       toPosition: position(h.to_position),
       orb: num(h.orb) ?? 0,
       pass: str(h.pass),
+      passes: Array.isArray(h.passes) ? h.passes.filter((p): p is string => typeof p === 'string') : [],
       weight: num(h.weight) ?? 0,
     })
   }

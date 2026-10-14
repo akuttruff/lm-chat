@@ -25,6 +25,9 @@ export interface TransitRow {
   /** "2026-10-15 16:59", local; null when it is not exact in the window. */
   exact: string | null
   movement: 'applying' | 'separating' | null
+  /** Every exact moment of the contact's run, and which of them `exact` is: "1 of 3" when a retrograde brings it back. */
+  passes: string[]
+  pass: string | null
 }
 
 const movementOf = (v: unknown): TransitRow['movement'] =>
@@ -58,6 +61,8 @@ export function activeTransits(wheel: Wheel): TransitRow[] {
         orb: a.orb,
         exact: a.exactAt,
         movement: movementOf(a.movement),
+        passes: a.passes,
+        pass: a.pass,
       }
     })
     .sort((a, b) => (a.exact && b.exact ? a.exact.localeCompare(b.exact) : a.exact ? -1 : b.exact ? 1 : a.orb - b.orb))
@@ -82,10 +87,16 @@ const parts = (iso: string): { year: string; month: number; day: number; time: s
  * so a retrograde loop's exact moment last year doesn't read as this one.
  */
 export function dayText(iso: string, ref?: string | null): string {
+  const { day, time } = dayParts(iso, ref)
+  return time ? `${day} ${time}` : day
+}
+
+/** The same, in two pieces -- "Dec 7, 2025" and "16:36" -- so a cell can break between them and nowhere else. */
+export function dayParts(iso: string, ref?: string | null): { day: string; time: string | null } {
   const p = parts(iso)
-  if (!p) return iso
+  if (!p) return { day: iso, time: null }
   const year = ref && ref.slice(0, 4) !== p.year && /^\d{4}/.test(ref) ? `, ${p.year}` : ''
-  return `${MONTHS[p.month]} ${p.day}${year}${p.time ? ` ${p.time}` : ''}`
+  return { day: `${MONTHS[p.month]} ${p.day}${year}`, time: p.time }
 }
 
 

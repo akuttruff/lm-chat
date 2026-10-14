@@ -1,5 +1,5 @@
 import { type Wheel, ordinal } from '../lib/chartWheel.ts'
-import { activeTransits, aspectCell, bodyCell, dayText, orbText, windowText } from '../lib/transitTable.ts'
+import { activeTransits, aspectCell, bodyCell, dayParts, dayText, orbText, windowText } from '../lib/transitTable.ts'
 import { type ForecastTable, keyTransits, periodText } from '../lib/forecastTable.ts'
 
 function Body({ name, retrograde }: { name: string; retrograde: boolean }) {
@@ -33,16 +33,36 @@ function Natal({ name, retrograde = false, house }: { name: string; retrograde?:
 }
 
 /** "Oct 6 16:36" on top; dim when it has passed. Over the movement, or the days in orb. */
-function When({ exact, past, nearest, under, on }: { exact: string | null; past: boolean; nearest?: string | null; under: string | null; on: string | null }) {
+/** A moment as "Dec 7, 2025 16:36", breakable only between the day and the time. */
+function Day({ iso, on }: { iso: string; on: string | null }) {
+  const { day, time } = dayParts(iso, on)
+  return <>{<span className="tt-date">{day}</span>}{time && <> <span className="tt-date">{time}</span></>}</>
+}
+
+function When({ exact, past, nearest, under, on, pass, passes }: {
+  exact: string | null; past: boolean; nearest?: string | null; under: string | null; on: string | null; pass: string | null; passes: string[]
+}) {
+  const shown = exact ?? nearest ?? null
   return (
     <td className="tt-when">
       {exact
-        ? <span className={past ? 'tt-near' : 'tt-exact'}>{past ? 'was exact ' : 'exact '}<span className="tt-date">{dayText(exact, on)}</span></span>
+        ? <span className={past ? 'tt-near' : 'tt-exact'}>{past ? 'was exact ' : 'exact '}<Day iso={exact} on={on} /></span>
         : nearest
-          ? <span className="tt-near" title="in orb through these days; the nearest moment it is exact">{past ? 'was exact ' : 'exact '}<span className="tt-date">{dayText(nearest, on)}</span></span>
+          ? <span className="tt-near" title="in orb through these days; the nearest moment it is exact">{past ? 'was exact ' : 'exact '}<Day iso={nearest} on={on} /></span>
           : <span className="tt-house" title="in orb, not exact within reach of the search">—</span>}
       {under && <div className="tt-pos">{under}</div>}
+      {pass && <Run pass={pass} others={passes.filter((p) => p !== shown)} on={on} />}
     </td>
+  )
+}
+
+/** "pass 1 of 3 · also Feb 21, 2027 · Jun 2, 2027": the rest of a retrograde's run, so one date is never taken for the end of it. */
+function Run({ pass, others, on }: { pass: string; others: string[]; on: string | null }) {
+  return (
+    <div className="tt-pos" title="every moment this contact is exact as the planet retrogrades over it">
+      pass {pass}
+      {others.map((p, i) => <span key={p}>{i === 0 ? ' · also ' : ' · '}<span className="tt-date">{dayText(p.slice(0, 10), on)}</span></span>)}
+    </div>
   )
 }
 
@@ -65,7 +85,7 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
         <tbody>
           {rows.map((r) => (
             <tr key={`${r.from}|${r.type}|${r.to}`}>
-              <When exact={r.exact} past={Boolean(r.exact && wheel.dateTime && r.exact < wheel.dateTime)} under={r.movement} on={wheel.dateTime ?? null} />
+              <When exact={r.exact} past={Boolean(r.exact && wheel.dateTime && r.exact < wheel.dateTime)} under={r.movement} on={wheel.dateTime ?? null} pass={r.pass} passes={r.passes} />
               <td>
                 <Body name={r.from} retrograde={r.fromRetrograde} />
                 {r.fromPosition && <div className="tt-pos">{r.fromPosition}</div>}
@@ -113,6 +133,8 @@ export function ForecastTransits({ table }: { table: ForecastTable }) {
                 past={Boolean(!r.exact && r.nearestExact && r.nearestExact < r.start)}
                 nearest={r.nearestExact}
                 on={table.start}
+                pass={r.pass}
+                passes={r.passes}
                 under={`in orb ${windowText(r.start, r.end)}${r.movement ? ` · ${r.movement}` : ''}`}
               />
               <td>
@@ -121,7 +143,7 @@ export function ForecastTransits({ table }: { table: ForecastTable }) {
               </td>
               <td>
                 <Aspect type={r.type} />
-                <div className="tt-pos">orb {orbText(r.orb)}{r.pass && ` · pass ${r.pass}`}</div>
+                <div className="tt-pos">orb {orbText(r.orb)}</div>
               </td>
               <td>
                 <Natal name={r.to} house={r.toHouse} />
