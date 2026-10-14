@@ -617,9 +617,15 @@ describe('retrying the last message', () => {
     bus.add({ write: (chunk: string) => { sent.push(JSON.parse(chunk.replace(/^data: /, ''))); return true } } as never)
     vi.stubGlobal('fetch', reply('Again.'))
     await engine.retryTurn(convId)
-    const tails = sent.filter((e) => e.type === 'tail')
+    const tails = sent.filter((e) => e.type === 'tail').map((e) => e.payload as { base: number; messages: Message[] })
     expect(tails.length).toBeGreaterThan(0)
-    expect(tails.every((e) => e.payload.base === 0)).toBe(true)
+    // The message retried stays as it was; everything after it goes, and the old reply is never sent again.
+    expect(tails.some((t) => t.base <= 1)).toBe(true)
+    expect(tails.flatMap((t) => t.messages).some((m) => m.text === 'First answer.')).toBe(false)
+    let held = new Store({ dir }).get(convId)!.messages.slice(0, 2)
+    held = [{ ...held[0]! }, { id: 'old', role: 'assistant', text: 'First answer.' }]
+    for (const t of tails) held = [...held.slice(0, t.base), ...t.messages]
+    expect(held.map((m) => m.text)).toEqual(['one', 'Again.'])
   })
 
   it('has nothing to retry in a chat with no message sent', async () => {
@@ -1093,10 +1099,38 @@ describe('streaming load', () => {
     expect(sent.some((e) => e.type === 'conversations')).toBe(false)
     for (const t of tails) {
       const payload = t.payload as { base: number }
-      expect(payload.base).toBe(2)
+      expect(payload.base).toBeGreaterThanOrEqual(2)
       expect(JSON.stringify(t.payload).length).toBeLessThan(5_000)
     }
     expect(messages().at(-1)!.text).toBe(Array.from({ length: 60 }, (_, i) => `t${i}`).join(' '))
+  })
+
+  it('sends each message of the turn once as it settles, and then only the one still streaming', async () => {
+    const sent: { type: string; payload: unknown }[] = []
+    vi.spyOn(bus, 'send').mockImplementation((e) => { sent.push(e as never) })
+    const chart = JSON.stringify([{ type: 'text', text: 'x'.repeat(50_000) }])
+    vi.stubGlobal('fetch', paced([
+      evt({ type: 'tool_call.start', tool: 'mcp/astrology' }),
+      evt({ type: 'tool_call.success', output: chart }),
+      ...tokens(60),
+      evt({ type: 'chat.end', result: {} }),
+    ], 10))
+    await engine.runTurn(convId, 'hi')
+    const tails = sent.filter((e) => e.type === 'tail').map((e) => e.payload as { base: number; messages: Message[] })
+    // The prompt went first, on its own; the tool result once, when it arrived.
+    expect(tails[0]).toMatchObject({ base: 0, messages: [{ role: 'user', text: 'hi' }] })
+    const withTool = tails.filter((t) => t.messages.some((m) => m.role === 'tool'))
+    expect(withTool.length).toBeLessThanOrEqual(2) // as it starts, and with its output
+    // Every tail while the reply streamed carried the reply alone.
+    const streaming = tails.filter((t) => t.messages.some((m) => m.role === 'assistant' && m.streaming))
+    expect(streaming.length).toBeGreaterThan(1)
+    // (The tool's output and the first tokens can share one tail, when both arrive within a tick.)
+    expect(streaming.filter((t) => t.messages.map((m) => m.role).join() !== 'assistant').length).toBeLessThanOrEqual(1)
+    expect(JSON.stringify(tails).length).toBeLessThan(chart.length * 3)
+    // Put together the way a client does, the tails make the thread as stored.
+    let held: Message[] = []
+    for (const t of tails) held = [...held.slice(0, t.base), ...t.messages]
+    expect(held).toEqual(messages())
   })
 
   it('saves to disk a handful of times, not once per token', async () => {

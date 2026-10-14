@@ -507,6 +507,8 @@ export class Engine {
   private titling: Set<string>
   private reading: Set<string>
   private statuses: Map<string, StatusPayload>
+  /** Each thread's messages as last sent in a tail, one JSON print per message, so the next tail can skip what has not changed. */
+  private sent = new Map<string, string[]>()
   readonly slots: Slots
 
   constructor(
@@ -550,13 +552,25 @@ export class Engine {
     this.bus.send({ type: 'status', payload })
   }
 
-  /** Send the part of a thread a turn has changed: its messages from `base` on. */
+  /**
+   * Send the part of a thread a turn has changed: its messages from `base`
+   * on, less any at the front that clients already hold as they are. While
+   * a reply streams, that leaves the reply alone: the prompt, the tool
+   * results and the reasoning before it went out once and stay as sent, and
+   * resending a chart's output several times a second over the tunnel was
+   * most of what a phone downloaded during a turn.
+   */
   private publishTail(conversationId: string, base: number): void {
     const conv = this.store.get(conversationId)
     if (!conv) return
+    const sent = this.sent.get(conversationId) ?? []
+    const prints = conv.messages.map((m, i) => (i < base ? sent[i] ?? '' : JSON.stringify(m)))
+    let from = base
+    while (from < prints.length && from < sent.length && prints[from] === sent[from]) from++
+    this.sent.set(conversationId, prints)
     this.bus.send({
       type: 'tail',
-      payload: { conversationId, base, messages: conv.messages.slice(base), meta: metaOf(conv) },
+      payload: { conversationId, base: from, messages: conv.messages.slice(from), meta: metaOf(conv) },
     })
   }
 
