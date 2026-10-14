@@ -1,8 +1,10 @@
 /**
  * The transits of a transit chart as table rows: the aspects in play at
  * the chart's moment, for the table under the wheel. Read from the parsed
- * wheel here; TransitTable.tsx draws them. (list_upcoming_transits gets no
- * table: Amie found one not meaningful, so don't add it back.)
+ * wheel here; TransitTable.tsx draws them, and the forecast table
+ * (forecastTable.ts) shares the cells and the date words. (The
+ * list_upcoming_transits result gets no table: Amie found one not
+ * meaningful, so don't add it back.)
  */
 import { type Wheel, aspectFamily, aspectGlyph, type AspectFamily, GLYPHS, displayName } from './chartWheel.ts'
 
@@ -62,6 +64,19 @@ export function dayText(iso: string): string {
   return `${MONTHS[p.month]} ${p.day}${p.time ? ` ${p.time}` : ''}`
 }
 
+
+/** "Oct 14", "Oct 14–16" or "Oct 28–Nov 3": the days a contact is in orb. */
+export function windowText(start: string | null, end: string | null): string {
+  if (!start) return end ? dayText(end) : ''
+  if (!end || end === start) return dayText(start)
+  const a = parts(start)
+  const b = parts(end)
+  if (!a || !b) return `${start}–${end}`
+  return a.month === b.month ? `${MONTHS[a.month]} ${a.day}–${b.day}` : `${MONTHS[a.month]} ${a.day}–${MONTHS[b.month]} ${b.day}`
+}
+
+/** "Oct 15", the day alone of "2026-10-15 16:59". */
+export const dayOnly = (iso: string): string => dayText(iso.slice(0, 10))
 
 /** What a cell shows for a body: its glyph, its name, and ℞ when it is retrograde. */
 export interface BodyCell { glyph: string; name: string; retrograde: boolean }

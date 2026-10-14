@@ -3,7 +3,8 @@ import { Wrench, ChevronRight, TriangleAlert } from 'lucide-react'
 import { argValue, argsSummary, prettyOutput, sizeLabel, toolLabel } from '../lib/toolFormat.ts'
 import { looksLikeChart, parseWheel } from '../lib/chartWheel.ts'
 import ChartWheel from './ChartWheel'
-import { ActiveTransits } from './TransitTable'
+import { ActiveTransits, ForecastTransits } from './TransitTable'
+import { looksLikeForecast, parseForecast } from '../lib/forecastTable.ts'
 
 interface ToolCardProps {
   name?: string
@@ -26,7 +27,8 @@ const SHORT = 120
  * result; expanded, each parameter in full, then the whole result in its
  * own scrolling panel, JSON indented. A chart from the astrology server is
  * also drawn as a wheel (see ChartWheel) with its transits as a table
- * under it (TransitTable), shown either way.
+ * under it, and a forecast's key transits as a table (TransitTable),
+ * shown either way.
  */
 function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProps) {
   const [open, setOpen] = useState(false)
@@ -38,6 +40,8 @@ function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProp
   const full = useMemo(() => (open ? prettyOutput(text) : ''), [open, text])
   // A chart result is drawn as a wheel above its text, whether or not the card is open.
   const wheel = useMemo(() => (!failed && looksLikeChart(text) ? parseWheel(text) : null), [failed, text])
+  // A forecast's key transits as a table: that result has no wheel.
+  const forecast = useMemo(() => (!failed && looksLikeForecast(text) ? parseForecast(text) : null), [failed, text])
   const source = plugin?.replace(/^mcp\//, '')
   const meta = [source, text.length > SHORT ? sizeLabel(text.length) : null, failed ? 'failed' : null]
     .filter(Boolean).join(' · ')
@@ -79,6 +83,7 @@ function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProp
         )}
         {wheel && <ChartWheel wheel={wheel} readings={readings} />}
         {wheel?.kind === 'transit' && <ActiveTransits wheel={wheel} />}
+        {forecast && <ForecastTransits table={forecast} />}
         {short && <div className="tc-short">{text}</div>}
         {text.length > SHORT && !open && <div className="tc-preview">{text.replace(/\s+/g, ' ').slice(0, 300)}</div>}
         {text.length > SHORT && open && <pre className="tc-output">{full}</pre>}

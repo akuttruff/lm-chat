@@ -1,5 +1,6 @@
 import { type Wheel, ordinal } from '../lib/chartWheel.ts'
-import { type TransitRow, activeTransits, aspectCell, bodyCell, dayText, orbText } from '../lib/transitTable.ts'
+import { activeTransits, aspectCell, bodyCell, dayOnly, dayText, orbText, windowText } from '../lib/transitTable.ts'
+import { type ForecastTable, keyTransits, periodText } from '../lib/forecastTable.ts'
 
 function Body({ name, retrograde }: { name: string; retrograde: boolean }) {
   const cell = bodyCell(name, retrograde)
@@ -22,11 +23,11 @@ function Aspect({ type }: { type: string }) {
   )
 }
 
-function Natal({ row, natal }: { row: TransitRow; natal: boolean }) {
+function Natal({ name, retrograde = false, house }: { name: string; retrograde?: boolean; house: number | null }) {
   return (
     <>
-      <Body name={row.to} retrograde={row.toRetrograde} />
-      {natal && row.toHouse !== null && <span className="tt-house"> · {ordinal(row.toHouse)}</span>}
+      <Body name={name} retrograde={retrograde} />
+      {house !== null && <span className="tt-house"> · {ordinal(house)}</span>}
     </>
   )
 }
@@ -51,10 +52,48 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
             <tr key={`${r.from}|${r.type}|${r.to}`}>
               <td><Body name={r.from} retrograde={r.fromRetrograde} /></td>
               <td><Aspect type={r.type} /></td>
-              <td><Natal row={r} natal /></td>
+              <td><Natal name={r.to} retrograde={r.toRetrograde} house={r.toHouse} /></td>
               <td className="tt-num">{orbText(r.orb)}</td>
               {/* The exact moment says which way it is going; only without one is the word needed. */}
               <td className="tt-when">{r.exact ? dayText(r.exact) : r.movement ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/**
+ * The key transits of a forecast, under the result: the top of the tool's
+ * ranking in its order, each with when it is exact (or the days it is in
+ * orb, dimmed, when it never is within the period), both ends, the natal
+ * house, and which pass it is when a retrograde brings it back.
+ */
+export function ForecastTransits({ table }: { table: ForecastTable }) {
+  const rows = keyTransits(table)
+  if (rows.length === 0) return null
+  const when = table.horizon === 'week' ? dayText : dayOnly
+  const passes = rows.some((r) => r.pass)
+  return (
+    <div className="tt-wrap">
+      <table className="tt">
+        <caption>Key transits · {periodText(table)}</caption>
+        <thead>
+          <tr><th>When</th><th>Transit</th><th>Aspect</th><th>Natal</th>{passes && <th>Pass</th>}</tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={`${r.from}|${r.type}|${r.to}|${r.start}|${i}`}>
+              <td className="tt-when">
+                {r.exact
+                  ? when(r.exact)
+                  : <span className="tt-house" title={`in orb ${windowText(r.start, r.end)}, not exact in the period`}>{windowText(r.start, r.end)}</span>}
+              </td>
+              <td><Body name={r.from} retrograde={r.fromRetrograde} /></td>
+              <td><Aspect type={r.type} /></td>
+              <td><Natal name={r.to} house={r.toHouse} /></td>
+              {passes && <td className="tt-num">{r.pass ?? ''}</td>}
             </tr>
           ))}
         </tbody>

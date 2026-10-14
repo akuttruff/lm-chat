@@ -3,6 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ToolCard from './ToolCard'
 import transit from '../test/fixtures/transit-chart.json?raw'
+import week from '../test/fixtures/forecast-week.json?raw'
+import year from '../test/fixtures/forecast-year.json?raw'
 
 describe('ChartWheel in a tool card', () => {
   it('draws a transit result as a wheel, without opening the card', () => {
@@ -32,6 +34,23 @@ describe('ChartWheel in a tool card', () => {
     expect(rows.length).toBeGreaterThan(3)
     expect(rows.some((r) => /Jupiter.*square.*Sun · 6th/.test(r.textContent ?? ''))).toBe(true)
     expect(table.querySelectorAll('.wheel-rx').length).toBeGreaterThan(0)
+  })
+
+  it('tables a forecast\'s key transits, which has no wheel: the week with times, the year with passes', () => {
+    const w = render(<ToolCard name="forecast_week" plugin="mcp/astrology-v2" output={week} />)
+    expect(w.container.querySelector('.wheel')).toBeNull()
+    const table = w.container.querySelector('table.tt')!
+    expect(table.querySelector('caption')?.textContent).toBe('Key transits · Oct 14–20')
+    expect(table.querySelectorAll('tbody tr').length).toBeLessThanOrEqual(8)
+    expect(table.querySelector('tbody tr')?.textContent).toMatch(/Oct 19 22:56.*Mars.*square.*Saturn · 1st/)
+    expect(table.querySelector('thead')?.textContent).not.toContain('Pass')
+    const y = render(<ToolCard name="forecast_year" plugin="mcp/astrology-v2" output={year} />)
+    const yt = y.container.querySelectorAll('table.tt')[0]!
+    expect(yt.querySelector('caption')?.textContent).toBe('Key transits · Oct 14, 2026 – Oct 14, 2027')
+    expect(yt.querySelectorAll('tbody tr')).toHaveLength(12)
+    expect(yt.querySelector('thead')?.textContent).toContain('Pass')
+    expect(yt.textContent).toMatch(/\d of \d/)
+    expect(yt.querySelector('tbody')?.textContent).not.toMatch(/\d\d:\d\d/)
   })
 
   it('draws nothing for a result that is not a chart', () => {

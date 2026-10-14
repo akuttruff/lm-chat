@@ -1,0 +1,98 @@
+/**
+ * A forecast's key transits as table rows.
+ *
+ * forecast_week, forecast_month and forecast_year each return
+ * `headline_transits`: the contacts of the period ranked by how much they
+ * shape it (slow planet, central natal point, hard aspect; for a week, the
+ * contacts exact within it first). The table under the result keeps only
+ * the top of that ranking, in the tool's order, so what is drawn is what
+ * the reply leads with. TransitTable.tsx draws it.
+ */
+
+export type Horizon = 'week' | 'month' | 'year'
+
+export interface ForecastRow {
+  from: string
+  to: string
+  /** "Square", as the tool names it. */
+  type: string
+  fromRetrograde: boolean
+  toHouse: number | null
+  /** The local moment it is exact, or null when it is only in orb within the period. */
+  exact: string | null
+  /** The first and last day in orb. */
+  start: string
+  end: string
+  orb: number
+  /** "2 of 3" when a retrograde brings the same contact back. */
+  pass: string | null
+  weight: number
+}
+
+export interface ForecastTable {
+  horizon: Horizon
+  start: string
+  end: string
+  /** Every headline the tool sent, in its order. */
+  rows: ForecastRow[]
+}
+
+/** How many of the ranked headlines the table shows: the week's few, the top of a month, the top of a year. */
+export const KEY_ROWS: Record<Horizon, number> = { week: 8, month: 8, year: 12 }
+
+const isRecord = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v)
+const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+
+/** Whether a tool result is a forecast: a horizon and its ranked headlines. */
+export const looksLikeForecast = (text: string): boolean => text.includes('"forecast"') && text.includes('"headline_transits"')
+
+/** The headlines of a forecast result; null if it is not one. */
+export function parseForecast(text: string): ForecastTable | null {
+  let data: unknown
+  try { data = JSON.parse(text) } catch { return null }
+  if (!isRecord(data) || !Array.isArray(data.headline_transits) || !isRecord(data.range)) return null
+  const horizon = data.forecast
+  if (horizon !== 'week' && horizon !== 'month' && horizon !== 'year') return null
+  const start = str(data.range.start)
+  const end = str(data.range.end)
+  if (!start || !end) return null
+  const rows: ForecastRow[] = []
+  for (const h of data.headline_transits) {
+    if (!isRecord(h)) continue
+    const from = str(h.transiting)
+    const to = str(h.natal)
+    const type = str(h.aspect)
+    const first = str(h.start)
+    const last = str(h.end)
+    if (!from || !to || !type || !first || !last) continue
+    rows.push({
+      from, to, type,
+      fromRetrograde: h.retrograde === true,
+      toHouse: num(h.natal_house),
+      exact: str(h.exact),
+      start: first, end: last,
+      orb: num(h.orb) ?? 0,
+      pass: str(h.pass),
+      weight: num(h.weight) ?? 0,
+    })
+  }
+  return { horizon, start, end, rows }
+}
+
+/** The rows the table shows: the top of the ranking, as many as the horizon allows. */
+export const keyTransits = (table: ForecastTable): ForecastRow[] => table.rows.slice(0, KEY_ROWS[table.horizon])
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/** "Oct 14–20", "October 2026" or "Oct 14, 2026 – Oct 14, 2027": the period, for the caption. */
+export function periodText(table: ForecastTable): string {
+  const [y1, m1, d1] = table.start.split('-').map(Number)
+  const [y2, m2, d2] = table.end.split('-').map(Number)
+  if (!y1 || !m1 || !d1 || !y2 || !m2 || !d2) return `${table.start} – ${table.end}`
+  const short = (m: number) => MONTHS[m - 1]!.slice(0, 3)
+  if (table.horizon === 'month' && d1 === 1 && m1 === m2 && y1 === y2) return `${MONTHS[m1 - 1]} ${y1}`
+  if (y1 === y2 && m1 === m2) return `${short(m1)} ${d1}–${d2}`
+  if (y1 === y2) return `${short(m1)} ${d1}–${short(m2)} ${d2}`
+  return `${short(m1)} ${d1}, ${y1} – ${short(m2)} ${d2}, ${y2}`
+}
