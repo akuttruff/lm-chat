@@ -66,7 +66,7 @@ describe('isSafeModelId', () => {
       '../../etc/passwd', 'a/../../b', '/etc/passwd', 'a/b/c',
       'a//b', '', '.hidden', 'a\\b', 'a\0b', 'x'.repeat(201),
     ]) {
-      expect(isSafeModelId(bad), bad).toBe(false)
+      expect([bad, isSafeModelId(bad)]).toEqual([bad, false])
     }
   })
 })

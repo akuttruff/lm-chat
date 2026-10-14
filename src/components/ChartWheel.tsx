@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { Download } from 'lucide-react'
 import WheelViewer from './WheelViewer'
@@ -275,13 +275,14 @@ function WheelTip({ wheel, hover, svg, readings }: { wheel: Wheel; hover: Hover;
 function WheelSvg({ wheel, title, svgRef, readings }: { wheel: Wheel; title: string; svgRef?: Ref<SVGSVGElement>; readings?: Record<string, string> }) {
   const asc = wheel.angles.Asc
   const rings = layout(wheel.kind)
-  const ownRef = useRef<SVGSVGElement>(null)
+  // The element itself, as state: the popup measures against it, and a ref read during render is not allowed.
+  const [own, setOwn] = useState<SVGSVGElement | null>(null)
   const [hover, setHover] = useState<Hover | null>(null)
-  const setRef = (el: SVGSVGElement | null) => {
-    ownRef.current = el
+  const setRef = useCallback((el: SVGSVGElement | null) => {
+    setOwn(el)
     if (typeof svgRef === 'function') svgRef(el)
     else if (svgRef) svgRef.current = el
-  }
+  }, [svgRef])
   /** The last press came from a finger: the click that follows must not open the viewer. */
   const pressedByTouch = useRef(false)
   /** Comes to, leaves or presses something: a mouse hovers, a finger holds. */
@@ -328,7 +329,7 @@ function WheelSvg({ wheel, title, svgRef, readings }: { wheel: Wheel; title: str
 
   return (
     <>
-      {hover && <WheelTip wheel={wheel} hover={hover} svg={ownRef.current} readings={readings} />}
+      {hover && <WheelTip wheel={wheel} hover={hover} svg={own} readings={readings} />}
       <svg
         ref={setRef}
         viewBox={`0 0 ${SIZE} ${SIZE}`}

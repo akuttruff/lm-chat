@@ -72,7 +72,7 @@ export async function listServerTools(spec: McpServerSpec, timeoutMs = 20_000): 
   const transport = new StdioClientTransport({
     command: spec.command,
     args: spec.args ?? [],
-    env: { ...(process.env as Record<string, string>), ...(spec.env ?? {}) },
+    env: { ...(process.env as Record<string, string>), ...spec.env },
     stderr: 'ignore',
   })
   const client = new Client({ name: 'lm-chat', version: '1.0.0' })

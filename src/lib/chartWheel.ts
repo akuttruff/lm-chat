@@ -206,7 +206,7 @@ export function spread(longitudes: number[], minGap: number): number[] {
     }
     if (!moved) break
   }
-  const out = new Array<number>(n)
+  const out: number[] = Array.from({ length: n }, () => 0)
   order.forEach((o, k) => { out[o.i] = norm(pos[k]!) })
   return out
 }

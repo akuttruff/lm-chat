@@ -14,7 +14,8 @@
       {
         "allowConstantExport": true
       }
-    ]
+    ],
+    "vitest/require-mock-type-parameters": "off"
   },
   "ignorePatterns": [
     "dist",

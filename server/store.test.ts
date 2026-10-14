@@ -770,7 +770,7 @@ describe('review fixes', () => {
   it('leaves the store untouched when a restored copy cannot be written', () => {
     const blank = store.create()
     const bad = { ...blank, id: 'ghost', messages: [{ id: 'm', role: 'system' } as unknown as Message] }
-    expect(() => store.restore(bad)).toThrow()
+    expect(() => store.restore(bad)).toThrow(/CHECK constraint failed: role/)
     expect(store.get('ghost')).toBeUndefined()
     expect(store.getConversations().items.map((c) => c.id)).toEqual([blank.id])
     expect(store.getConversations().activeId).toBe(blank.id)
