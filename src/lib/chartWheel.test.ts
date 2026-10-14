@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   aspectDetail, aspectFamily, aspectSentence, aspectsOfPoint, describePoint, elementOf, looksLikeChart, parseWheel, polar,
-  screenAngle, signDegrees, spread, aspectGlyph } from './chartWheel.ts'
+  screenAngle, signDegrees, spread, aspectGlyph, hasRetrograde} from './chartWheel.ts'
 // The astro server's own output for one birth chart and one transit moment, as text, the way a tool card gets it.
 import transit from '../test/fixtures/transit-chart.json?raw'
 import natal from '../test/fixtures/natal-chart.json?raw'
@@ -33,6 +33,15 @@ describe('parseWheel', () => {
     expect(jupiterSun.orb).toBeCloseTo(1.08)
     // Aspects to the angles are kept: the wheel knows where they are.
     expect(w.aspects.some((a) => a.to === 'Asc')).toBe(true)
+  })
+
+  it('takes a retrograde flag the record spells out, with or without a speed', () => {
+    const data = JSON.parse(transit) as { objects: Record<string, Record<string, unknown>> }
+    data.objects.Sun = { ...data.objects.Sun, retrograde: true }
+    delete data.objects.Sun.speed
+    const w = parseWheel(JSON.stringify(data))!
+    expect(w.outer.find((p) => p.name === 'Sun')!.retrograde).toBe(true)
+    expect(hasRetrograde(w)).toBe(true)
   })
 
   it('marks a transiting planet retrograde from its speed', () => {
@@ -172,7 +181,7 @@ describe('in words', () => {
     expect(sun.aspects).toContain('Jupiter in Leo squaring your Sun in Taurus')
     const saturn = describePoint(w, 'outer', w.outer.find((p) => p.name === 'Saturn')!)
     expect(saturn.title).toBe('Transiting Saturn')
-    expect(saturn.position).toBe('10°36′ Aries · 5th house · retrograde')
+    expect(saturn.position).toBe('10°36′ Aries · 5th house · ℞ retrograde')
     expect(saturn.aspects).toEqual([])
   })
 

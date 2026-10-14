@@ -5,7 +5,7 @@ import WheelViewer from './WheelViewer'
 import {
   aspectDetail, aspectFamily, aspectSentence, aspectsOfPoint, describePoint, elementOf, fromLongitude, natalLongitude,
   polar, screenAngle, signDegrees, spread, SIGN_GLYPHS, SIGN_NAMES,
-  type AspectFamily, type Element as ZodiacElement, type Ring as RingName, type Wheel, type WheelPoint, aspectGlyph } from '../lib/chartWheel.ts'
+  type AspectFamily, type Element as ZodiacElement, type Ring as RingName, type Wheel, type WheelPoint, aspectGlyph, hasRetrograde} from '../lib/chartWheel.ts'
 import { downloadBlob } from '../lib/export.ts'
 import { readingFor } from '../lib/readings.ts'
 import { placeTip, type Placement, type Point, type Subject } from '../lib/tipPlacement.ts'
@@ -119,7 +119,7 @@ function Ring({ name, points, band, asc, glyphSize, color, degreeColor, onPoint,
             </text>
             <text x={dx} y={dy} fontSize={11} fill={degreeColor} textAnchor="middle" dominantBaseline="central" fontFamily={FONT}>
               {deg}°<tspan fontSize={8}>{String(min).padStart(2, '0')}</tspan>
-              {p.retrograde && <tspan fontSize={8} fill={PALETTE.hard}> r</tspan>}
+              {p.retrograde && <tspan className="wheel-rx" fontSize={9} fill={PALETTE.hard}> ℞</tspan>}
             </text>
           </g>
         )
@@ -481,6 +481,7 @@ function ChartWheel({ wheel, readings }: { wheel: Wheel; readings?: Record<strin
           <i style={{ background: ASPECT_COLOR.hard }} /> {aspectGlyph('square')} square, {aspectGlyph('opposition')} opposition
           <i style={{ background: ASPECT_COLOR.soft }} /> {aspectGlyph('trine')} trine, {aspectGlyph('sextile')} sextile
           <i style={{ background: ASPECT_COLOR.conjunction }} /> {aspectGlyph('conjunction')} conjunction
+          {hasRetrograde(wheel) && <><b style={{ color: PALETTE.hard }}>℞</b> retrograde</>}
         </span>
         <button
           type="button"

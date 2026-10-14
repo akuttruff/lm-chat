@@ -89,8 +89,9 @@ function pointsOf(map: Record<string, unknown>): WheelPoint[] {
     const longitude = longitudeOf(entry)
     if (longitude === null) continue
     const speed = isRecord(entry) ? num(entry.speed) : null
+    const flagged = isRecord(entry) && entry.retrograde === true
     const house = isRecord(entry) ? num(entry.house) : null
-    points.push({ name, glyph: GLYPHS[name]!, longitude: norm(longitude), retrograde: speed !== null && speed < 0, house })
+    points.push({ name, glyph: GLYPHS[name]!, longitude: norm(longitude), retrograde: flagged || (speed !== null && speed < 0), house })
   }
   return points
 }
@@ -329,6 +330,9 @@ export interface PointSummary {
   aspects: string[]
 }
 
+/** Whether any planet on the wheel is retrograde, so the legend explains the ℞. */
+export const hasRetrograde = (wheel: Wheel): boolean => [...wheel.inner, ...wheel.outer].some((p) => p.retrograde)
+
 /** What the popup says for a planet on a ring. */
 export function describePoint(wheel: Wheel, ring: Ring, point: WheelPoint): PointSummary {
   const { deg, min } = signDegrees(point.longitude)
@@ -336,7 +340,7 @@ export function describePoint(wheel: Wheel, ring: Ring, point: WheelPoint): Poin
     : ring === 'outer' ? `Transiting ${displayName(point.name)}` : `Your ${displayName(point.name)}`
   const where = [`${deg}°${String(min).padStart(2, '0')}′ ${signName(point.longitude)}`]
   if (point.house !== null) where.push(`${ordinal(point.house)} house`)
-  if (point.retrograde) where.push('retrograde')
+  if (point.retrograde) where.push('℞ retrograde')
   return {
     title,
     position: where.join(' · '),

@@ -16,6 +16,14 @@ describe('ChartWheel in a tool card', () => {
     expect(container.querySelector('.tc-preview')).toBeInTheDocument()
   })
 
+  it('marks a retrograde planet with ℞ beside its degree and explains it in the legend', () => {
+    const { container } = render(<ToolCard name="create_transit_chart" plugin="mcp/astrology-v2" output={transit} />)
+    const marks = Array.from(container.querySelectorAll('.wheel-svg tspan.wheel-rx'))
+    expect(marks.length).toBeGreaterThan(0)
+    expect(marks.every((t) => t.textContent?.trim() === '℞')).toBe(true)
+    expect(container.querySelector('.wheel-legend')?.textContent).toContain('℞ retrograde')
+  })
+
   it('draws nothing for a result that is not a chart', () => {
     const { container } = render(<ToolCard name="list_upcoming_transits" output={'{"spans": []}'} />)
     expect(container.querySelector('.wheel')).toBeNull()
