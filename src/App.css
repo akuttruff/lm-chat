@@ -338,11 +338,31 @@ html, body, #root {
 .wheel-svg { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto; border-radius: 8px; }
 .wheel-caption { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--paper-dim); }
 .wheel-title { flex: 1 1 100%; color: var(--paper); }
-.wheel-legend { display: inline-flex; align-items: center; gap: 4px; flex: 1 1 auto; }
+.wheel-legend { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; flex: 1 1 auto; }
 .wheel-legend i { display: inline-block; width: 14px; height: 2px; margin-left: 6px; border-radius: 1px; }
 .wheel-legend i:first-child, .wheel-legend b:first-child { margin-left: 0; }
 .wheel-legend b { font-weight: 400; font-size: 10px; margin-left: 6px; }
 /* The aspect's glyph before its words, in the popup and the legend. */
+/* Transits as a table: under a transit wheel, or for an upcoming-transits result on its own. */
+.tt-wrap { margin-top: 10px; overflow-x: auto; }
+.tt { width: 100%; border-collapse: collapse; font-size: 12px; color: var(--paper); }
+.tt caption { text-align: left; padding: 0 0 6px; font-size: 12px; color: var(--paper-dim); }
+.tt th { font-weight: 500; font-size: 11px; color: var(--paper-dim); }
+.tt th, .tt td { padding: 4px 5px 4px 0; border-bottom: 1px solid var(--line); text-align: left; vertical-align: baseline; }
+.tt td:last-child, .tt th:last-child { padding-right: 0; }
+.tt-body, .tt-aspect, .tt-num { white-space: nowrap; }
+.tt tr:last-child td { border-bottom: 0; }
+.tt-glyph { display: inline-block; min-width: 1.1em; margin-right: 2px; font-size: 1.05em; line-height: 1; font-family: -apple-system, "SF Pro Text", system-ui, "Segoe UI Symbol", "Noto Sans Symbols 2", sans-serif; }
+.tt-num, .tt-when { font-variant-numeric: tabular-nums; color: var(--paper-dim); }
+/* A date and its time may sit on two lines where the card is narrow. */
+.tt-when { white-space: normal; min-width: 3.8em; }
+.tt-house { color: var(--paper-dim); font-size: 11px; }
+.tt .wheel-rx { color: #E8906C; font-size: 11px; }
+.tt-conjunction { color: #EDE8DC; }
+.tt-hard { color: #E8906C; }
+.tt-soft { color: #8FBCE6; }
+.tt-minor { color: #9FB592; }
+.tt-note { margin: 6px 0 0; font-size: 11px; color: var(--paper-dim); }
 .wheel-glyph { display: inline-block; min-width: 1.1em; margin-right: 4px; font-size: 1.05em; line-height: 1; color: var(--paper-dim); }
 .wheel-save { flex: 0 0 auto; }
 /* The wheel in the card is a button: a tap opens it full screen to pinch into. */

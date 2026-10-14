@@ -267,7 +267,7 @@ const VERBS: Record<string, string> = {
   quincunx: 'quincunx', semisextile: 'semi-sextile', 'semi-sextile': 'semi-sextile',
 }
 
-const ordinal = (n: number): string => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`
+export const ordinal = (n: number): string => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`
 
 /** The sign a longitude is in, by name. */
 export const signName = (longitude: number): string => SIGN_NAMES[signDegrees(longitude).sign]!

@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ToolCard from './ToolCard'
 import transit from '../test/fixtures/transit-chart.json?raw'
+import upcoming from '../test/fixtures/upcoming-transits.json?raw'
 
 describe('ChartWheel in a tool card', () => {
   it('draws a transit result as a wheel, without opening the card', () => {
@@ -22,6 +23,25 @@ describe('ChartWheel in a tool card', () => {
     expect(marks.length).toBeGreaterThan(0)
     expect(marks.every((t) => t.textContent?.trim() === '℞')).toBe(true)
     expect(container.querySelector('.wheel-legend')?.textContent).toContain('℞ retrograde')
+  })
+
+  it('tables the transits in play under the wheel, tightest first, with ℞ where a body is retrograde', () => {
+    const { container } = render(<ToolCard name="create_transit_chart" plugin="mcp/astrology-v2" output={transit} />)
+    const table = container.querySelector('table.tt')!
+    expect(table.querySelector('caption')?.textContent).toMatch(/^Transits on Oct 13 05:58/)
+    const rows = Array.from(table.querySelectorAll('tbody tr'))
+    expect(rows.length).toBeGreaterThan(3)
+    expect(rows.some((r) => /Jupiter.*square.*Sun · 6th/.test(r.textContent ?? ''))).toBe(true)
+    expect(table.querySelectorAll('.wheel-rx').length).toBeGreaterThan(0)
+  })
+
+  it('tables an upcoming-transits result, which has no wheel', () => {
+    const { container } = render(<ToolCard name="list_upcoming_transits" plugin="mcp/astrology-v2" output={upcoming} />)
+    expect(container.querySelector('.wheel')).toBeNull()
+    const table = container.querySelector('table.tt')!
+    expect(table.querySelector('caption')?.textContent).toBe('Transits Oct 14')
+    expect(table.querySelectorAll('tbody tr')).toHaveLength(17)
+    expect(table.querySelector('tbody tr')?.textContent).toMatch(/Oct 14.*Chiron ℞.*conjunction.*Mercury · 5th/)
   })
 
   it('draws nothing for a result that is not a chart', () => {
