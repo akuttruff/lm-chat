@@ -90,13 +90,28 @@ describe('astrology, said aloud', () => {
 
   it('reads a transit table row as one sentence: who, where, which house, doing what to which of yours', () => {
     expect(say("| Jupiter ☐ square Sun | 20°36' Leo ☐ 20°38' Taurus | 9th → 6th | Vision vs. daily action; \"am I overthinking?\" |"))
-      .toBe('Jupiter in Leo, your 9th house, is squaring your Sun in Taurus, in your 6th house. Vision vs. daily action; "am I overthinking?"')
+      .toBe('Jupiter in Leo, your 9th house, squaring your Sun in Taurus, in your 6th house. Vision vs. daily action; "am I overthinking?"')
     expect(say("| Moon △ trine Mercury | 27°30' Leo △ 27°30' Aries | 9th → 5th | A window for creativity |"))
-      .toBe('The Moon in Leo, your 9th house, is trining your Mercury in Aries, in your 5th house. A window for creativity.')
+      .toBe('The Moon in Leo, your 9th house, trining your Mercury in Aries, in your 5th house. A window for creativity.')
+  })
+
+  it("works the aspect out from the positions, whatever symbol the model put between the names", () => {
+    // Written by the model: a Saturn glyph for sextile, a stray symbol before each row, short signs, bare houses.
+    expect(say("| ☌ Mercury ♄ MC | 15°35' Sco ♄ 15°34' Vir | 12 → 10 | Insight becomes articulation |"))
+      .toBe('Mercury in Scorpio, your 12th house, sextiling your Midheaven in Virgo, in your 10th house. Insight becomes articulation.')
+    expect(say("| ☌ Chiron ♄ Pluto | 28°55' Aries ☌ 0°11' Sco | 5 → 12 | Separating |"))
+      .toBe('Chiron in Aries, your 5th house, opposing your Pluto in Scorpio, in your 12th house. Separating.')
+    expect(say("| ♄ Pluto ♄ Asc | 3°04' Aqu ♄ 3°47' Sag | 1 | Quiet empowerment |"))
+      .toBe('Pluto in Aquarius sextiling your Ascendant in Sagittarius, in your 1st house. Quiet empowerment.')
+    // No house column at all; and without degrees, the aspect the row names is taken at its word.
+    expect(say('| Venus ☌ Moon | 12°10\' Cancer ☌ 12°30\' Cancer | Tender |')).toBe('Venus in Cancer conjunct your Moon in Cancer. Tender.')
+    expect(say('| Mars trine Sun | Leo trine Aries | 9 | Drive |')).toBe('Mars in Leo trining your Sun in Aries, in your 9th house. Drive.')
+    // Not a transit row: read cell by cell as before.
+    expect(say("| Venus | 3°04' Aqu | 1 | a lone position |")).toBe('Venus, 3 degrees Aquarius, 1, a lone position.')
   })
 
   it('says each aspect once, by name, never as its symbol', () => {
-    expect(say('**Jupiter ☐ (square) your Sun — exact at 4:36 PM**')).toBe('Jupiter is squaring your Sun — exact at 4:36 PM')
+    expect(say('**Jupiter ☐ (square) your Sun — exact at 4:36 PM**')).toBe('Jupiter squaring your Sun — exact at 4:36 PM')
     expect(say('Sun ☐ Jupiter was exact yesterday.')).toBe('Sun square Jupiter was exact yesterday.')
     expect(say('Pluto ✶ sextile Asc, Neptune △ trine Asc, Venus ☌ Mars, Mars ☍ Saturn.'))
       .toBe('Pluto sextile Ascendant, Neptune trine Ascendant, Venus conjunct Mars, Mars opposite Saturn.')
@@ -104,7 +119,7 @@ describe('astrology, said aloud', () => {
 
   it('places a body by its sign, and a bare position in degrees', () => {
     expect(say('Transiting Sun 13°00′ Libra ☐ square natal Jupiter 12°46′ Capricorn (2nd house)'))
-      .toBe('Transiting Sun in Libra is squaring your Jupiter in Capricorn (2nd house)')
+      .toBe('Transiting Sun in Libra squaring your Jupiter in Capricorn (2nd house)')
     expect(say('The Moon (27°30\' Leo △ 27°30\' Aries, house 5)')).toMatch(/27 degrees Leo trine 27 degrees Aries/)
   })
 
