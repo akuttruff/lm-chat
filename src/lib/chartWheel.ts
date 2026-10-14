@@ -288,13 +288,14 @@ export function aspectSentence(wheel: Wheel, a: WheelAspect): string {
   return `${fromText} ${verb} ${wheel.kind === 'transit' ? 'your ' : ''}${toText}`
 }
 
-/** "orb 0°23′, applying, exact 2026-10-12 23:43" -- whatever of it is known. */
+/** "exact 2026-10-12 23:43, orb 0°23′, applying" -- whatever of it is known. */
 export function aspectDetail(a: WheelAspect): string {
   const deg = Math.floor(a.orb)
   const min = Math.round((a.orb - deg) * 60)
-  const parts = [`orb ${deg}°${String(min).padStart(2, '0')}′`]
-  if (a.movement) parts.push(a.movement.toLowerCase().startsWith('app') ? 'applying' : 'separating')
+  const parts: string[] = []
   if (a.exactAt) parts.push(`exact ${a.exactAt}`)
+  parts.push(`orb ${deg}°${String(min).padStart(2, '0')}′`)
+  if (a.movement) parts.push(a.movement.toLowerCase().startsWith('app') ? 'applying' : 'separating')
   return parts.join(', ')
 }
 

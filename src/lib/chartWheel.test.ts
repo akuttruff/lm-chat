@@ -161,7 +161,7 @@ describe('in words', () => {
   it('gives the orb, direction and exact moment when known', () => {
     const w = parseWheel(transit)!
     const a = w.aspects.find((x) => x.from === 'Mercury' && x.to === 'MC')!
-    expect(aspectDetail(a)).toBe('orb 0°23′, applying, exact 2026-10-13 16:16')
+    expect(aspectDetail(a)).toBe('exact 2026-10-13 16:16, orb 0°23′, applying')
     expect(aspectDetail({ ...a, movement: null, exactAt: null })).toBe('orb 0°23′')
   })
 

@@ -74,7 +74,7 @@ describe('ChartWheel in a tool card', () => {
     expect(lines.length).toBeGreaterThan(1)
     fireEvent.pointerEnter(lines[0]!, { pointerType: 'mouse' })
     expect(screen.getByRole('tooltip')).toHaveTextContent('Mercury in Scorpio sextile your Midheaven in Virgo')
-    expect(screen.getByRole('tooltip')).toHaveTextContent('orb 0°23′, applying, exact 2026-10-13 16:16')
+    expect(screen.getByRole('tooltip')).toHaveTextContent('exact 2026-10-13 16:16, orb 0°23′, applying')
     const after = container.querySelectorAll('.wheel-aspect')
     expect(after[0]!.getAttribute('opacity')).toBe('1')
     expect(after[1]!.getAttribute('opacity')).toBe('0.18')
