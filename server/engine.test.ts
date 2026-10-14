@@ -256,6 +256,41 @@ describe('streaming', () => {
     expect(tool.failed).toBe(false)
   })
 
+  it('keeps the results of calls made at once with their own calls, whatever order they return in', async () => {
+    const text = (t: string) => JSON.stringify([{ type: 'text', text: t }])
+    vi.stubGlobal('fetch', streams([
+      evt({ type: 'tool_call.start' }),
+      evt({ type: 'tool_call.name', tool_name: 'create_transit_chart', provider_info: { plugin_id: 'mcp/astrology-v2' } }),
+      evt({ type: 'tool_call.arguments', tool_name: 'create_transit_chart', arguments: { city: 'Culver City' } }),
+      evt({ type: 'tool_call.start' }),
+      evt({ type: 'tool_call.name', tool_name: 'list_upcoming_transits', provider_info: { plugin_id: 'mcp/astrology-v2' } }),
+      evt({ type: 'tool_call.arguments', tool_name: 'list_upcoming_transits', arguments: { days: 7 } }),
+      // The list answers first, by name; then the chart, by its parameters.
+      evt({ type: 'tool_call.success', tool_name: 'list_upcoming_transits', output: text('the list') }),
+      evt({ type: 'tool_call.success', arguments: { city: 'Culver City' }, output: text('the chart') }),
+      evt({ type: 'message.delta', content: 'done' }),
+      evt({ type: 'chat.end', result: {} }),
+    ]))
+    await engine.runTurn(convId, 'hi')
+    const tools = messages().filter((m) => m.role === 'tool')
+    expect(tools.map((m) => [m.name, m.output])).toEqual([['create_transit_chart', 'the chart'], ['list_upcoming_transits', 'the list']])
+  })
+
+  it('gives unlabelled results to the calls still waiting, oldest first, and a failure the same way', async () => {
+    vi.stubGlobal('fetch', streams([
+      evt({ type: 'tool_call.start', tool: 'a' }),
+      evt({ type: 'tool_call.start', tool: 'b' }),
+      evt({ type: 'tool_call.start', tool: 'c' }),
+      evt({ type: 'tool_call.success', output: 'first' }),
+      evt({ type: 'tool_call.failure', reason: 'broke' }),
+      evt({ type: 'tool_call.success', output: 'third' }),
+      evt({ type: 'chat.end', result: {} }),
+    ]))
+    await engine.runTurn(convId, 'hi')
+    const tools = messages().filter((m) => m.role === 'tool')
+    expect(tools.map((m) => [m.name, m.output, m.failed])).toEqual([['a', 'first', false], ['b', 'broke', true], ['c', 'third', false]])
+  })
+
   it('marks a failed tool call', async () => {
     vi.stubGlobal('fetch', streams([
       evt({ type: 'tool_call.start', tool: 'mcp/x' }),

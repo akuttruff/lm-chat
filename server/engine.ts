@@ -735,6 +735,25 @@ export class Engine {
     }
 
     const produced: Message[] = []
+    /** Tool messages whose result has arrived. The model can issue several calls at once, and their results come in any order. */
+    const settled = new Set<Message>()
+    /**
+     * The call a result belongs to: by name and parameters when the event
+     * says, else the oldest still waiting. Matching the newest message, as
+     * before, sent every result of a parallel batch into the last call and
+     * left the others empty -- a transit chart with no wheel.
+     */
+    const claimTool = (evt: ChatEvent): Message | undefined => {
+      const waiting = produced.filter((m) => m.role === 'tool' && m.plugin !== AUTO_LOADED && !settled.has(m))
+      if (!waiting.length) return undefined
+      const name = evt.tool_name || evt.tool || evt.metadata?.tool_name
+      const args = toolArgs(evt.arguments)
+      const byArgs = args && waiting.find((m) => m.args && JSON.stringify(m.args) === JSON.stringify(args) && (!name || m.name === name))
+      const byName = name && waiting.find((m) => m.name === name)
+      const chosen = byArgs || byName || waiting[0]!
+      settled.add(chosen)
+      return chosen
+    }
     // The notes were loaded for this reply without a tool call; show that, so
     // it is visible what the model started from.
     if (memory?.used.length) {
@@ -988,7 +1007,7 @@ export class Engine {
               break
             }
             case 'tool_call.success': {
-              const lastTool = [...produced].reverse().find((m) => m.role === 'tool' && m.plugin !== AUTO_LOADED)
+              const lastTool = claimTool(evt)
               if (lastTool) {
                 lastTool.output = formatToolOutput(evt.output).slice(0, MAX_TOOL_OUTPUT)
                 const args = toolArgs(evt.arguments)
@@ -1002,7 +1021,7 @@ export class Engine {
               break
             }
             case 'tool_call.failure': {
-              const lastTool = [...produced].reverse().find((m) => m.role === 'tool' && m.plugin !== AUTO_LOADED)
+              const lastTool = claimTool(evt)
               if (lastTool) {
                 lastTool.failed = true
                 lastTool.output = evt.reason || 'Tool call failed'
