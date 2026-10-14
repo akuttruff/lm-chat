@@ -24,5 +24,10 @@ describe('transits as rows', () => {
     expect(dayText('2026-10-15 16:59')).toBe('Oct 15 16:59')
     expect(dayText('2026-10-15')).toBe('Oct 15')
     expect(dayText('whenever')).toBe('whenever')
+    // Against the table's own date: the year only when it differs.
+    expect(dayText('2025-12-07 16:36', '2026-10-14 10:06')).toBe('Dec 7, 2025 16:36')
+    expect(dayText('2027-06-11 08:19', '2026-10-14')).toBe('Jun 11, 2027 08:19')
+    expect(dayText('2026-11-01 16:51', '2026-10-14 10:06')).toBe('Nov 1 16:51')
+    expect(dayText('2026-11-01', null)).toBe('Nov 1')
   })
 })

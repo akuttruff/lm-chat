@@ -71,16 +71,21 @@ export function orbText(orb: number): string {
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const parts = (iso: string): { month: number; day: number; time: string | null } | null => {
+const parts = (iso: string): { year: string; month: number; day: number; time: string | null } | null => {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}:\d{2}))?/.exec(iso)
-  return m ? { month: Number(m[2]) - 1, day: Number(m[3]), time: m[4] ?? null } : null
+  return m ? { year: m[1]!, month: Number(m[2]) - 1, day: Number(m[3]), time: m[4] ?? null } : null
 }
 
-/** "Oct 14", or "Oct 14 16:59" with a time; anything unreadable as it came. */
-export function dayText(iso: string): string {
+/**
+ * "Oct 14", or "Oct 14 16:59" with a time; anything unreadable as it came.
+ * Given the table's own date, a day in another year carries it ("Dec 7, 2025 16:36"),
+ * so a retrograde loop's exact moment last year doesn't read as this one.
+ */
+export function dayText(iso: string, ref?: string | null): string {
   const p = parts(iso)
   if (!p) return iso
-  return `${MONTHS[p.month]} ${p.day}${p.time ? ` ${p.time}` : ''}`
+  const year = ref && ref.slice(0, 4) !== p.year && /^\d{4}/.test(ref) ? `, ${p.year}` : ''
+  return `${MONTHS[p.month]} ${p.day}${year}${p.time ? ` ${p.time}` : ''}`
 }
 
 

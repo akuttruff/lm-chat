@@ -33,13 +33,13 @@ function Natal({ name, retrograde = false, house }: { name: string; retrograde?:
 }
 
 /** "Oct 6 16:36" on top; dim when it has passed. Over the movement, or the days in orb. */
-function When({ exact, past, nearest, under }: { exact: string | null; past: boolean; nearest?: string | null; under: string | null }) {
+function When({ exact, past, nearest, under, on }: { exact: string | null; past: boolean; nearest?: string | null; under: string | null; on: string | null }) {
   return (
     <td className="tt-when">
       {exact
-        ? <span className={past ? 'tt-near' : 'tt-exact'}>{past ? 'was exact ' : 'exact '}<span className="tt-date">{dayText(exact)}</span></span>
+        ? <span className={past ? 'tt-near' : 'tt-exact'}>{past ? 'was exact ' : 'exact '}<span className="tt-date">{dayText(exact, on)}</span></span>
         : nearest
-          ? <span className="tt-near" title="in orb through these days; the nearest moment it is exact">{past ? 'was exact ' : 'exact '}<span className="tt-date">{dayText(nearest)}</span></span>
+          ? <span className="tt-near" title="in orb through these days; the nearest moment it is exact">{past ? 'was exact ' : 'exact '}<span className="tt-date">{dayText(nearest, on)}</span></span>
           : <span className="tt-house" title="in orb, not exact within reach of the search">—</span>}
       {under && <div className="tt-pos">{under}</div>}
     </td>
@@ -65,7 +65,7 @@ export function ActiveTransits({ wheel }: { wheel: Wheel }) {
         <tbody>
           {rows.map((r) => (
             <tr key={`${r.from}|${r.type}|${r.to}`}>
-              <When exact={r.exact} past={Boolean(r.exact && wheel.dateTime && r.exact < wheel.dateTime)} under={r.movement} />
+              <When exact={r.exact} past={Boolean(r.exact && wheel.dateTime && r.exact < wheel.dateTime)} under={r.movement} on={wheel.dateTime ?? null} />
               <td>
                 <Body name={r.from} retrograde={r.fromRetrograde} />
                 {r.fromPosition && <div className="tt-pos">{r.fromPosition}</div>}
@@ -112,6 +112,7 @@ export function ForecastTransits({ table }: { table: ForecastTable }) {
                 exact={r.exact}
                 past={Boolean(!r.exact && r.nearestExact && r.nearestExact < r.start)}
                 nearest={r.nearestExact}
+                on={table.start}
                 under={`in orb ${windowText(r.start, r.end)}${r.movement ? ` · ${r.movement}` : ''}`}
               />
               <td>
