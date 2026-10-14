@@ -6,7 +6,7 @@
  * list_upcoming_transits result gets no table: Amie found one not
  * meaningful, so don't add it back.)
  */
-import { type Wheel, aspectFamily, aspectGlyph, type AspectFamily, GLYPHS, displayName } from './chartWheel.ts'
+import { type Wheel, aspectFamily, aspectGlyph, type AspectFamily, GLYPHS, displayName, signDegrees, signName } from './chartWheel.ts'
 
 export interface TransitRow {
   /** The transiting body, and the natal point. */
@@ -18,6 +18,9 @@ export interface TransitRow {
   toRetrograde: boolean
   /** The natal house of the point aspected, when known. */
   toHouse: number | null
+  /** "21°50′ Leo": where each body is on the wheel. */
+  fromPosition: string | null
+  toPosition: string | null
   orb: number
   /** "2026-10-15 16:59", local; null when it is not exact in the window. */
   exact: string | null
@@ -27,21 +30,37 @@ export interface TransitRow {
 const movementOf = (v: unknown): TransitRow['movement'] =>
   typeof v !== 'string' ? null : v.toLowerCase().startsWith('app') ? 'applying' : v.toLowerCase().startsWith('sep') ? 'separating' : null
 
-/** The aspects on a transit wheel as rows, tightest first: what is in play at that moment. */
+/** "21°50′ Leo" for a longitude. */
+export function positionText(longitude: number): string {
+  const { deg, min } = signDegrees(longitude)
+  return `${deg}°${String(min).padStart(2, '0')}′ ${signName(longitude)}`
+}
+
+/**
+ * The aspects on a transit wheel as rows: what is in play at that moment,
+ * in date order of their exact moments (those with none last, tightest
+ * first), each with both bodies' positions read off the rings.
+ */
 export function activeTransits(wheel: Wheel): TransitRow[] {
   if (wheel.kind !== 'transit') return []
-  const retro = (ring: 'inner' | 'outer', name: string): boolean => wheel[ring].find((p) => p.name === name)?.retrograde ?? false
+  const point = (ring: 'inner' | 'outer', name: string) => wheel[ring].find((p) => p.name === name)
   return wheel.aspects
-    .map((a): TransitRow => ({
-      from: a.from, to: a.to, type: a.type,
-      fromRetrograde: retro('outer', a.from),
-      toRetrograde: retro('inner', a.to),
-      toHouse: wheel.inner.find((p) => p.name === a.to)?.house ?? null,
-      orb: a.orb,
-      exact: a.exactAt,
-      movement: movementOf(a.movement),
-    }))
-    .sort((a, b) => a.orb - b.orb)
+    .map((a): TransitRow => {
+      const from = point('outer', a.from)
+      const to = point('inner', a.to)
+      return {
+        from: a.from, to: a.to, type: a.type,
+        fromRetrograde: from?.retrograde ?? false,
+        toRetrograde: to?.retrograde ?? false,
+        toHouse: to?.house ?? null,
+        fromPosition: from ? positionText(from.longitude) : null,
+        toPosition: to ? positionText(to.longitude) : null,
+        orb: a.orb,
+        exact: a.exactAt,
+        movement: movementOf(a.movement),
+      }
+    })
+    .sort((a, b) => (a.exact && b.exact ? a.exact.localeCompare(b.exact) : a.exact ? -1 : b.exact ? 1 : a.orb - b.orb))
 }
 
 /** "1°17′". */

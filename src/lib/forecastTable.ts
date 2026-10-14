@@ -20,6 +20,10 @@ export interface ForecastRow {
   toHouse: number | null
   /** The local moment it is exact, or null when it is only in orb within the period. */
   exact: string | null
+  /** That moment, or else the nearest exact moment before or after the period; null when none within a year. */
+  nearestExact: string | null
+  /** For a contact that does not perfect in the period: whether its orb closes or opens across it. */
+  movement: 'applying' | 'separating' | null
   /** The first and last day in orb. */
   start: string
   end: string
@@ -86,6 +90,8 @@ export function parseForecast(text: string): ForecastTable | null {
       fromRetrograde: h.retrograde === true,
       toHouse: num(h.natal_house),
       exact: str(h.exact),
+      nearestExact: str(h.nearest_exact) ?? str(h.exact),
+      movement: h.movement === 'applying' || h.movement === 'separating' ? h.movement : null,
       start: first, end: last,
       fromPosition: position(h.from_position),
       toPosition: position(h.to_position),

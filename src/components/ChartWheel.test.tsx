@@ -26,13 +26,16 @@ describe('ChartWheel in a tool card', () => {
     expect(container.querySelector('.wheel-legend')?.textContent).toContain('℞ retrograde')
   })
 
-  it('tables the transits in play under the wheel, tightest first, with ℞ where a body is retrograde', () => {
+  it('tables the transits in play under the wheel in date order, with positions, movement and ℞', () => {
     const { container } = render(<ToolCard name="create_transit_chart" plugin="mcp/astrology-v2" output={transit} />)
     const table = container.querySelector('table.tt')!
     expect(table.querySelector('caption')?.textContent).toMatch(/^Transits on Oct 13 05:58/)
-    const rows = Array.from(table.querySelectorAll('tbody tr'))
+    expect(table.querySelector('thead')?.textContent).toBe('WhenTransitAspectNatal')
+    const rows = Array.from(table.querySelectorAll('tbody tr')).map((r) => r.textContent ?? '')
     expect(rows.length).toBeGreaterThan(3)
-    expect(rows.some((r) => /Jupiter.*square.*Sun · 6th/.test(r.textContent ?? ''))).toBe(true)
+    // Jupiter squared the Sun a week before the chart: dimmed as past, and separating.
+    expect(rows.find((r) => /Jupiter.*square.*Sun · 6th/.test(r))).toMatch(/^was exact Oct 6 16:36separating.*Jupiter2\d°\d\d′ Leo.*squareorb 1°05′.*Sun · 6th20°38′ Taurus$/)
+    expect(table.querySelectorAll('.tt-near').length).toBeGreaterThan(0)
     expect(table.querySelectorAll('.wheel-rx').length).toBeGreaterThan(0)
   })
 
@@ -40,12 +43,13 @@ describe('ChartWheel in a tool card', () => {
     const w = render(<ToolCard name="forecast_week" plugin="mcp/astrology-v2" output={week} />)
     expect(w.container.querySelector('.wheel')).toBeNull()
     const table = w.container.querySelector('table.tt')!
-    expect(table.querySelector('caption')?.textContent).toBe('Key transits · Oct 14–20')
+    expect(table.querySelector('caption')?.textContent).toBe('Key transits · Oct 12–18')
     expect(table.querySelectorAll('tbody tr').length).toBe(JSON.parse(week).headline_transits.filter((h: { weight: number }) => h.weight >= 0.7).length)
     // Date order, with the in-orb days, the exact moment, both positions and the orb.
     const rows = Array.from(table.querySelectorAll('tbody tr')).map((r) => r.textContent ?? '')
-    expect(rows.find((r) => /Mars.*square.*Saturn/.test(r))).toMatch(/^Oct 19 22:56in orb Oct 1\d–\d+.*Mars12°30′ Leo.*squareorb 0°0\d′.*Saturn · 1st12°30′ Scorpio$/)
-    expect(rows.indexOf(rows.find((r) => /Mars.*square.*Venus/.test(r))!)).toBeLessThan(rows.indexOf(rows.find((r) => /Mars.*square.*Saturn/.test(r))!))
+    expect(rows.at(-1)).toMatch(/^exact Oct 17 05:04in orb Oct 15–18.*Mars11°01′ Leo.*squareorb 0°07′.*Venus · 7th11°01′ Taurus$/)
+    // The backdrop first, by its first day in orb, saying when it does perfect and which way it is going.
+    expect(rows[0]).toMatch(/^(was exact|exact) [A-Z][a-z]{2} \d.*in orb Oct 12–1\d · (applying|separating)/)
     expect(table.querySelector('thead')?.textContent).toBe('WhenTransitAspectNatal')
     expect(table.textContent).not.toContain('pass ')
     const y = render(<ToolCard name="forecast_year" plugin="mcp/astrology-v2" output={year} />)
@@ -53,7 +57,8 @@ describe('ChartWheel in a tool card', () => {
     expect(yt.querySelector('caption')?.textContent).toBe('Key transits · Oct 14, 2026 – Oct 14, 2027')
     expect(yt.querySelectorAll('tbody tr')).toHaveLength(JSON.parse(year).headline_transits.filter((h: { weight: number }) => h.weight >= 3).length)
     expect(yt.textContent).toMatch(/pass \d of \d/)
-    expect(yt.querySelector('tbody')?.textContent).toContain('—') // a contact in orb all year without an exact moment in it
+    // A contact in orb without perfecting in the period says when it does, before or after.
+    expect(w.container.querySelectorAll('.tt-near').length).toBeGreaterThan(0)
   })
 
   it('draws nothing for a result that is not a chart', () => {

@@ -4,13 +4,17 @@ import { activeTransits, dayText, orbText } from './transitTable.ts'
 import transit from '../test/fixtures/transit-chart.json?raw'
 
 describe('transits as rows', () => {
-  it('lists a transit wheel\'s aspects tightest first, with the houses and retrograde state of each end', () => {
+  it('lists a transit wheel\'s aspects in date order, with positions, houses, movement and retrograde state', () => {
     const rows = activeTransits(parseWheel(transit)!)
     expect(rows.length).toBeGreaterThan(3)
-    expect(rows.map((r) => r.orb)).toEqual([...rows.map((r) => r.orb)].sort((a, b) => a - b))
+    const dated = rows.filter((r) => r.exact).map((r) => r.exact!)
+    expect(dated.length).toBeGreaterThan(0)
+    expect(dated).toEqual(dated.slice().sort())
+    expect(rows.slice(dated.length).every((r) => !r.exact)).toBe(true) // the undated last, tightest first
+    expect(rows.slice(dated.length).map((r) => r.orb)).toEqual(rows.slice(dated.length).map((r) => r.orb).sort((a, b) => a - b))
     const jupiter = rows.find((r) => r.from === 'Jupiter' && r.to === 'Sun')!
-    expect(jupiter).toMatchObject({ type: 'Square', toHouse: 6, fromRetrograde: false, movement: 'separating' })
-    expect(rows.some((r) => r.exact)).toBe(true)
+    expect(jupiter).toMatchObject({ type: 'Square', toHouse: 6, fromRetrograde: false, movement: 'separating', toPosition: '20°38′ Taurus' })
+    expect(jupiter.fromPosition).toMatch(/^2\d°\d\d′ Leo$/)
     expect(activeTransits({ ...parseWheel(transit)!, kind: 'natal' })).toEqual([])
   })
 

@@ -17,9 +17,9 @@ describe('a forecast as rows', () => {
 
   it('reads the week with its exact contacts first, both ends, houses and the retrograde flag', () => {
     const t = parseForecast(week)!
-    expect(t).toMatchObject({ horizon: 'week', start: '2026-10-14', end: '2026-10-20' })
+    expect(t).toMatchObject({ horizon: 'week', start: '2026-10-12', end: '2026-10-18' })
     expect(t.rows.length).toBeGreaterThan(4)
-    expect(t.rows[0]).toMatchObject({ from: 'Mars', to: 'Saturn', type: 'Square', exact: '2026-10-19 22:56', toHouse: 1, fromRetrograde: false, pass: null, fromPosition: '12°30′ Leo', toPosition: '12°30′ Scorpio' })
+    expect(t.rows[0]).toMatchObject({ from: 'Mars', to: 'Venus', type: 'Square', exact: '2026-10-17 05:04', toHouse: 7, fromRetrograde: false, pass: null, fromPosition: '11°01′ Leo', toPosition: '11°01′ Taurus', movement: null })
     const exact = t.rows.map((r) => Boolean(r.exact))
     expect(exact.indexOf(false)).toBeGreaterThan(0)
     expect(exact.slice(exact.indexOf(false))).not.toContain(true)
@@ -27,7 +27,7 @@ describe('a forecast as rows', () => {
     // In date order: the exact moment, or the first day in orb; the weightier first on the same moment.
     const moments = keyTransits(t).map((r) => r.exact ?? r.start)
     expect(moments).toEqual(moments.slice().sort())
-    expect(keyTransits(t).at(-1)).toMatchObject({ from: 'Sun', to: 'Mercury', exact: '2026-10-20 14:21' })
+    expect(keyTransits(t).at(-1)).toMatchObject({ from: 'Mars', to: 'Venus', exact: '2026-10-17 05:04' })
     // The week's events make the table: Mars, the Sun and Venus do, Mercury not unless on a key point.
     expect(keyTransits(t).some((r) => r.from === 'Mars' && r.exact)).toBe(true)
     const mercury = { ...t.rows[0]!, from: 'Mercury', weight: 0.5 }
@@ -52,8 +52,22 @@ describe('a forecast as rows', () => {
     expect(y.rows.some((r) => r.fromRetrograde)).toBe(true)
   })
 
+  it('says when a contact in orb all period actually perfects, before or after it', () => {
+    const t = parseForecast(week)!
+    const backdrop = t.rows.filter((r) => !r.exact)
+    expect(backdrop.length).toBeGreaterThan(0)
+    expect(backdrop.some((r) => r.nearestExact)).toBe(true)
+    for (const r of backdrop) if (r.nearestExact) expect(r.nearestExact < t.start || r.nearestExact > t.end).toBe(true)
+    for (const r of t.rows) if (r.exact) expect(r.nearestExact).toBe(r.exact)
+    // Which way the backdrop is going across the week.
+    expect(backdrop.every((r) => r.movement === 'applying' || r.movement === 'separating')).toBe(true)
+    expect(backdrop.some((r) => r.movement === 'applying') && backdrop.some((r) => r.movement === 'separating')).toBe(true)
+    expect(parseForecast('{"forecast":"week","range":{"start":"2026-10-12","end":"2026-10-18"},"headline_transits":[{"transiting":"Pluto","natal":"Sun","aspect":"Square","start":"2026-10-12","end":"2026-10-18"}]}')!.rows[0])
+      .toMatchObject({ exact: null, nearestExact: null })
+  })
+
   it('names the period for the caption', () => {
-    expect(periodText(parseForecast(week)!)).toBe('Oct 14–20')
+    expect(periodText(parseForecast(week)!)).toBe('Oct 12–18')
     expect(periodText(parseForecast(month)!)).toBe('October 2026')
     expect(periodText(parseForecast(year)!)).toBe('Oct 14, 2026 – Oct 14, 2027')
     expect(periodText({ horizon: 'week', start: '2026-10-29', end: '2026-11-04', rows: [] })).toBe('Oct 29–Nov 4')

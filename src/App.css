@@ -358,7 +358,11 @@ html, body, #root {
 .tt-when { white-space: normal; min-width: 3.8em; }
 .tt-house { color: var(--paper-dim); font-size: 11px; }
 .tt-pos { color: var(--paper-dim); font-size: 11px; white-space: nowrap; margin-top: 1px; }
-.tt-exact { color: var(--paper); white-space: nowrap; }
+/* The When cell wraps wherever it must, so the other three columns keep their width on a phone. */
+.tt-exact { color: var(--paper); }
+.tt-near { color: var(--paper-dim); }
+.tt-when .tt-pos { white-space: normal; }
+.tt-date { white-space: nowrap; }
 .tt .wheel-rx { color: #E8906C; font-size: 11px; }
 .tt-conjunction { color: #EDE8DC; }
 .tt-hard { color: #E8906C; }
