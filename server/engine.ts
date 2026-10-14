@@ -6,11 +6,13 @@ import { canTurnOff, cheapestReasoning, fitReasoning, reasoningCapability } from
 import type { ReasoningCapability } from './capabilities.ts'
 import { Slots, parallelLimit } from './slots.ts'
 import { AUTO_LOADED, MEMORY_PLUGIN, Memories } from './memory.ts'
+import { Transcript, formatToolOutput, toolArgs, type ReplyMeta } from './transcript.ts'
 import { metaOf } from '../src/types.ts'
+export { formatToolOutput, toolArgs }
 import { parseIntegrations } from '../src/lib/integrations.ts'
 import { looksLikeChart, parseWheel } from '../src/lib/chartWheel.ts'
 import { READINGS_PROMPT, aspectKey, parseReadings, readingsInput, readingsTokenCap } from '../src/lib/readings.ts'
-import type { ChatEvent, ContextSummary, ImageUpload, Message, MessageImage, ReplyStats, ServerConfig } from '../src/types.ts'
+import type { ChatEvent, ContextSummary, Conversation, Folder, ImageUpload, Message, MessageImage, ReplyStats, ServerConfig } from '../src/types.ts'
 
 /**
  * Runs a turn against LM Studio, server-side.
@@ -19,53 +21,6 @@ import type { ChatEvent, ContextSummary, ImageUpload, Message, MessageImage, Rep
  * or a reload killed the generation outright -- LM Studio would log "Client
  * disconnected" and throw the work away. Here the turn outlives any client.
  */
-
-// LM Studio wraps tool results in a content envelope, e.g.
-// [{"type":"text","text":"Friday, September 25..."}]. Show the text.
-export function formatToolOutput(raw: unknown): string {
-  if (raw == null) return ''
-  let v: unknown = raw
-  if (typeof v === 'string') {
-    const asString = v
-    const trimmed = asString.trim()
-    if (!(trimmed.startsWith('[') || trimmed.startsWith('{'))) return asString
-    try { v = JSON.parse(trimmed) } catch { return asString }
-  }
-  const parts: unknown[] = Array.isArray(v) ? v : [v]
-  const texts = parts
-    .map((p) => (p && typeof p === 'object' && typeof (p as { text?: unknown }).text === 'string'
-      ? (p as { text: string }).text
-      : null))
-    .filter((t): t is string => t !== null)
-  if (texts.length) return texts.join('\n')
-  return typeof raw === 'string' ? raw : JSON.stringify(v)
-}
-
-/**
- * Tool results are kept in full rather than clipped for display: a later turn
- * often depends on the data a tool returned (a natal chart, a search result),
- * and a truncated copy is worse than useless. The UI collapses them instead.
- *
- * Sized above what the MCP tools actually emit -- a year of transits runs to
- * roughly 20KB -- so the cap is a guard against a runaway tool, not something
- * a normal result ever meets.
- */
-const MAX_TOOL_OUTPUT = 50000
-/** Parameters longer than this, as JSON, are kept cut down: they're for reading, not replaying. */
-const MAX_TOOL_ARGS = 8000
-
-/** A tool call's parameters from an LM Studio event: an object, within MAX_TOOL_ARGS, or nothing. */
-export function toolArgs(raw: unknown): Record<string, unknown> | undefined {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
-  const json = JSON.stringify(raw)
-  if (json.length <= MAX_TOOL_ARGS) return raw as Record<string, unknown>
-  // Each value cut down in turn, so every name still shows.
-  const share = Math.max(80, Math.floor(MAX_TOOL_ARGS / Math.max(1, Object.keys(raw).length)))
-  return Object.fromEntries(Object.entries(raw).map(([k, v]) => {
-    const text = typeof v === 'string' ? v : JSON.stringify(v)
-    return [k, text.length > share ? `${text.slice(0, share)}… (${text.length} characters)` : v]
-  }))
-}
 
 /**
  * Replay the conversation to the model as a system prompt.
@@ -466,6 +421,69 @@ interface TurnState {
   stalled: boolean
 }
 
+/**
+ * Sends a turn's progress to clients and disk: at once on a commit, and
+ * coalesced while streaming, so a fast model can't flood either. A commit
+ * cancels any pending throttled update, so a stale snapshot can never land
+ * after the final state.
+ */
+class TailPublisher {
+  private timer: ReturnType<typeof setTimeout> | undefined
+  private lastPersist = Date.now()
+
+  constructor(
+    private readonly save: (messages: Message[], opts: { touch: boolean; persist?: boolean }) => void,
+    private readonly send: () => void,
+  ) {}
+
+  commit(messages: Message[], { touch = false }: { touch?: boolean } = {}): void {
+    this.close()
+    this.save(messages, { touch })
+    this.lastPersist = Date.now()
+    this.send()
+  }
+
+  /** Streaming progress: sent within PUBLISH_INTERVAL_MS, saved every PERSIST_INTERVAL_MS. */
+  snapshot(current: () => Message[]): void {
+    if (this.timer !== undefined) return
+    this.timer = setTimeout(() => {
+      this.timer = undefined
+      const now = Date.now()
+      const persist = now - this.lastPersist >= PERSIST_INTERVAL_MS
+      if (persist) this.lastPersist = now
+      this.save(current(), { persist, touch: false })
+      this.send()
+    }, PUBLISH_INTERVAL_MS)
+  }
+
+  close(): void {
+    clearTimeout(this.timer)
+    this.timer = undefined
+  }
+}
+
+/** LM Studio's stream, event by event; `onChunk` on every read, for a watchdog. */
+async function* sseEvents(body: ReadableStream<Uint8Array>, onChunk: () => void): AsyncGenerator<ChatEvent> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) return
+    onChunk() // progress: the server is still talking
+    buf += decoder.decode(value, { stream: true })
+    const lines = buf.split('\n')
+    buf = lines.pop() ?? ''
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/\r$/, '')
+      if (!line.startsWith('data:')) continue
+      const payload = line.slice(5).trim()
+      if (!payload) continue
+      try { yield JSON.parse(payload) as ChatEvent } catch { /* not an event */ }
+    }
+  }
+}
+
 function lastUserIndex(messages: Message[]): number {
   for (let i = messages.length - 1; i >= 0; i--) if (messages[i]!.role === 'user') return i
   return -1
@@ -651,25 +669,12 @@ export class Engine {
     // are only ever sent what comes after.
     const tailFrom = retry ? retryFrom : history.length
     const base = config.lmStudioUrl.replace(/\/+$/, '')
-
-    // A pending throttled update, which a commit must cancel so a stale
-    // snapshot can never land after the final state.
-    let publishTimer: ReturnType<typeof setTimeout> | undefined
-    let lastPersist = Date.now()
-
-    // Only sending a message moves a chat up the list; everything after
-    // that (the reply, its errors) leaves its place alone.
-    const commit = (messages: Message[], { touch = false }: { touch?: boolean } = {}): void => {
-      clearTimeout(publishTimer)
-      publishTimer = undefined
-      // Everything before tailFrom is already on disk and unchanged all turn.
-      this.store.setMessages(conversationId, messages, { touch, from: tailFrom })
-      lastPersist = Date.now()
-      this.publishTail(conversationId, tailFrom)
-    }
-
+    const tail = new TailPublisher(
+      (messages, opts) => this.store.setMessages(conversationId, messages, { ...opts, from: tailFrom }),
+      () => this.publishTail(conversationId, tailFrom),
+    )
     const fail = (message: string, statusText: string): void => {
-      commit([...history, { id: newId(), role: 'error', text: message }])
+      tail.commit([...history, { id: newId(), role: 'error', text: message }])
       this.publish(conversationId, '', statusText, null)
     }
 
@@ -683,7 +688,9 @@ export class Engine {
     }
     // The message being sent -- on a retry, the one being sent again.
     const sent = history[history.length - 1]!
-    commit(history, { touch: true })
+    // Only sending a message moves a chat up the list; everything after
+    // that (the reply, its errors) leaves its place alone.
+    tail.commit(history, { touch: true })
 
     if (!config.model) {
       this.running.delete(conversationId)
@@ -692,8 +699,205 @@ export class Engine {
     }
 
     const startedAt = Date.now()
-    this.publish(conversationId, 'pending', 'thinking...', startedAt)
+    const status = (text: string): void => this.publish(conversationId, 'pending', text, startedAt)
+    status('thinking...')
+    const { body, cap, memory } = await this.requestFor(conv, folder, config, history, text, sent)
 
+    const stallSeconds = Number(config.stallSeconds) || 0
+    let watchdog: ReturnType<typeof setTimeout> | undefined
+    const armWatchdog = (): void => {
+      clearTimeout(watchdog)
+      if (!stallSeconds) return
+      watchdog = setTimeout(() => {
+        turn.stalled = true
+        controller.abort(new DOMException('stalled', 'AbortError'))
+      }, stallSeconds * 1000)
+    }
+
+    const transcript = new Transcript(history)
+    transcript.noteMemories(memory?.used ?? [])
+    let instance: string | null = null
+    let completed = false
+    let responseId: string | null = null
+    const meta = (): ReplyMeta => ({ model: config.model, instance, elapsed: ((Date.now() - startedAt) / 1000).toFixed(1), responseId })
+    const snapshot = (): void => tail.snapshot(() => transcript.visible())
+    const finalize = (): void => {
+      transcript.finish(meta())
+      tail.commit(transcript.visible())
+    }
+    /** The turn ended early: what it had, then a note saying why. */
+    const cutShort = (text: string, statusText: string): void => {
+      finalize()
+      tail.commit([...transcript.all(), { id: newId(), role: 'error', text }])
+      this.publish(conversationId, '', statusText, null)
+    }
+
+    let succeeded = false
+    let releaseSlot: (() => void) | undefined
+
+    try {
+      // Wait here rather than inside LM Studio, where a queued request is
+      // silent: the watchdog starts only once the model is really on it.
+      if (!this.slots.free('turn')) {
+        status('waiting for a free slot...')
+        releaseSlot = await this.slots.acquire('turn', controller.signal)
+        status('thinking...')
+      } else {
+        releaseSlot = await this.slots.acquire('turn', controller.signal)
+      }
+      armWatchdog()
+
+      const res = await fetch(`${base}/api/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}),
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+
+      if (!res.ok) {
+        fail(await describeHttpError(res), res.status === 401 ? 'auth failed' : `HTTP ${res.status}`)
+        return
+      }
+      if (!res.body) throw new Error('LM Studio returned no stream')
+
+      for await (const evt of sseEvents(res.body, armWatchdog)) {
+        switch (evt.type) {
+          case 'chat.start':
+            if (evt.model_instance_id) instance = evt.model_instance_id
+            break
+          case 'model_load.start':
+            status('loading model...')
+            break
+          case 'model_load.progress':
+            status(`loading model ${Math.round((evt.progress || 0) * 100)}%`)
+            break
+          case 'prompt_processing.start':
+            status('reading prompt...')
+            break
+          case 'prompt_processing.progress':
+            status(`reading prompt ${Math.round((evt.progress || 0) * 100)}%`)
+            break
+          case 'reasoning.start':
+            status('reasoning...')
+            transcript.startReasoning()
+            snapshot()
+            break
+          case 'reasoning.delta':
+            transcript.reasoningDelta(evt.content || '')
+            snapshot()
+            break
+          case 'reasoning.end':
+            transcript.closeReasoning()
+            snapshot()
+            break
+          case 'message.start':
+            status('writing...')
+            transcript.closeReasoning()
+            break
+          case 'message.delta':
+            transcript.messageDelta(evt.content || '')
+            snapshot()
+            break
+          case 'message.end':
+            transcript.endMessage(meta())
+            snapshot()
+            break
+          case 'tool_call.start':
+            transcript.startTool(evt.tool)
+            status('calling a tool...')
+            snapshot()
+            break
+          case 'tool_call.name':
+          case 'tool_call.arguments': {
+            const name = evt.tool_name || evt.tool
+            if (!name) break
+            transcript.nameTool(name, evt.provider_info?.plugin_id, evt.arguments)
+            status(`using ${name}...`)
+            snapshot()
+            break
+          }
+          case 'tool_call.success':
+            transcript.toolResult(evt)
+            snapshot()
+            break
+          case 'tool_call.failure':
+            transcript.toolFailure(evt)
+            snapshot()
+            break
+          case 'error':
+            throw new Error(evt.error?.message || 'LM Studio reported an error')
+          case 'chat.end':
+            completed = true
+            if (evt.result?.response_id) {
+              responseId = evt.result.response_id
+              this.store.patch(conversationId, { responseId }, { touch: false })
+            }
+            transcript.setStats(replyStats(evt.result?.stats, cap))
+            break
+          default:
+            break
+        }
+      }
+
+      finalize()
+      this.publish(conversationId, 'live', 'connected', null)
+      succeeded = true
+    } catch (err) {
+      if (completed) {
+        // The reply arrived in full and the connection dropped afterwards.
+        finalize()
+        this.publish(conversationId, 'live', 'connected', null)
+        succeeded = true
+      } else if (turn.stalled) {
+        cutShort(
+          `No output from LM Studio for ${stallSeconds}s, so the reply was abandoned. It may still be working on a long tool call.`,
+          'no response',
+        )
+      } else if ((err as Error)?.name === 'AbortError') {
+        cutShort('Stopped.', 'stopped')
+      } else if (transcript.producedAnything()) {
+        cutShort(`The reply was cut short: ${(err as Error).message}`, 'interrupted')
+      } else {
+        fail(
+          `Couldn't reach LM Studio at ${base}. Check that its server is running. ` +
+          `(${(err as Error).message})`,
+          "can't reach LM Studio",
+        )
+      }
+    } finally {
+      clearTimeout(watchdog)
+      tail.close()
+      releaseSlot?.()
+      this.running.delete(conversationId)
+      this.publishTail(conversationId, tailFrom)
+    }
+
+    // After the turn is released, so the user can already send the next one;
+    // that turn simply replays a little more until the summary lands.
+    if (succeeded) {
+      await this.compact(conversationId)
+      await this.title(conversationId)
+      await this.readingsFor(conversationId)
+    }
+  }
+
+  /**
+   * The request for one turn: the model, the input (with this turn's
+   * pictures), the limits, the reasoning level, the tools, and the whole
+   * conversation replayed as the system prompt. Settings resolve chat, then
+   * folder, then global.
+   */
+  private async requestFor(
+    conv: Conversation,
+    folder: Folder | undefined,
+    config: ServerConfig,
+    history: Message[],
+    text: string,
+    sent: Message,
+  ): Promise<{ body: Record<string, unknown>; cap: number; memory: ReturnType<Memories['context']> | null }> {
     // With images, the input is parts: the text, then each image as a data
     // URL (LM Studio's /api/v1/chat takes {type:'image', data_url}). Only
     // this turn carries them; the transcript names them afterwards.
@@ -736,392 +940,7 @@ export class Engine {
     const systemPrompt = [DATE_NOTE, config.systemPrompt.trim(), memory?.block].filter(Boolean).join('\n\n')
     const prompt = buildHistoryPrompt(systemPrompt, history, limit, conv.summary)
     if (prompt) body.system_prompt = prompt
-
-    const stallSeconds = Number(config.stallSeconds) || 0
-    let watchdog: ReturnType<typeof setTimeout> | undefined
-    const armWatchdog = (): void => {
-      clearTimeout(watchdog)
-      if (!stallSeconds) return
-      watchdog = setTimeout(() => {
-        turn.stalled = true
-        controller.abort(new DOMException('stalled', 'AbortError'))
-      }, stallSeconds * 1000)
-    }
-
-    const produced: Message[] = []
-    /** Tool messages whose result has arrived. The model can issue several calls at once, and their results come in any order. */
-    const settled = new Set<Message>()
-    /**
-     * The call a result belongs to: by name and parameters when the event
-     * says, else the oldest still waiting. Matching the newest message, as
-     * before, sent every result of a parallel batch into the last call and
-     * left the others empty -- a transit chart with no wheel.
-     */
-    const claimTool = (evt: ChatEvent): Message | undefined => {
-      const waiting = produced.filter((m) => m.role === 'tool' && m.plugin !== AUTO_LOADED && !settled.has(m))
-      if (!waiting.length) return undefined
-      const name = evt.tool_name || evt.tool || evt.metadata?.tool_name
-      const args = toolArgs(evt.arguments)
-      const byArgs = args && waiting.find((m) => m.args && JSON.stringify(m.args) === JSON.stringify(args) && (!name || m.name === name))
-      const byName = name && waiting.find((m) => m.name === name)
-      const chosen = byArgs || byName || waiting[0]!
-      settled.add(chosen)
-      return chosen
-    }
-    // The notes were loaded for this reply without a tool call; show that, so
-    // it is visible what the model started from.
-    if (memory?.used.length) {
-      const n = memory.used.length
-      produced.push({
-        id: newId(), role: 'tool', name: 'memory', plugin: AUTO_LOADED, failed: false,
-        output: `${n} ${n === 1 ? 'memory' : 'memories'} loaded into this reply:\n` +
-          memory.used.map((m) => `- ${m.text}`).join('\n'),
-      })
-    }
-    let assistantId: string | null = null
-    let acc = ''
-    let reasoningId: string | null = null
-    let racc = ''
-    let reasoningStart = 0
-    let completed = false
-    let turnResponseId: string | null = null
-
-    // Placeholders that have produced nothing yet are left out: shown, they
-    // flicker in and out; saved, their removal looks like lost messages and
-    // triggers a backup.
-    const visible = (): Message[] => [
-      ...history,
-      ...produced
-        .filter((m) => !(m.streaming && (m.role === 'assistant' || m.role === 'reasoning') && !(m.text || '').trim()))
-        .map((m) => ({ ...m })),
-    ]
-
-    const publishNow = (): void => {
-      publishTimer = undefined
-      const now = Date.now()
-      const persist = now - lastPersist >= PERSIST_INTERVAL_MS
-      if (persist) lastPersist = now
-      this.store.setMessages(conversationId, visible(), { persist, touch: false })
-      this.publishTail(conversationId, tailFrom)
-    }
-
-    /** Streaming progress: coalesced, so a fast model can't flood clients or the disk. */
-    const snapshot = (): void => {
-      if (publishTimer === undefined) publishTimer = setTimeout(publishNow, PUBLISH_INTERVAL_MS)
-    }
-
-    const dropEmptyAssistant = (): void => {
-      if (assistantId !== null && acc.trim() === '') {
-        const i = produced.findIndex((m) => m.id === assistantId)
-        if (i !== -1) produced.splice(i, 1)
-      }
-      assistantId = null
-      acc = ''
-    }
-
-    const closeReasoning = (): void => {
-      if (reasoningId === null) return
-      const msg = produced.find((m) => m.id === reasoningId)
-      if (msg) {
-        if (!(msg.text || '').trim()) {
-          const i = produced.indexOf(msg)
-          if (i !== -1) produced.splice(i, 1)
-        } else {
-          msg.streaming = false
-          msg.elapsed = ((Date.now() - reasoningStart) / 1000).toFixed(1)
-        }
-      }
-      reasoningId = null
-      racc = ''
-    }
-
-    const finalize = (): void => {
-      closeReasoning()
-      const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1)
-      const producedSomething = produced.some(
-        (m) => (m.role === 'tool' && m.plugin !== AUTO_LOADED) || m.role === 'reasoning' ||
-          (m.role === 'assistant' && m.id !== assistantId && m.text),
-      )
-      if (assistantId !== null && acc.trim() === '' && producedSomething) {
-        dropEmptyAssistant()
-      } else if (assistantId !== null) {
-        const msg = produced.find((m) => m.id === assistantId)
-        if (msg) {
-          msg.text = acc.trim() || '(empty response)'
-          msg.streaming = false
-          msg.model = config.model
-          msg.instance = instance ?? undefined
-          msg.elapsed = elapsed
-          if (turnResponseId) msg.responseId = turnResponseId
-        }
-      }
-      commit(visible())
-    }
-
-    let instance: string | null = null
-    let succeeded = false
-    let releaseSlot: (() => void) | undefined
-
-    try {
-      // Wait here rather than inside LM Studio, where a queued request is
-      // silent: the watchdog starts only once the model is really on it.
-      if (!this.slots.free('turn')) {
-        this.publish(conversationId, 'pending', 'waiting for a free slot...', startedAt)
-        releaseSlot = await this.slots.acquire('turn', controller.signal)
-        this.publish(conversationId, 'pending', 'thinking...', startedAt)
-      } else {
-        releaseSlot = await this.slots.acquire('turn', controller.signal)
-      }
-      armWatchdog()
-
-      const res = await fetch(`${base}/api/v1/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}),
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      })
-
-      if (!res.ok) {
-        fail(await describeHttpError(res), res.status === 401 ? 'auth failed' : `HTTP ${res.status}`)
-        return
-      }
-      if (!res.body) throw new Error('LM Studio returned no stream')
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-
-      for (;;) {
-        const { value, done } = await reader.read()
-        if (done) break
-        armWatchdog() // progress: the server is still talking
-        buf += decoder.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop() ?? ''
-
-        for (const rawLine of lines) {
-          const line = rawLine.replace(/\r$/, '')
-          if (!line.startsWith('data:')) continue
-          const payload = line.slice(5).trim()
-          if (!payload) continue
-          let evt: ChatEvent
-          try { evt = JSON.parse(payload) as ChatEvent } catch { continue }
-
-          switch (evt.type) {
-            case 'chat.start':
-              if (evt.model_instance_id) instance = evt.model_instance_id
-              break
-            case 'model_load.start':
-              this.publish(conversationId, 'pending', 'loading model...', startedAt)
-              break
-            case 'model_load.progress':
-              this.publish(conversationId, 'pending',
-                `loading model ${Math.round((evt.progress || 0) * 100)}%`, startedAt)
-              break
-            case 'prompt_processing.start':
-              this.publish(conversationId, 'pending', 'reading prompt...', startedAt)
-              break
-            case 'prompt_processing.progress':
-              this.publish(conversationId, 'pending',
-                `reading prompt ${Math.round((evt.progress || 0) * 100)}%`, startedAt)
-              break
-            case 'reasoning.start': {
-              this.publish(conversationId, 'pending', 'reasoning...', startedAt)
-              dropEmptyAssistant()
-              reasoningId = newId()
-              racc = ''
-              reasoningStart = Date.now()
-              produced.push({ id: reasoningId, role: 'reasoning', text: '', streaming: true })
-              snapshot()
-              break
-            }
-            case 'reasoning.delta': {
-              racc += evt.content || ''
-              if (reasoningId === null) {
-                reasoningId = newId()
-                reasoningStart = Date.now()
-                produced.push({ id: reasoningId, role: 'reasoning', text: racc, streaming: true })
-              } else {
-                const msg = produced.find((m) => m.id === reasoningId)
-                if (msg) msg.text = racc
-              }
-              snapshot()
-              break
-            }
-            case 'reasoning.end':
-              closeReasoning()
-              snapshot()
-              break
-            case 'message.start':
-              this.publish(conversationId, 'pending', 'writing...', startedAt)
-              closeReasoning()
-              break
-            case 'message.delta': {
-              acc += evt.content || ''
-              if (assistantId === null) {
-                assistantId = newId()
-                produced.push({ id: assistantId, role: 'assistant', text: acc, streaming: true })
-              } else {
-                const msg = produced.find((m) => m.id === assistantId)
-                if (msg) msg.text = acc
-              }
-              snapshot()
-              break
-            }
-            case 'message.end': {
-              closeReasoning()
-              if (assistantId !== null && acc.trim() === '') {
-                dropEmptyAssistant()
-                snapshot()
-                break
-              }
-              if (assistantId !== null) {
-                const msg = produced.find((m) => m.id === assistantId)
-                if (msg) {
-                  msg.text = (msg.text || '').trim()
-                  msg.streaming = false
-                  msg.model = config.model
-                  msg.instance = instance ?? undefined
-                  msg.elapsed = ((Date.now() - startedAt) / 1000).toFixed(1)
-                  if (turnResponseId) msg.responseId = turnResponseId
-                }
-              }
-              assistantId = null
-              acc = ''
-              snapshot()
-              break
-            }
-            case 'tool_call.start': {
-              closeReasoning()
-              dropEmptyAssistant()
-              // `tool_call.start` carries no name in practice, despite the
-              // docs: it arrives in the `tool_call.name` event that follows.
-              produced.push({ id: newId(), role: 'tool', name: evt.tool, output: '', failed: false })
-              this.publish(conversationId, 'pending', 'calling a tool...', startedAt)
-              snapshot()
-              break
-            }
-            case 'tool_call.name':
-            case 'tool_call.arguments': {
-              const name = evt.tool_name || evt.tool
-              if (!name) break
-              const lastTool = [...produced].reverse().find((m) => m.role === 'tool' && m.plugin !== AUTO_LOADED)
-              if (lastTool) {
-                lastTool.name = name
-                const plugin = evt.provider_info?.plugin_id
-                if (plugin) lastTool.plugin = plugin
-                const args = toolArgs(evt.arguments)
-                if (args) lastTool.args = args
-              }
-              this.publish(conversationId, 'pending', `using ${name}...`, startedAt)
-              snapshot()
-              break
-            }
-            case 'tool_call.success': {
-              const lastTool = claimTool(evt)
-              if (lastTool) {
-                lastTool.output = formatToolOutput(evt.output).slice(0, MAX_TOOL_OUTPUT)
-                const args = toolArgs(evt.arguments)
-                if (args) lastTool.args = args
-                // Last chance to learn the name, if neither earlier event did.
-                if (!lastTool.name && (evt.tool_name || evt.tool)) {
-                  lastTool.name = evt.tool_name || evt.tool
-                }
-              }
-              snapshot()
-              break
-            }
-            case 'tool_call.failure': {
-              const lastTool = claimTool(evt)
-              if (lastTool) {
-                lastTool.failed = true
-                lastTool.output = evt.reason || 'Tool call failed'
-                const args = toolArgs(evt.arguments)
-                if (args) lastTool.args = args
-              } else {
-                produced.push({
-                  id: newId(), role: 'tool',
-                  name: evt.tool_name || evt.metadata?.tool_name || 'tool',
-                  output: evt.reason || 'Tool call failed', failed: true,
-                })
-              }
-              snapshot()
-              break
-            }
-            case 'error':
-              throw new Error(evt.error?.message || 'LM Studio reported an error')
-            case 'chat.end': {
-              completed = true
-              if (evt.result?.response_id) {
-                turnResponseId = evt.result.response_id
-                this.store.patch(conversationId, { responseId: turnResponseId }, { touch: false })
-              }
-              // On the reply that ends the turn: the numbers are for the
-              // whole turn, and that is the message whose footer shows them.
-              const stats = replyStats(evt.result?.stats, cap)
-              const reply = [...produced].reverse().find((m) => m.role === 'assistant')
-              if (stats && reply) reply.stats = stats
-              break
-            }
-            default:
-              break
-          }
-        }
-      }
-
-      finalize()
-      this.publish(conversationId, 'live', 'connected', null)
-      succeeded = true
-    } catch (err) {
-      if (completed) {
-        // The reply arrived in full and the connection dropped afterwards.
-        finalize()
-        this.publish(conversationId, 'live', 'connected', null)
-        succeeded = true
-      } else if (turn.stalled) {
-        finalize()
-        commit([...history, ...produced, {
-          id: newId(), role: 'error',
-          text: `No output from LM Studio for ${stallSeconds}s, so the reply was ` +
-            'abandoned. It may still be working on a long tool call.',
-        }])
-        this.publish(conversationId, '', 'no response', null)
-      } else if ((err as Error)?.name === 'AbortError') {
-        finalize()
-        commit([...history, ...produced, { id: newId(), role: 'error', text: 'Stopped.' }])
-        this.publish(conversationId, '', 'stopped', null)
-      } else if (produced.some((m) => m.role !== 'tool' || m.plugin !== AUTO_LOADED)) {
-        finalize()
-        commit([...history, ...produced, {
-          id: newId(), role: 'error',
-          text: `The reply was cut short: ${(err as Error).message}`,
-        }])
-        this.publish(conversationId, '', 'interrupted', null)
-      } else {
-        fail(
-          `Couldn't reach LM Studio at ${base}. Check that its server is running. ` +
-          `(${(err as Error).message})`,
-          "can't reach LM Studio",
-        )
-      }
-    } finally {
-      clearTimeout(watchdog)
-      clearTimeout(publishTimer)
-      releaseSlot?.()
-      this.running.delete(conversationId)
-      this.publishTail(conversationId, tailFrom)
-    }
-
-    // After the turn is released, so the user can already send the next one;
-    // that turn simply replays a little more until the summary lands.
-    if (succeeded) {
-      await this.compact(conversationId)
-      await this.title(conversationId)
-      await this.readingsFor(conversationId)
-    }
+    return { body, cap, memory }
   }
 
   /**
