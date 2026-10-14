@@ -210,6 +210,20 @@ describe('the More menu', () => {
     expect(screen.getByRole('button', { name: 'Delete this chat' })).toBeInTheDocument()
   })
 
+  it('opens the tool list from the menu, saying when the chat has its own', async () => {
+    const user = userEvent.setup()
+    const onOpenTools = vi.fn()
+    const { rerender } = render(<Composer onSend={vi.fn()} onOpenTools={onOpenTools} />)
+    expect(screen.queryByRole('button', { name: /tools/i })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Tools for this chat' }))
+    expect(onOpenTools).toHaveBeenCalled()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    rerender(<Composer onSend={vi.fn()} onOpenTools={onOpenTools} toolsCustomized />)
+    await user.click(screen.getByRole('button', { name: 'More actions' }))
+    expect(screen.getByRole('menuitem', { name: 'Tools for this chat (its own list)' })).toBeInTheDocument()
+  })
+
   it('offers the memory picker only while memory is on', async () => {
     const user = userEvent.setup()
     const onPickMemories = vi.fn()

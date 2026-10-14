@@ -430,10 +430,16 @@ html, body, #root {
 .composer.dragging { background: color-mix(in srgb, var(--moss) 14%, var(--bg)); border-top-color: var(--moss); }
 .composer.dragging .composer-input { border-color: var(--moss); border-style: dashed; }
 /* Chips first, then the box: the box keeps the full width however many chips there are. */
-.composer-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+/* One line, always: the chips keep their size and the folder name gives way. */
+.composer-chips { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; }
+.composer-chips > * { flex-shrink: 0; }
+/* Short of room, the effort and folder names shorten, down to the icon alone. */
+.composer-chips > .folder-chip, .composer-chips > .effort-chip { flex-shrink: 1; min-width: 36px; overflow: hidden; }
+.composer-chips svg { flex-shrink: 0; }
+.effort-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .composer-chips:empty { display: none; }
 /* More: one quiet chip at the end of the row, with the occasional actions
-   (memories, temporary, export) in a menu above it. */
+   (tools, memories, temporary, export) in a menu above it. */
 /* Delete: its own chip just before More, pushed to the end of the row with it. */
 .delete-chip { margin-left: auto; padding: 0 10px; color: var(--paper-dim); border-color: var(--line); }
 .delete-chip:hover { color: var(--danger); }
@@ -1179,7 +1185,6 @@ html, body, #root {
 .temporary-chip { padding: 0 11px; color: var(--paper-dim); border-color: var(--line); }
 .temporary-chip.on { color: var(--bg); background: var(--rust); border-color: var(--rust); }
 /* Lit when the chat has a tool list of its own, like the memory chip when on. */
-.tools-chip.on { color: var(--paper); background: var(--moss-dim); border-color: var(--moss); }
 
 /* --- tool picker --- */
 .tool-summary { color: var(--paper-dim); }
@@ -1204,7 +1209,7 @@ html, body, #root {
   font-size: 13px;
 }
 
-.folder-chip span { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-chip span { max-width: 140px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .toggle-row { display: flex; align-items: center; gap: 10px; font-size: 14px; margin: 4px 0 8px; cursor: pointer; }
 .toggle-row input { width: 18px; height: 18px; accent-color: var(--moss); }

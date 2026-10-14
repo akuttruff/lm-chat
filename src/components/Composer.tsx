@@ -42,7 +42,7 @@ export default function Composer({
   memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false, onDeleteChat, onCopyChat, onDownloadChat, onCollapse,
 }: ComposerProps) {
   // The overflow menu at the end of the chip row: the actions you reach for
-  // now and then (memories, temporary, export) live there, so the row stays
+  // now and then (tools, memories, temporary, export) live there, so the row stays
   // one line on a phone. Delete sits beside it, one tap away.
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLSpanElement>(null)
@@ -159,7 +159,7 @@ export default function Composer({
       {onOpenReasoning && (
         <button
           type="button"
-          className="reasoning-chip"
+          className="reasoning-chip effort-chip"
           onClick={onOpenReasoning}
           aria-label={`Reasoning effort: ${reasoningLabel}`}
         >
@@ -192,18 +192,6 @@ export default function Composer({
           <span>{folderLabel}</span>
         </button>
       )}
-      {onOpenTools && (
-        <button
-          type="button"
-          className={`reasoning-chip tools-chip${toolsCustomized ? ' on' : ''}`}
-          onClick={onOpenTools}
-          aria-label={toolsCustomized ? 'Tools: chosen for this chat' : 'Tools: same as the folder or Settings'}
-          title={toolsCustomized ? 'This chat has its own tool list' : 'Choose which tools this chat offers the model'}
-        >
-          <Wrench size={14} aria-hidden="true" />
-          <span>Tools</span>
-        </button>
-      )}
       {onToggleMemory && (
         <button
           type="button"
@@ -228,7 +216,7 @@ export default function Composer({
           <Trash2 size={15} aria-hidden="true" />
         </button>
       )}
-      {(onPickMemories || onToggleTemporary || onCopyChat || onDownloadChat) && (
+      {(onOpenTools || onPickMemories || onToggleTemporary || onCopyChat || onDownloadChat) && (
         <span className="more-wrap" ref={moreRef}>
           <button
             type="button"
@@ -237,12 +225,21 @@ export default function Composer({
             aria-expanded={moreOpen}
             aria-haspopup="menu"
             aria-label="More actions"
-            title="Memories, temporary, export"
+            title="Tools, memories, temporary, export"
           >
             <Ellipsis size={15} aria-hidden="true" />
           </button>
           {moreOpen && (
             <div className="more-menu" role="menu" aria-label="More actions">
+              {onOpenTools && (
+                <button
+                  type="button" role="menuitem"
+                  onClick={() => { setMoreOpen(false); onOpenTools() }}
+                  title={toolsCustomized ? 'This chat has its own tool list' : 'Choose which tools this chat offers the model'}
+                >
+                  <Wrench size={14} aria-hidden="true" /> Tools for this chat{toolsCustomized ? ' (its own list)' : ''}
+                </button>
+              )}
               {memoryOn && onPickMemories && (
                 <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onPickMemories() }}>
                   <ListChecks size={14} aria-hidden="true" /> Choose memories for this chat
