@@ -38,6 +38,41 @@ function setup(overrides = {}) {
 }
 
 describe('ConversationList', () => {
+  it('swipes a row aside to show its actions, and the click that swipe leaves behind opens nothing', () => {
+    const props = setup()
+    const row = screen.getByText('Astrology forecast').closest('button')!
+    fireEvent.pointerDown(row, { clientX: 300, clientY: 50, button: 0 })
+    fireEvent.pointerMove(row, { clientX: 302, clientY: 52 }) // a tremor, not a drag
+    expect(row.style.transform).toBe('')
+    fireEvent.pointerMove(row, { clientX: 100, clientY: 55 })
+    expect(row.style.transform).toBe('translateX(-200px)')
+    fireEvent.pointerUp(row, { clientX: 100, clientY: 55 })
+    expect(row.style.transform).toBe('') // CSS settles it from here
+    expect(row).toHaveClass('open')
+    fireEvent.click(row)
+    expect(props.onOpen).not.toHaveBeenCalled()
+    expect(row).toHaveClass('open')
+    // A plain tap on the swiped row tucks it back; the next one opens the chat.
+    fireEvent.pointerDown(row, { clientX: 50, clientY: 50, button: 0 })
+    fireEvent.pointerUp(row, { clientX: 50, clientY: 50 })
+    fireEvent.click(row)
+    expect(row).not.toHaveClass('open')
+    fireEvent.click(row)
+    expect(props.onOpen).toHaveBeenCalledWith('a')
+  })
+
+  it('leaves a vertical drag -- scrolling -- to the list', () => {
+    const props = setup()
+    const row = screen.getByText('Astrology forecast').closest('button')!
+    fireEvent.pointerDown(row, { clientX: 300, clientY: 50, button: 0 })
+    fireEvent.pointerMove(row, { clientX: 298, clientY: 120 })
+    fireEvent.pointerMove(row, { clientX: 100, clientY: 200 })
+    expect(row.style.transform).toBe('')
+    fireEvent.pointerUp(row, { clientX: 100, clientY: 200 })
+    expect(row).not.toHaveClass('open')
+    expect(props.onOpen).not.toHaveBeenCalled()
+  })
+
   it('lists every conversation', async () => {
     setup()
     expect(await screen.findByText('Astrology forecast')).toBeInTheDocument()

@@ -1,5 +1,4 @@
 import { useMemo, useState, memo } from 'react'
-import { motion } from 'motion/react'
 import { Wrench, ChevronRight, TriangleAlert } from 'lucide-react'
 import { argValue, argsSummary, prettyOutput, sizeLabel, toolLabel } from '../lib/toolFormat.ts'
 import { looksLikeChart, parseWheel } from '../lib/chartWheel.ts'
@@ -60,9 +59,9 @@ function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProp
             {meta && <span className="tc-meta">{meta}</span>}
           </span>
           {expandable && (
-            <motion.span className="tc-chevron" animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.15 }}>
+            <span className="tc-chevron" data-open={open || undefined}>
               <ChevronRight size={16} aria-hidden="true" />
-            </motion.span>
+            </span>
           )}
         </button>
         {params.length > 0 && !open && <div className="tc-args" title={argsSummary(args!)}>{argsSummary(args!)}</div>}

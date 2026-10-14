@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
 import { MessagesSquare, Pencil, RotateCcw } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 import ToolCard from './ToolCard'
@@ -140,14 +139,11 @@ function sameMessage(a: Message, b: Message): boolean {
     && a.stats?.outputTokens === b.stats?.outputTokens
 }
 
-const ThreadRow = memo(function ThreadRow({ message, onRetry, edit, title }: { message: Message; onRetry?: () => void; edit?: EditControls; title?: string }) {
+const ThreadRow = memo(function ThreadRow({ message, onRetry, edit, title, arriving }: { message: Message; onRetry?: () => void; edit?: EditControls; title?: string; arriving?: boolean }) {
   return (
-    <motion.div
-      className={`msg-row ${message.role}`}
+    <div
+      className={`msg-row ${message.role}${arriving ? ' arriving' : ''}`}
       data-msg-id={message.id}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.18, ease: 'easeOut' }}
     >
       {message.role === 'tool' ? (
         <ToolCard
@@ -192,7 +188,7 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry, edit, title }: { m
         />
         </>
       )}
-    </motion.div>
+    </div>
   )
 }, (prev, next) => sameMessage(prev.message, next.message) && Boolean(prev.onRetry) === Boolean(next.onRetry)
   && Boolean(prev.edit) === Boolean(next.edit) && prev.edit?.editing === next.edit?.editing && prev.title === next.title)
@@ -239,6 +235,8 @@ export default function ChatThread({ messages: allMessages, summary, conversatio
   // consumed by the layout effect below and then never used again --
   // ongoing scroll behaviour is entirely the following/handleScroll pair.
   const [initial] = useState(() => computeInitialScrollState(conversationId, messages, INITIAL_WINDOW))
+  // The messages here when the thread opened: shown at once. Later ones ease in.
+  const [opened] = useState(() => new Set(allMessages.map((m) => m.id)))
   const restoreTo = useRef(initial.restore)
   // Whether new content should pull the view down. Reading back through a
   // conversation while the model is still writing used to be impossible:
@@ -414,28 +412,20 @@ export default function ChatThread({ messages: allMessages, summary, conversatio
             Show {Math.min(hidden, INITIAL_WINDOW * 2)} earlier message{hidden === 1 ? '' : 's'}
           </button>
         )}
-        <AnimatePresence initial={false}>
-          {visible.flatMap((msg) => {
-            const row = <ThreadRow key={msg.id} message={msg} onRetry={msg.id === lastUserId ? onRetry : undefined} edit={editFor(msg)} title={title} />
+        {visible.flatMap((msg) => {
+            const row = <ThreadRow key={msg.id} message={msg} onRetry={msg.id === lastUserId ? onRetry : undefined} edit={editFor(msg)} title={title} arriving={!opened.has(msg.id)} />
             if (!summary?.text || msg.id !== summary.through) return [row]
             return [row, (
-              <motion.div
-                key="summary"
-                className="msg-row summary"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.18 }}
-              >
+              <div key="summary" className="msg-row summary arriving">
                 <SummaryNote text={summary.text} />
                 {canRefold && msg.id === foldThrough && (
                   <button type="button" className="show-earlier" onClick={() => setUnfolded(false)}>
                     Hide the {foldIndex + 1} earlier message{foldIndex === 0 ? '' : 's'} again
                   </button>
                 )}
-              </motion.div>
+              </div>
             )]
           })}
-        </AnimatePresence>
       </div>
     </div>
   )

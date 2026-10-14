@@ -1,5 +1,4 @@
 import { useState, memo } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
 import { ChevronRight, FoldVertical } from 'lucide-react'
 
 interface SummaryNoteProps {
@@ -24,23 +23,15 @@ function SummaryNote({ text }: SummaryNoteProps) {
       >
         <FoldVertical size={14} aria-hidden="true" />
         <span>Earlier turns summarized for the model</span>
-        <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.15 }}>
+        <span className="chev">
           <ChevronRight size={14} aria-hidden="true" />
-        </motion.span>
+        </span>
       </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            className="reasoning-body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18 }}
-          >
-            <div className="reasoning-text">{text}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {open && (
+        <div className="reasoning-body">
+          <div className="reasoning-text">{text}</div>
+        </div>
+      )}
     </div>
   )
 }

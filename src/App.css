@@ -905,8 +905,13 @@ html, body, #root {
 }
 
 .reasoning-toggle svg { color: var(--moss); }
+.reasoning-toggle .chev { display: grid; transition: transform 0.15s; }
+.reasoning-toggle[aria-expanded="true"] .chev { transform: rotate(90deg); }
 
-.reasoning-body { overflow: hidden; }
+/* Unfolds from nothing: a grid row growing from 0fr to 1fr is how CSS animates to an unknown height. */
+.reasoning-body { display: grid; overflow: hidden; animation: unfold 0.18s ease-out; }
+.reasoning-body > * { min-height: 0; overflow: hidden; }
+@keyframes unfold { from { grid-template-rows: 0fr; opacity: 0; } to { grid-template-rows: 1fr; opacity: 1; } }
 
 /* auto-compaction marker: spans the thread, since it summarizes both sides */
 .msg-row.summary { justify-content: center; }
@@ -964,7 +969,8 @@ html, body, #root {
 }
 .tc-meta { font-size: 12px; color: var(--paper-dim); opacity: 0.8; }
 .tool-card.failed .tc-meta { color: var(--danger); opacity: 1; }
-.tc-chevron { flex: 0 0 auto; display: grid; color: var(--paper-dim); }
+.tc-chevron { flex: 0 0 auto; display: grid; color: var(--paper-dim); transition: transform 0.15s; }
+.tc-chevron[data-open] { transform: rotate(90deg); }
 
 .tc-preview,
 .tc-short,
@@ -1075,7 +1081,10 @@ html, body, #root {
   text-align: left;
   cursor: pointer;
   touch-action: pan-y;
+  /* Swiped aside to show the actions behind it; it settles with a short, springy ease. */
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
+.conv-row.open { transform: translateX(calc(-1 * var(--actions-w, 246px))); }
 
 .conv-glyph { flex: 0 0 auto; color: var(--line); }
 .conv-row.active .conv-glyph { color: var(--moss); }
@@ -1369,6 +1378,13 @@ html, body, #root {
   display: flex;
   min-width: 0;
   max-width: 100%;
+}
+/* A message that arrives while the thread is open eases in; the ones there at first paint simply are. */
+.msg-row.arriving { animation: rise 0.18s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) {
+  .msg-row.arriving, .reasoning-body { animation: none; }
+  .conv-row, .reasoning-toggle .chev, .tc-chevron { transition: none; }
 }
 
 .msg-row.user { justify-content: flex-end; align-items: center; }

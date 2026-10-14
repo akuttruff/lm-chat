@@ -1,5 +1,4 @@
 import {useState, memo} from 'react'
-import { AnimatePresence, motion } from 'motion/react'
 import { Brain, ChevronRight } from 'lucide-react'
 
 interface ReasoningBlockProps {
@@ -24,23 +23,15 @@ function ReasoningBlock({ text, streaming, elapsed }: ReasoningBlockProps) {
         <span>
           {streaming ? 'Thinking...' : `Thought${elapsed ? ` for ${elapsed}s` : ''}`}
         </span>
-        <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.15 }}>
+        <span className="chev">
           <ChevronRight size={14} aria-hidden="true" />
-        </motion.span>
+        </span>
       </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            className="reasoning-body"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18 }}
-          >
-            <div className="reasoning-text">{text}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {open && (
+        <div className="reasoning-body">
+          <div className="reasoning-text">{text}</div>
+        </div>
+      )}
     </div>
   )
 }

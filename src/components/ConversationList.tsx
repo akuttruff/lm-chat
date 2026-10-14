@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 import type React from 'react'
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { Drawer } from 'vaul'
-import { motion } from 'motion/react'
 import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus, CheckSquare, PanelLeftClose, Search, Settings, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { swipeReveal } from '../lib/swipeReveal.ts'
 import type { Conversation, Folder, SearchHit } from '../types.ts'
 import type { ChatStatus } from '../hooks/useServerState.ts'
 
@@ -106,6 +106,22 @@ function sameConv(a: Conversation, b: Conversation): boolean {
  */
 const Row = memo(function Row({ conv, isActive, status, onOpen, onDelete, onRestore, onRename, onStar, onOpenFolderPicker }: RowProps) {
   const [dragged, setDragged] = useState(false)
+  // The swipe that opens the actions behind the row; drawn straight onto the
+  // row while the finger moves, and left to CSS to settle once it lifts.
+  const swipe = useRef(swipeReveal(ACTIONS_WIDTH)).current
+  // A swipe's pointer-up still produces a click, which must not open the chat.
+  const swiped = useRef(false)
+  const slide = (e: ReactPointerEvent<HTMLButtonElement>, x: number | null): void => {
+    e.currentTarget.style.transition = x === null ? '' : 'none'
+    e.currentTarget.style.transform = x === null ? '' : `translateX(${x}px)`
+  }
+  const settle = (e: ReactPointerEvent<HTMLButtonElement>): void => {
+    const open = swipe.end()
+    slide(e, null)
+    if (open === null) return
+    swiped.current = true
+    setDragged(open)
+  }
   // Only the open chat's messages are loaded; the rest carry a count.
   const count = conv.messageCount ?? conv.messages.length
 
@@ -156,22 +172,29 @@ const Row = memo(function Row({ conv, isActive, status, onOpen, onDelete, onRest
         </button>
       </div>
 
-      <motion.button
+      <button
         type="button"
-        className={`conv-row${isActive ? ' active' : ''}`}
-        drag="x"
-        dragDirectionLock
-        dragConstraints={{ left: -ACTIONS_WIDTH, right: 0 }}
-        // No elastic and no momentum: a row must not drift past its bounds or
-        // keep gliding after the finger lifts, which read as the list wobbling
-        // while scrolling vertically.
-        dragElastic={0}
-        dragMomentum={false}
-        dragPropagation={false}
-        animate={{ x: dragged ? -ACTIONS_WIDTH : 0 }}
-        transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-        onDragEnd={(_event, info) => setDragged(info.offset.x < -ACTIONS_WIDTH / 2)}
-        onClick={() => (dragged ? setDragged(false) : onOpen(conv.id))}
+        className={`conv-row${isActive ? ' active' : ''}${dragged ? ' open' : ''}`}
+        style={{ '--actions-w': `${ACTIONS_WIDTH}px` } as CSSProperties}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return
+          swiped.current = false
+          swipe.start(e.clientX, e.clientY, dragged)
+        }}
+        onPointerMove={(e) => {
+          const x = swipe.move(e.clientX, e.clientY)
+          if (x === null) return
+          // Ours from here, even if the finger leaves the row.
+          try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* jsdom */ }
+          slide(e, x)
+        }}
+        onPointerUp={settle}
+        onPointerCancel={settle}
+        onClick={() => {
+          if (swiped.current) { swiped.current = false; return }
+          if (dragged) setDragged(false)
+          else onOpen(conv.id)
+        }}
         onKeyDown={(e) => {
           // Desktop: Delete (or Backspace, on a Mac keyboard) removes the focused chat.
           if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -207,7 +230,7 @@ const Row = memo(function Row({ conv, isActive, status, onOpen, onDelete, onRest
             </span>
           )}
         </span>
-      </motion.button>
+      </button>
 
       {/* With a mouse there's nothing to swipe: the same actions appear on
           hover (CSS shows them only on devices that can hover). */}
