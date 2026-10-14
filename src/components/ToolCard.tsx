@@ -3,8 +3,7 @@ import { Wrench, ChevronRight, TriangleAlert } from 'lucide-react'
 import { argValue, argsSummary, prettyOutput, sizeLabel, toolLabel } from '../lib/toolFormat.ts'
 import { looksLikeChart, parseWheel } from '../lib/chartWheel.ts'
 import ChartWheel from './ChartWheel'
-import { ActiveTransits, UpcomingTransits } from './TransitTable'
-import { looksLikeUpcoming, parseUpcoming } from '../lib/transitTable.ts'
+import { ActiveTransits } from './TransitTable'
 
 interface ToolCardProps {
   name?: string
@@ -26,9 +25,8 @@ const SHORT = 120
  * much it returned -- with its parameters on one line and one line of the
  * result; expanded, each parameter in full, then the whole result in its
  * own scrolling panel, JSON indented. A chart from the astrology server is
- * also drawn as a wheel (see ChartWheel), with its transits as a table
- * under it, and a list of upcoming transits as a table (TransitTable),
- * shown either way.
+ * also drawn as a wheel (see ChartWheel) with its transits as a table
+ * under it (TransitTable), shown either way.
  */
 function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProps) {
   const [open, setOpen] = useState(false)
@@ -40,8 +38,6 @@ function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProp
   const full = useMemo(() => (open ? prettyOutput(text) : ''), [open, text])
   // A chart result is drawn as a wheel above its text, whether or not the card is open.
   const wheel = useMemo(() => (!failed && looksLikeChart(text) ? parseWheel(text) : null), [failed, text])
-  // And a list of upcoming transits as a table: that result has no wheel.
-  const upcoming = useMemo(() => (!failed && looksLikeUpcoming(text) ? parseUpcoming(text) : null), [failed, text])
   const source = plugin?.replace(/^mcp\//, '')
   const meta = [source, text.length > SHORT ? sizeLabel(text.length) : null, failed ? 'failed' : null]
     .filter(Boolean).join(' · ')
@@ -83,7 +79,6 @@ function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProp
         )}
         {wheel && <ChartWheel wheel={wheel} readings={readings} />}
         {wheel?.kind === 'transit' && <ActiveTransits wheel={wheel} />}
-        {upcoming && <UpcomingTransits table={upcoming} />}
         {short && <div className="tc-short">{text}</div>}
         {text.length > SHORT && !open && <div className="tc-preview">{text.replace(/\s+/g, ' ').slice(0, 300)}</div>}
         {text.length > SHORT && open && <pre className="tc-output">{full}</pre>}
