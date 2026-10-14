@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type {
   Conversation, ConversationMeta, ConversationStore, Folder, FolderUpdate, ImageUpload, Message, PublicConfig, Status, SearchHit,
 } from '../types.ts'
+import { chime } from '../lib/chime.ts'
+import type { ChimeTone } from '../lib/chime.ts'
 
 /**
  * The whole client state, streamed from the app server.
@@ -133,6 +135,17 @@ export function applyEvent(s: ConversationStore, event: ServerEvent): Conversati
   }
 }
 
+/**
+ * The chime a chat's new status calls for, if it just finished a reply:
+ * rising for a reply that arrived, falling for one that failed. Stopping it
+ * yourself makes no sound -- you were there to tap Stop.
+ */
+export function finishTone(wasPending: boolean, state: string, text: string): ChimeTone | null {
+  if (!wasPending || state === 'pending') return null
+  if (state === 'live') return 'done'
+  return text === 'stopped' ? null : 'failed'
+}
+
 const toChatStatus = (e: StatusEvent): ChatStatus =>
   ({ state: e.state as Status['state'], text: e.text, startedAt: e.startedAt })
 
@@ -154,6 +167,9 @@ export default function useServerState(): ServerState {
   const [connected, setConnected] = useState(false)
   const activeIdRef = useRef<string | null>(null)
   activeIdRef.current = store.activeId
+  // Chats the server last reported as mid-reply, so a finish can be told
+  // apart from a status that merely repeats (see finishTone).
+  const pendingRef = useRef(new Set<string>())
 
   const refreshConfig = useCallback(async () => {
     try {
@@ -262,6 +278,8 @@ export default function useServerState(): ServerState {
         return
       }
       if (event.type === 'statuses') {
+        // Replies that finished while we were away are not news to chime about.
+        pendingRef.current = new Set(event.payload.filter((e) => e.state === 'pending').map((e) => e.conversationId))
         // A (re)connect snapshot of every chat mid-reply. Anything we thought
         // was in flight but isn't listed finished while we were away; keep
         // only the settled outcomes ("stopped", "auth failed") we already had.
@@ -274,6 +292,12 @@ export default function useServerState(): ServerState {
         return
       }
       const update = event.payload
+      // Every device that's open chimes, and for any chat, not only the one
+      // on screen: a reply you're waiting on elsewhere is still worth hearing.
+      const tone = finishTone(pendingRef.current.has(update.conversationId), update.state, update.text)
+      if (update.state === 'pending') pendingRef.current.add(update.conversationId)
+      else pendingRef.current.delete(update.conversationId)
+      if (tone) chime(tone)
       setStatuses((prev) => ({ ...prev, [update.conversationId]: toChatStatus(update) }))
     }
 

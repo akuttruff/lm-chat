@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
-import useServerState from './useServerState.ts'
+import useServerState, { finishTone } from './useServerState.ts'
+import { chime } from '../lib/chime.ts'
 import { FakeEventSource, stubEventSource } from '../test/sse.ts'
 import type { Conversation, ConversationStore } from '../types.ts'
+
+vi.mock('../lib/chime.ts', () => ({ chime: vi.fn(), listenForChimeUnlock: vi.fn() }))
 
 const conv = (over: Partial<Conversation> = {}): Conversation => ({
   id: 'c1', name: 'Chat', createdAt: 1, updatedAt: 2,
@@ -34,7 +37,7 @@ function stubApi(routes: Record<string, unknown> = {}) {
   return calls
 }
 
-beforeEach(() => { stubEventSource() })
+beforeEach(() => { stubEventSource(); vi.mocked(chime).mockClear() })
 
 describe('useServerState', () => {
   it('subscribes to the server event stream', async () => {
@@ -415,5 +418,73 @@ describe('useServerState', () => {
       await act(() => result.current.deleteFolder('f1'))
       expect(result.current.folders).toEqual([])
     })
+  })
+})
+
+describe('finishTone', () => {
+  it('rises for a reply that arrived', () => {
+    expect(finishTone(true, 'live', 'connected')).toBe('done')
+  })
+
+  it('falls for one that failed, was cut short or went quiet', () => {
+    for (const text of ['failed', 'interrupted', 'no response', "can't reach LM Studio"]) {
+      expect(finishTone(true, '', text)).toBe('failed')
+    }
+  })
+
+  it('stays quiet for a reply you stopped, one still going, or one never seen starting', () => {
+    expect(finishTone(true, '', 'stopped')).toBeNull()
+    expect(finishTone(true, 'pending', 'writing...')).toBeNull()
+    expect(finishTone(false, 'live', 'connected')).toBeNull()
+  })
+})
+
+describe('the finished chime', () => {
+  const status = (conversationId: string, state: string, text: string) =>
+    ({ type: 'status', payload: { conversationId, state, text, startedAt: state === 'pending' ? 1 : null } })
+
+  it('chimes once when a reply finishes, for any chat', async () => {
+    stubApi()
+    renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      const es = FakeEventSource.latest()
+      es.emit({ type: 'conversations', payload: store([conv(), conv({ id: 'c2' })], 'c1') })
+      es.emit(status('c2', 'pending', 'thinking...'))
+      es.emit(status('c2', 'pending', 'writing...'))
+    })
+    expect(chime).not.toHaveBeenCalled()
+    act(() => { FakeEventSource.latest().emit(status('c2', 'live', 'connected')) })
+    expect(chime).toHaveBeenCalledExactlyOnceWith('done')
+    act(() => { FakeEventSource.latest().emit(status('c2', 'live', 'connected')) })
+    expect(chime).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not chime for replies that finished while disconnected', async () => {
+    stubApi()
+    renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      const es = FakeEventSource.latest()
+      es.emit(status('c1', 'pending', 'writing...'))
+      // The reconnect snapshot no longer lists c1: it finished while we were away.
+      es.emit({ type: 'statuses', payload: [] })
+      es.emit(status('c1', 'live', 'connected'))
+    })
+    expect(chime).not.toHaveBeenCalled()
+  })
+
+  it('chimes the failed tone, and nothing for a stop', async () => {
+    stubApi()
+    renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      const es = FakeEventSource.latest()
+      es.emit(status('c1', 'pending', 'writing...'))
+      es.emit(status('c1', '', 'stopped'))
+      es.emit(status('c1', 'pending', 'thinking...'))
+      es.emit(status('c1', '', 'interrupted'))
+    })
+    expect(chime).toHaveBeenCalledExactlyOnceWith('failed')
   })
 })
