@@ -43,7 +43,7 @@ export default function Composer({
 }: ComposerProps) {
   // The overflow menu at the end of the chip row: the actions you reach for
   // now and then (tools, memories, temporary, export) live there, so the row stays
-  // one line on a phone. Delete sits beside it, one tap away.
+  // one line on a phone. Delete sits beside memory, well away from it.
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLSpanElement>(null)
   useEffect(() => {
@@ -206,14 +206,14 @@ export default function Composer({
           <Brain size={14} aria-hidden="true" fill={memoryOn ? 'currentColor' : 'none'} />
         </button>
       )}
-      {onCollapse && (
-        <button type="button" className="reasoning-chip collapse-chip" onClick={onCollapse} aria-label="Hide message bar" title="Hide the message bar">
-          <PanelBottomClose size={15} aria-hidden="true" />
-        </button>
-      )}
       {onDeleteChat && (
         <button type="button" className="reasoning-chip delete-chip" onClick={onDeleteChat} aria-label="Delete this chat" title="Delete this chat (Undo is offered)">
           <Trash2 size={15} aria-hidden="true" />
+        </button>
+      )}
+      {onCollapse && (
+        <button type="button" className="reasoning-chip collapse-chip" onClick={onCollapse} aria-label="Hide message bar" title="Hide the message bar">
+          <PanelBottomClose size={15} aria-hidden="true" />
         </button>
       )}
       {(onOpenTools || onPickMemories || onToggleTemporary || onCopyChat || onDownloadChat) && (

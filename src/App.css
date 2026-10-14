@@ -440,11 +440,10 @@ html, body, #root {
 .composer-chips:empty { display: none; }
 /* More: one quiet chip at the end of the row, with the occasional actions
    (tools, memories, temporary, export) in a menu above it. */
-/* Delete: its own chip just before More, pushed to the end of the row with it. */
-.delete-chip { margin-left: auto; padding: 0 10px; color: var(--paper-dim); border-color: var(--line); }
+/* Delete: its own chip beside memory, away from More so a tap on one never lands on the other. */
+.delete-chip { padding: 0 10px; color: var(--paper-dim); border-color: var(--line); }
 .delete-chip:hover { color: var(--danger); }
 .more-wrap { position: relative; margin-left: auto; display: inline-flex; }
-.delete-chip + .more-wrap { margin-left: 0; }
 .more-chip { padding: 0 10px; color: var(--paper-dim); border-color: var(--line); }
 .more-chip[aria-expanded="true"] { color: var(--paper); background: var(--bg); }
 .more-menu {
