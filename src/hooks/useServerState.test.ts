@@ -147,6 +147,30 @@ describe('useServerState', () => {
     expect(calls.some((c) => c.url === '/api/chats/c2/active')).toBe(true)
   })
 
+  it('shows a new chat from the response, without waiting for the stream', async () => {
+    const created = conv({ id: 'c9', name: '', folderId: 'f1' })
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${url}`)
+      const body = url === '/api/chats' && init?.method === 'POST' ? created : url === '/api/chats' ? store([], null) : {}
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
+    }))
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv()], 'c1') })
+    })
+    await act(async () => { await result.current.newChat('f1') })
+    expect(calls).toContain('POST /api/chats')
+    expect(result.current.activeId).toBe('c9')
+    expect(result.current.conversations.map((c) => c.id)).toContain('c9')
+    // The stream's own copy, arriving late, replaces it rather than doubling it.
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'created', payload: { conversation: created, activeId: 'c9' } })
+    })
+    expect(result.current.conversations.filter((c) => c.id === 'c9')).toHaveLength(1)
+  })
+
   it('applies metadata, creations and removals without message payloads', async () => {
     stubApi()
     const { result } = renderHook(() => useServerState())

@@ -362,8 +362,17 @@ export default function useServerState(): ServerState {
   }, [])
 
   const newChat = useCallback(async (folderId?: string | null) => {
-    await post('/api/chats', folderId ? { folderId } : {})
-  }, [])
+    const r = await post('/api/chats', folderId ? { folderId } : {})
+    if (!r.ok) return
+    // Shown from the response, not only the stream's `created`: a stream that
+    // is lagging or reconnecting made the press look like it did nothing, and
+    // pressing again only re-blanked the same chat. The event, when it comes,
+    // replaces this copy by id.
+    const conv = await r.json() as Conversation
+    if (typeof conv?.id !== 'string') return
+    const next = applyEvent(storeRef.current, { type: 'created', payload: { conversation: conv, activeId: conv.id } })
+    if (next) commitStore(next)
+  }, [commitStore])
 
   const openChat = useCallback(async (id: string) => {
     // Switch now; the server's confirmation is only for other devices.
