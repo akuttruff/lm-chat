@@ -193,7 +193,11 @@ export interface ApiState {
 }
 
 export function createApiState(options: ApiOptions = {}): ApiState {
-  return { store: new Store({ dir: options.dir }), bus: new Bus(), engine: newEngineState() }
+  const store = new Store({ dir: options.dir })
+  // Only on a fresh process: a dev-server reload keeps this state, and its turns.
+  const cut = store.settleInterrupted()
+  if (cut) console.log(`[chats] ${cut} ${cut === 1 ? 'reply was' : 'replies were'} cut off by the last restart`)
+  return { store, bus: new Bus(), engine: newEngineState() }
 }
 
 export function createApi(options: ApiOptions = {}, state: ApiState = createApiState(options)) {

@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { Store, deriveName } from './store.ts'
+import { INTERRUPTED_TEXT, Store, deriveName } from './store.ts'
 import type { Message } from '../src/types.ts'
 
 let dir: string
@@ -827,5 +827,20 @@ describe('review fixes', () => {
     // Without `from`, the whole thread is written again.
     store.setMessages(c.id, [...head, { id: 'a2', role: 'assistant', text: 'three' }])
     expect(new Store({ dir }).get(c.id)!.messages.map((m) => m.text)).toEqual(['one', 'two', 'three'])
+  })
+})
+
+describe('settleInterrupted', () => {
+  it("marks a chat whose last word was the user's as cut off, and leaves answered ones alone", () => {
+    const cut = store.create()
+    store.setMessages(cut.id, [{ id: 'u1', role: 'user', text: 'hello?' }])
+    const answered = store.create()
+    store.setMessages(answered.id, [{ id: 'u2', role: 'user', text: 'hi' }, { id: 'a2', role: 'assistant', text: 'hello' }])
+    expect(store.settleInterrupted()).toBe(1)
+    expect(store.get(cut.id)!.messages.at(-1)).toMatchObject({ role: 'error', text: INTERRUPTED_TEXT })
+    expect(store.get(answered.id)!.messages).toHaveLength(2)
+    // On disk too, and settled only once.
+    expect(new Store({ dir }).get(cut.id)!.messages.at(-1)!.role).toBe('error')
+    expect(store.settleInterrupted()).toBe(0)
   })
 })

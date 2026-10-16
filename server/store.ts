@@ -38,6 +38,9 @@ const MAX_CONVERSATIONS = 60
 const BACKUP_KEEP = 20
 
 let seq = 0
+/** What an interrupted reply says in the thread. */
+export const INTERRUPTED_TEXT = 'The server restarted while this reply was being written. Retry sends your message again.'
+
 export const newId = (): string => `${Date.now().toString(36)}-${(seq++).toString(36)}`
 
 // Strictly increasing, so two updates in the same millisecond still order
@@ -1012,6 +1015,23 @@ export class Store {
     if (!conv.name) conv.name = deriveName(messages)
     if (touch) conv.updatedAt = stamp()
     if (persist) this.writeMessages(conv, from)
+  }
+
+  /**
+   * Replies the last server stopped in the middle of: a chat whose last
+   * message is the user's has no answer and never will, since the turn died
+   * with the process. Say so in the thread, where Retry can reach it, rather
+   * than leave the message hanging as if nothing happened.
+   */
+  settleInterrupted(): number {
+    let n = 0
+    for (const conv of this.conversations.items) {
+      const last = conv.messages[conv.messages.length - 1]
+      if (!last || last.role !== 'user') continue
+      this.setMessages(conv.id, [...conv.messages, { id: newId(), role: 'error', text: INTERRUPTED_TEXT }], { touch: false })
+      n++
+    }
+    return n
   }
 
   remove(id: string): void {
