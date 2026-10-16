@@ -851,9 +851,22 @@ export class Engine {
         }
       }
 
-      finalize()
-      this.publish(conversationId, 'live', 'connected', null)
-      succeeded = true
+      if (completed) {
+        finalize()
+        this.publish(conversationId, 'live', 'connected', null)
+        succeeded = true
+      } else {
+        // LM Studio closed the stream without a chat.end. It logs why on its
+        // side (an MCP tool hitting its 60-second limit, most often) but
+        // sends no error frame, so without this the turn would pass as a
+        // finished reply with a tool call left hanging and nothing said.
+        console.log(`[engine] stream ended without chat.end (${transcript.producedAnything() ? 'partial reply kept' : 'nothing produced'})`)
+        cutShort(
+          'LM Studio closed the connection before the reply finished. When this follows a tool call, ' +
+          "the tool most likely ran past LM Studio's 60-second limit: ask for a narrower range or fewer items and try again.",
+          'interrupted',
+        )
+      }
     } catch (err) {
       if (completed) {
         // The reply arrived in full and the connection dropped afterwards.

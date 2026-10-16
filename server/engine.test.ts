@@ -376,6 +376,25 @@ describe('failures', () => {
     expect(messages().at(-1)!.text).toMatch(/Couldn't reach LM Studio/)
   })
 
+  it('treats a stream that ends without chat.end as cut short, keeping what arrived', async () => {
+    // LM Studio's MCP tool timeout: it logs the error and closes the stream
+    // with no error frame, right after the tool_call.arguments packet.
+    vi.stubGlobal('fetch', streams([
+      evt({ type: 'message.start' }),
+      evt({ type: 'message.delta', content: 'Let me check.' }),
+      evt({ type: 'message.end' }),
+      evt({ type: 'tool_call.start', tool: 't1' }),
+      evt({ type: 'tool_call.name', tool: 't1', tool_name: 'list_upcoming_transits', provider_info: { plugin_id: 'mcp/astrology-v2' } }),
+    ]))
+    await engine.runTurn(convId, 'When are the Pluto squares?')
+    const last = messages().at(-1)!
+    expect(last.role).toBe('error')
+    expect(last.text).toMatch(/closed the connection before the reply finished/)
+    expect(last.text).toMatch(/60-second limit/)
+    expect(messages().some((m) => m.role === 'assistant' && m.text === 'Let me check.')).toBe(true)
+    expect(messages().some((m) => m.role === 'tool' && m.name === 'list_upcoming_transits')).toBe(true)
+  })
+
   it('surfaces an error frame', async () => {
     vi.stubGlobal('fetch', streams([evt({ type: 'error', error: { message: 'model exploded' } })]))
     await engine.runTurn(convId, 'hi')
