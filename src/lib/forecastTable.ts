@@ -46,7 +46,7 @@ export interface ForecastTable {
 }
 
 /**
- * A contact is key when its weight reaches this: Amie's rule, by weight
+ * A contact is key when its weight reaches this: the house rule, by weight
  * and not by count. The tool's weight is the transiting planet's slowness
  * (Mercury 0.5, Venus 0.7, Sun 0.8, Mars 1, Jupiter and Chiron 3, Saturn
  * and Uranus 4, Neptune and Pluto 5), doubled on the Sun, Moon, Asc, MC
