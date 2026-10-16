@@ -862,8 +862,9 @@ export class Engine {
         // finished reply with a tool call left hanging and nothing said.
         console.log(`[engine] stream ended without chat.end (${transcript.producedAnything() ? 'partial reply kept' : 'nothing produced'})`)
         cutShort(
-          'LM Studio closed the connection before the reply finished. When this follows a tool call, ' +
-          "the tool most likely ran past LM Studio's 60-second limit: ask for a narrower range or fewer items and try again.",
+          'LM Studio closed the connection before the reply finished and did not say why; its server log has the reason. ' +
+          "After a tool call it is usually one of two things: the tool ran past LM Studio's 60-second limit (ask for less and retry), " +
+          'or the plugin process had died (just retry).',
           'interrupted',
         )
       }

@@ -391,6 +391,7 @@ describe('failures', () => {
     expect(last.role).toBe('error')
     expect(last.text).toMatch(/closed the connection before the reply finished/)
     expect(last.text).toMatch(/60-second limit/)
+    expect(last.text).toMatch(/plugin process had died/)
     expect(messages().some((m) => m.role === 'assistant' && m.text === 'Let me check.')).toBe(true)
     expect(messages().some((m) => m.role === 'tool' && m.name === 'list_upcoming_transits')).toBe(true)
   })
