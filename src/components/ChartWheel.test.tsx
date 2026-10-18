@@ -155,7 +155,7 @@ describe('ChartWheel in a tool card', () => {
   })
 
   it("shows the transit's reading in the popup once written, and says it is coming until then", () => {
-    const readings = { 'Mercury|Conjunction|Pluto': 'Say the quiet thing out loud today.' }
+    const readings = { 'Mercury|Conjunction|Pluto': 'Say the quiet thing out loud today.', 'Saturn|Conjunction|Mars': 'Old effort, tested again.' }
     const { container, rerender } = render(<ToolCard name="create_transit_chart" output={transit} />)
     const line = container.querySelectorAll('.wheel-aspect')[0]!
     fireEvent.pointerEnter(line, { pointerType: 'mouse' })
@@ -164,11 +164,11 @@ describe('ChartWheel in a tool card', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('Say the quiet thing out loud today.')
     expect(screen.getByRole('tooltip')).not.toHaveTextContent('on its way')
     fireEvent.pointerLeave(line, { pointerType: 'mouse' })
-    // The planet's popup carries the reading under its aspect line.
-    const mercury = [...container.querySelectorAll('.wheel-point')].find((g) => g.textContent?.includes('15°04'))!
-    fireEvent.pointerEnter(mercury, { pointerType: 'mouse' })
+    // The planet's popup carries the reading under its aspect line (for a planet with a few aspects; Mercury's five would crowd it).
+    const saturn = [...container.querySelectorAll('.wheel-point')].find((g) => g.textContent?.includes('10°36'))!
+    fireEvent.pointerEnter(saturn, { pointerType: 'mouse' })
     const tip = screen.getByRole('tooltip')
-    expect(tip).toHaveTextContent('Transiting Mercury')
-    expect(tip.querySelector('li .wheel-tip-reading')).toHaveTextContent('Say the quiet thing out loud today.')
+    expect(tip).toHaveTextContent('Transiting Saturn')
+    expect(tip.querySelector('li .wheel-tip-reading')).toHaveTextContent('Old effort, tested again.')
   })
 })
