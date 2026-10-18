@@ -593,7 +593,7 @@ describe('turns', () => {
       { id: 't1', role: 'tool', name: 'create_transit_chart', plugin: 'mcp/astrology-v2', output: transitChart },
       { id: 'a1', role: 'assistant', text: 'Here they are.' },
     ])
-    const answer = '```json\n{"Mercury|Sextile|MC": "Say the quiet thing out loud today.", "Nothing|Square|Nobody": "dropped"}\n```'
+    const answer = '```json\n{"Mercury|Trine|MC": "Say the quiet thing out loud today.", "Nothing|Square|Nobody": "dropped"}\n```'
     const stream = (text: string) => new ReadableStream({ start(c) { for (const f of [`data: {"type":"message.delta","content":${JSON.stringify(text)}}\n\n`, 'data: {"type":"chat.end","result":{}}\n\n']) c.enqueue(new TextEncoder().encode(f)); c.close() } })
     const calls: string[] = []
     vi.stubGlobal('fetch', vi.fn((url: string, init?: { body?: string }) => {
@@ -602,11 +602,11 @@ describe('turns', () => {
       return Promise.resolve(new Response(stream(answer), { status: 200 }))
     }))
     const readings = await api.engine.readings(id, 't1')
-    expect(readings).toEqual({ 'Mercury|Sextile|MC': 'Say the quiet thing out loud today.' })
-    expect(api.store.get(id)!.messages[1]!.readings).toEqual({ 'Mercury|Sextile|MC': 'Say the quiet thing out loud today.' })
+    expect(readings).toEqual({ 'Mercury|Trine|MC': 'Say the quiet thing out loud today.' })
+    expect(api.store.get(id)!.messages[1]!.readings).toEqual({ 'Mercury|Trine|MC': 'Say the quiet thing out loud today.' })
     expect(api.store.get(id)!.messages).toHaveLength(3)
     const body = JSON.parse(calls[0]!) as { input: string; system_prompt: string }
-    expect(body.input).toContain('- key: Mercury|Sextile|MC')
+    expect(body.input).toContain('- key: Mercury|Trine|MC')
     expect(body.system_prompt).toMatch(/JSON object/)
     // Written already: not asked again, unless rewriting everything.
     expect(await api.engine.readings(id, 't1')).toBeNull()

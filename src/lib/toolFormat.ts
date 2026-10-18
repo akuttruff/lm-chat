@@ -29,7 +29,7 @@ export function argValue(v: unknown): string {
   return JSON.stringify(v)
 }
 
-/** "city: Culver City · state: CA" -- a tool call's parameters on one line. */
+/** "city: New York · state: NY" -- a tool call's parameters on one line. */
 export function argsSummary(args: Record<string, unknown>): string {
   return Object.entries(args).map(([k, v]) => `${k}: ${argValue(v).replace(/\s+/g, ' ')}`).join(' · ')
 }

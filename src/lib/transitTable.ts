@@ -3,8 +3,8 @@
  * the chart's moment, for the table under the wheel. Read from the parsed
  * wheel here; TransitTable.tsx draws them, and the forecast table
  * (forecastTable.ts) shares the cells and the date words. (The
- * list_upcoming_transits result gets no table: Amie found one not
- * meaningful, so don't add it back.)
+ * list_upcoming_transits result gets no table: one proved not
+ * meaningful in use, so don't add it back.)
  */
 import { type Wheel, aspectFamily, aspectGlyph, type AspectFamily, GLYPHS, displayName, signDegrees, signName } from './chartWheel.ts'
 

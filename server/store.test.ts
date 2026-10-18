@@ -628,8 +628,8 @@ describe('temporary chats', () => {
       db.exec('ALTER TABLE messages DROP COLUMN args; PRAGMA user_version = 11;')
       db.close()
       const upgraded = new Store({ dir: oldDir })
-      upgraded.setMessages(id, [{ id: 't1', role: 'tool', name: 'create_natal_chart', args: { city: 'Culver City', year: 1984 }, output: 'ok' }])
-      expect(new Store({ dir: oldDir }).get(id)!.messages[0]!.args).toEqual({ city: 'Culver City', year: 1984 })
+      upgraded.setMessages(id, [{ id: 't1', role: 'tool', name: 'create_natal_chart', args: { city: 'New York', year: 1990 }, output: 'ok' }])
+      expect(new Store({ dir: oldDir }).get(id)!.messages[0]!.args).toEqual({ city: 'New York', year: 1990 })
       // A transit chart's readings travel the same way; a corrupt value reads as none.
       upgraded.setMessages(id, [{ id: 't2', role: 'tool', name: 'create_transit_chart', output: '{}', readings: { 'Sun|Square|Moon': 'A day to be gentle.' } }])
       expect(new Store({ dir: oldDir }).get(id)!.messages[0]!.readings).toEqual({ 'Sun|Square|Moon': 'A day to be gentle.' })

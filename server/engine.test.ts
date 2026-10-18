@@ -261,13 +261,13 @@ describe('streaming', () => {
     vi.stubGlobal('fetch', streams([
       evt({ type: 'tool_call.start' }),
       evt({ type: 'tool_call.name', tool_name: 'create_transit_chart', provider_info: { plugin_id: 'mcp/astrology-v2' } }),
-      evt({ type: 'tool_call.arguments', tool_name: 'create_transit_chart', arguments: { city: 'Culver City' } }),
+      evt({ type: 'tool_call.arguments', tool_name: 'create_transit_chart', arguments: { city: 'New York' } }),
       evt({ type: 'tool_call.start' }),
       evt({ type: 'tool_call.name', tool_name: 'list_upcoming_transits', provider_info: { plugin_id: 'mcp/astrology-v2' } }),
       evt({ type: 'tool_call.arguments', tool_name: 'list_upcoming_transits', arguments: { days: 7 } }),
       // The list answers first, by name; then the chart, by its parameters.
       evt({ type: 'tool_call.success', tool_name: 'list_upcoming_transits', output: text('the list') }),
-      evt({ type: 'tool_call.success', arguments: { city: 'Culver City' }, output: text('the chart') }),
+      evt({ type: 'tool_call.success', arguments: { city: 'New York' }, output: text('the chart') }),
       evt({ type: 'message.delta', content: 'done' }),
       evt({ type: 'chat.end', result: {} }),
     ]))

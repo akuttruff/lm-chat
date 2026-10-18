@@ -24,7 +24,7 @@ const catalog = {
 
 const memories = [
   { id: 'a1', text: 'Favorite color is green', createdAt: 1, updatedAt: 1 },
-  { id: 'b2', text: 'Born May 10, 1984', createdAt: 2, updatedAt: 2 },
+  { id: 'b2', text: 'Born June 15, 1990', createdAt: 2, updatedAt: 2 },
 ]
 
 beforeEach(() => {
@@ -157,10 +157,10 @@ describe('FolderPicker', () => {
     await openEditor(user)
     expect(screen.getByLabelText('Memory')).toHaveValue('on')
     expect(screen.getByLabelText('Memories')).toHaveValue('custom')
-    expect(await screen.findByLabelText('Born May 10, 1984')).toBeChecked()
+    expect(await screen.findByLabelText('Born June 15, 1990')).toBeChecked()
     expect(screen.getByLabelText('Favorite color is green')).not.toBeChecked()
     await user.click(screen.getByRole('button', { name: 'Deselect all' }))
-    expect(screen.getByLabelText('Born May 10, 1984')).not.toBeChecked()
+    expect(screen.getByLabelText('Born June 15, 1990')).not.toBeChecked()
     await user.selectOptions(screen.getByLabelText('Memories'), 'auto')
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(props.onUpdate).toHaveBeenCalledWith('f1', {

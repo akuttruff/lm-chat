@@ -19,21 +19,21 @@ describe('a forecast as rows', () => {
     const t = parseForecast(week)!
     expect(t).toMatchObject({ horizon: 'week', start: '2026-10-12', end: '2026-10-18' })
     expect(t.rows.length).toBeGreaterThan(4)
-    expect(t.rows[0]).toMatchObject({ from: 'Mars', to: 'Venus', type: 'Square', exact: '2026-10-17 05:04', toHouse: 6, fromRetrograde: false, pass: null, passes: ['2026-10-17 05:04'], fromPosition: '11°01′ Leo', toPosition: '11°01′ Taurus', movement: null })
+    expect(t.rows[0]).toMatchObject({ from: 'Sun', to: 'Sun', type: 'Trine', exact: '2026-10-17 14:06', toHouse: 9, fromRetrograde: false, pass: null, passes: ['2026-10-17 14:06'], fromPosition: '24°23′ Libra', toPosition: '24°23′ Gemini', movement: null })
     // The slow planets' contacts are runs: every pass of each, with the one nearest the week among them.
     const runs = t.rows.filter((r) => r.pass)
     expect(runs.length).toBeGreaterThan(2)
     expect(runs.every((r) => r.passes.length >= 2 && r.passes.includes(r.nearestExact!) && r.pass!.endsWith(`of ${r.passes.length}`))).toBe(true)
-    expect(runs.find((r) => r.from === 'Jupiter' && r.to === 'Sun')).toMatchObject({ pass: '1 of 3', passes: ['2026-10-06 16:36', '2027-02-21 10:07', '2027-06-02 09:19'] })
-    const exact = t.rows.map((r) => Boolean(r.exact))
-    expect(exact.indexOf(false)).toBeGreaterThan(0)
-    expect(exact.slice(exact.indexOf(false))).not.toContain(true)
+    expect(runs.find((r) => r.from === 'Mercury' && r.to === 'MC')).toMatchObject({ pass: '1 of 3', passes: ['2026-10-14 04:42', '2026-11-01 10:33', '2026-11-26 10:03'] })
+    // A busy week: every headline perfects inside it, so there is no backdrop to follow the events.
+    expect(t.rows.every((r) => r.exact)).toBe(true)
     expect(new Set(keyTransits(t))).toEqual(new Set(t.rows.filter((r) => r.weight >= KEY_WEIGHT.week)))
     // In date order: the exact moment, or the first day in orb; the weightier first on the same moment.
     const moments = keyTransits(t).map((r) => r.exact ?? r.start)
     expect(moments).toEqual(moments.slice().sort())
-    expect(keyTransits(t).at(-1)).toMatchObject({ from: 'Mars', to: 'Venus', exact: '2026-10-17 05:04' })
-    // The week's events make the table: Mars, the Sun and Venus do, Mercury not unless on a key point.
+    expect(keyTransits(t).at(-1)).toMatchObject({ from: 'Mercury', to: 'Venus', exact: '2026-10-18 09:33' })
+    // The week's events make the table: Mars, the Sun and Venus do, Mercury not unless on a key point (Venus is the chart ruler here).
+    expect(keyTransits(t).some((r) => r.from === 'Mercury' && r.to === 'Pluto')).toBe(false)
     expect(keyTransits(t).some((r) => r.from === 'Mars' && r.exact)).toBe(true)
     const mercury = { ...t.rows[0]!, from: 'Mercury', weight: 0.5 }
     expect(keyTransits({ ...t, rows: [mercury, { ...mercury, weight: 1 }] })).toEqual([{ ...mercury, weight: 1 }])
@@ -58,7 +58,8 @@ describe('a forecast as rows', () => {
   })
 
   it('says when a contact in orb all period actually perfects, before or after it', () => {
-    const t = parseForecast(week)!
+    // October has six contacts in orb all month without perfecting in it, going both ways.
+    const t = parseForecast(month)!
     const backdrop = t.rows.filter((r) => !r.exact)
     expect(backdrop.length).toBeGreaterThan(0)
     expect(backdrop.some((r) => r.nearestExact)).toBe(true)

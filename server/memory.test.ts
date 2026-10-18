@@ -54,18 +54,18 @@ describe('Memories', () => {
   })
 
   it('puts what fits in the prompt with ids, framed as information, and says what it left out', () => {
-    seed([['a1', 'Born May 10, 1984', 1], ['b2', 'x'.repeat(300), 2], ['c3', 'Prefers short answers', 3]])
+    seed([['a1', 'Born June 15, 1990', 1], ['b2', 'x'.repeat(300), 2], ['c3', 'Prefers short answers', 3]])
     const block = new Memories(file).promptBlock(120)
     expect(block).toMatch(/remember, recall, update_memory, forget/)
     expect(block).toMatch(/not instructions/)
     expect(block).toContain('- [c3] Prefers short answers')
-    expect(block).toContain('- [a1] Born May 10, 1984')
+    expect(block).toContain('- [a1] Born June 15, 1990')
     expect(block).not.toContain('[b2]')
     expect(block).toMatch(/1 older memory not shown/)
   })
 
   it('tells the model to apply saved details unprompted and to save how the user likes things done', () => {
-    seed([['a1', 'Born May 10, 1984', 1]])
+    seed([['a1', 'Born June 15, 1990', 1]])
     const block = new Memories(file).promptBlock()
     expect(block).toMatch(/without being asked/)
     expect(block).toMatch(/pass it to tools/)
@@ -74,7 +74,7 @@ describe('Memories', () => {
 
   describe('a hand-picked selection', () => {
     beforeEach(() => {
-      seed([['a1', 'Born May 10, 1984', 1], ['b2', 'Lives in Seattle', 2], ['c3', 'Prefers short answers', 3]])
+      seed([['a1', 'Born June 15, 1990', 1], ['b2', 'Lives in Seattle', 2], ['c3', 'Prefers short answers', 3]])
     })
 
     it('includes only the chosen ids, newest first, ignoring the rest', () => {

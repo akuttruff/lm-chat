@@ -11,28 +11,28 @@ describe('parseWheel', () => {
     const w = parseWheel(transit)!
     expect(w.kind).toBe('transit')
     expect(w.dateTime).toBe('2026-10-13 05:58')
-    expect(w.natalDateTime).toBe('1984-05-10 20:44')
-    expect(w.inner.find((p) => p.name === 'Sun')!.longitude).toBeCloseTo(50.6369)
-    expect(w.outer.find((p) => p.name === 'Sun')!.longitude).toBeCloseTo(200.2108)
-    expect(w.angles.Asc).toBeCloseTo(243.7787)
-    expect(w.angles.MC).toBeCloseTo(165.5699)
+    expect(w.natalDateTime).toBe('1990-06-15 14:30')
+    expect(w.inner.find((p) => p.name === 'Sun')!.longitude).toBeCloseTo(84.3882)
+    expect(w.outer.find((p) => p.name === 'Sun')!.longitude).toBeCloseTo(200.0871)
+    expect(w.angles.Asc).toBeCloseTo(193.6954)
+    expect(w.angles.MC).toBeCloseTo(105.9221)
   })
 
   it('keeps the twelve cusps in house order', () => {
     const w = parseWheel(transit)!
     expect(w.cusps).toHaveLength(12)
-    expect(w.cusps[0]).toBe(240)
-    expect(w.cusps[9]).toBe(150)
+    expect(w.cusps[0]).toBe(180)
+    expect(w.cusps[9]).toBe(90)
   })
 
   it('carries every aspect with the transiting body first', () => {
     const w = parseWheel(transit)!
     expect(w.aspects.length).toBeGreaterThan(0)
-    const jupiterSun = w.aspects.find((a) => a.from === 'Jupiter' && a.to === 'Sun')!
-    expect(jupiterSun.type).toBe('Square')
-    expect(jupiterSun.orb).toBeCloseTo(1.08)
+    const mercuryPluto = w.aspects.find((a) => a.from === 'Mercury' && a.to === 'Pluto')!
+    expect(mercuryPluto.type).toBe('Conjunction')
+    expect(mercuryPluto.orb).toBeCloseTo(0.34)
     // Aspects to the angles are kept: the wheel knows where they are.
-    expect(w.aspects.some((a) => a.to === 'Asc')).toBe(true)
+    expect(w.aspects.some((a) => a.to === 'MC')).toBe(true)
   })
 
   it('takes a retrograde flag the record spells out, with or without a speed', () => {
@@ -56,7 +56,7 @@ describe('parseWheel', () => {
     expect(w.outer).toEqual([])
     expect(w.natalDateTime).toBeNull()
     expect(w.inner.map((p) => p.name)).toContain('Chiron')
-    expect(w.inner.find((p) => p.name === 'Jupiter')!.retrograde).toBe(true)
+    expect(w.inner.find((p) => p.name === 'Saturn')!.retrograde).toBe(true)
     expect(w.aspects.length).toBeGreaterThan(0)
   })
 
@@ -150,12 +150,12 @@ describe('spread', () => {
 describe('in words', () => {
   it('says what a transit aspect is, as an astrologer would', () => {
     const w = parseWheel(transit)!
-    const jupiterSun = w.aspects.find((a) => a.from === 'Jupiter' && a.to === 'Sun')!
-    expect(aspectSentence(w, jupiterSun)).toBe('Jupiter in Leo squaring your Sun in Taurus')
-    const uranusNode = w.aspects.find((a) => a.from === 'Uranus' && a.to === 'True North Node')!
-    expect(aspectSentence(w, uranusNode)).toBe('Uranus in Gemini conjunct your North Node in Gemini')
-    const neptuneAsc = w.aspects.find((a) => a.from === 'Neptune' && a.to === 'Asc')!
-    expect(aspectSentence(w, neptuneAsc)).toBe('Neptune in Aries trine your Ascendant in Sagittarius')
+    const saturnMars = w.aspects.find((a) => a.from === 'Saturn' && a.to === 'Mars')!
+    expect(aspectSentence(w, saturnMars)).toBe('Saturn in Aries conjunct your Mars in Aries')
+    const marsNode = w.aspects.find((a) => a.from === 'Mars' && a.to === 'True North Node')!
+    expect(aspectSentence(w, marsNode)).toBe('Mars in Leo opposing your North Node in Aquarius')
+    const mercuryMC = w.aspects.find((a) => a.from === 'Mercury' && a.to === 'MC')!
+    expect(aspectSentence(w, mercuryMC)).toBe('Mercury in Scorpio trine your Midheaven in Cancer')
   })
 
   it('says what a natal aspect is, without "your"', () => {
@@ -169,28 +169,31 @@ describe('in words', () => {
   it('gives the orb, direction and exact moment when known', () => {
     const w = parseWheel(transit)!
     const a = w.aspects.find((x) => x.from === 'Mercury' && x.to === 'MC')!
-    expect(aspectDetail(a)).toBe('exact 2026-10-13 16:16, pass 1 of 3 (also 2026-11-01 14:40, 2026-11-26 00:43), orb 0°23′, applying')
-    expect(aspectDetail({ ...a, movement: null, exactAt: null, pass: null, passes: [] })).toBe('orb 0°23′')
-    expect(aspectDetail({ ...a, movement: null, pass: null, passes: [a.exactAt!] })).toBe('exact 2026-10-13 16:16, orb 0°23′')
+    expect(aspectDetail(a)).toBe('exact 2026-10-14 04:42, pass 1 of 3 (also 2026-11-01 10:33, 2026-11-26 10:03), orb 0°52′, applying')
+    expect(aspectDetail({ ...a, movement: null, exactAt: null, pass: null, passes: [] })).toBe('orb 0°52′')
+    expect(aspectDetail({ ...a, movement: null, pass: null, passes: [a.exactAt!] })).toBe('exact 2026-10-14 04:42, orb 0°52′')
   })
 
   it('describes a planet with its position, house and aspects', () => {
     const w = parseWheel(transit)!
-    const sun = describePoint(w, 'inner', w.inner.find((p) => p.name === 'Sun')!)
-    expect(sun.title).toBe('Your Sun')
-    expect(sun.position).toBe('20°38′ Taurus · 6th house')
-    expect(sun.aspects).toContain('Jupiter in Leo squaring your Sun in Taurus')
+    const mercury = describePoint(w, 'inner', w.inner.find((p) => p.name === 'Mercury')!)
+    expect(mercury.title).toBe('Your Mercury')
+    expect(mercury.position).toBe('6°09′ Gemini · 9th house')
+    expect(mercury.aspects).toContain('Uranus in Gemini conjunct your Mercury in Gemini')
     const saturn = describePoint(w, 'outer', w.outer.find((p) => p.name === 'Saturn')!)
     expect(saturn.title).toBe('Transiting Saturn')
-    expect(saturn.position).toBe('10°36′ Aries · 5th house · ℞ retrograde')
-    expect(saturn.aspects).toEqual([])
+    expect(saturn.position).toBe('10°36′ Aries · 7th house · ℞ retrograde')
+    expect(saturn.aspects).toEqual(['Saturn in Aries conjunct your Mars in Aries'])
+    const sun = describePoint(w, 'inner', w.inner.find((p) => p.name === 'Sun')!)
+    expect(sun.position).toBe('24°23′ Gemini · 9th house')
+    expect(sun.aspects).toEqual([])
   })
 
   it('finds a point\'s aspects on the right ring only', () => {
     const w = parseWheel(transit)!
-    // Neptune transits natal Neptune; the outer Neptune is the moving end, the inner one the fixed end.
-    expect(aspectsOfPoint(w, 'outer', 'Neptune').map((i) => w.aspects[i]!.to)).toEqual(['Chiron', 'Asc', 'Neptune'])
-    expect(aspectsOfPoint(w, 'inner', 'Neptune').map((i) => w.aspects[i]!.from)).toEqual(['Neptune'])
+    // Transiting Mercury makes five contacts; natal Mercury receives one, from Uranus. Each ring finds only its own.
+    expect(aspectsOfPoint(w, 'outer', 'Mercury').map((i) => w.aspects[i]!.to)).toEqual(['Pluto', 'MC', 'Jupiter', 'Chiron', 'Neptune'])
+    expect(aspectsOfPoint(w, 'inner', 'Mercury').map((i) => w.aspects[i]!.from)).toEqual(['Uranus'])
   })
 })
 

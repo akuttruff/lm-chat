@@ -9,7 +9,7 @@ import year from '../test/fixtures/forecast-year.json?raw'
 describe('ChartWheel in a tool card', () => {
   it('draws a transit result as a wheel, without opening the card', () => {
     const { container } = render(<ToolCard name="create_transit_chart" plugin="mcp/astrology-v2" output={transit} />)
-    const svg = screen.getByRole('img', { name: /Transits 2026-10-13 05:58 over the natal chart of 1984-05-10 20:44/ })
+    const svg = screen.getByRole('img', { name: /Transits 2026-10-13 05:58 over the natal chart of 1990-06-15 14:30/ })
     expect(svg).toBeInTheDocument()
     // Twelve sign glyphs, and a glyph for every planet on both rings.
     expect(container.querySelectorAll('.wheel-svg text').length).toBeGreaterThan(12 + 2 * 10)
@@ -33,10 +33,10 @@ describe('ChartWheel in a tool card', () => {
     expect(table.querySelector('thead')?.textContent).toBe('WhenTransitAspectNatal')
     const rows = Array.from(table.querySelectorAll('tbody tr')).map((r) => r.textContent ?? '')
     expect(rows.length).toBeGreaterThan(3)
-    // Jupiter squared the Sun a week before the chart: dimmed as past, separating, and the first of three passes.
-    expect(rows.find((r) => /Jupiter.*square.*Sun · 6th/.test(r))).toMatch(/^was exact Oct 6 16:36separatingpass 1 of 3 · also Feb 21, 2027 · Jun 2, 2027.*Jupiter2\d°\d\d′ Leo.*squareorb 1°05′.*Sun · 6th20°38′ Taurus$/)
-    // A run already over says so, with the year on a date outside the chart's (Pluto ℞ is closing on the point again, but stations before it gets there).
-    expect(rows.find((r) => /Pluto.*trine.*Chiron/.test(r))).toMatch(/^was exact Dec 7, 2025 16:36(applying|separating)pass 3 of 3 · also Jan 31, 2025 · Aug 17, 2025/)
+    // Saturn crossed Mars a week before the chart: dimmed as past, separating, and the second of three passes.
+    expect(rows.find((r) => /Saturn.*conjunction.*Mars · 7th/.test(r))).toMatch(/^was exact Oct 5 04:39separatingpass 2 of 3 · also May 20 · Feb 11, 2027.*Saturn.*10°36′ Aries.*conjunctionorb 0°38′.*Mars · 7th11°14′ Aries$/)
+    // A run still to come says so, with the year on a date outside the chart's (Uranus ℞ is backing off Mercury, and returns next summer).
+    expect(rows.find((r) => /Uranus.*conjunction.*Mercury/.test(r))).toMatch(/^exact Jun 2, 2027 20:31separatingpass 1 of 3 · also Jan 20, 2028 · Mar 6, 2028/)
     expect(table.querySelectorAll('.tt-near').length).toBeGreaterThan(0)
     expect(table.querySelectorAll('.wheel-rx').length).toBeGreaterThan(0)
   })
@@ -49,9 +49,9 @@ describe('ChartWheel in a tool card', () => {
     expect(table.querySelectorAll('tbody tr').length).toBe(JSON.parse(week).headline_transits.filter((h: { weight: number }) => h.weight >= 0.7).length)
     // Date order, with the in-orb days, the exact moment, both positions and the orb.
     const rows = Array.from(table.querySelectorAll('tbody tr')).map((r) => r.textContent ?? '')
-    expect(rows.at(-1)).toMatch(/^exact Oct 17 05:04in orb Oct 15–18.*Mars11°01′ Leo.*squareorb 0°07′.*Venus · 6th11°01′ Taurus$/)
-    // The backdrop first, by its first day in orb, saying when it does perfect and which way it is going.
-    expect(rows[0]).toMatch(/^(was exact|exact) [A-Z][a-z]{2} \d.*in orb Oct 12–1\d · (applying|separating)/)
+    expect(rows.at(-1)).toMatch(/^exact Oct 18 09:33in orb Oct 17–18.*Mercury19°06′ Scorpio.*oppositionorb 0°15′.*Venus · 8th19°06′ Taurus$/)
+    // Every headline of this week perfects inside it, so the first row is the earliest event.
+    expect(rows[0]).toMatch(/^exact Oct 12 02:35in orb Oct 12–14/)
     expect(table.querySelector('thead')?.textContent).toBe('WhenTransitAspectNatal')
     // The slow planets' passes, in and out of the week.
     expect(table.textContent).toMatch(/pass \d of \d · also [A-Z][a-z]{2} \d/)
@@ -60,8 +60,8 @@ describe('ChartWheel in a tool card', () => {
     expect(yt.querySelector('caption')?.textContent).toBe('Key transits · Oct 14, 2026 – Oct 14, 2027')
     expect(yt.querySelectorAll('tbody tr')).toHaveLength(JSON.parse(year).headline_transits.filter((h: { weight: number }) => h.weight >= 3).length)
     expect(yt.textContent).toMatch(/pass \d of \d/)
-    // A contact in orb without perfecting in the period says when it does, before or after.
-    expect(w.container.querySelectorAll('.tt-near').length).toBeGreaterThan(0)
+    // A contact in orb without perfecting in the period says when it does, before or after (Pluto reaches the Node only in 2028).
+    expect(y.container.querySelectorAll('.tt-near').length).toBeGreaterThan(0)
   })
 
   it('draws nothing for a result that is not a chart', () => {
@@ -105,13 +105,13 @@ describe('ChartWheel in a tool card', () => {
   it('says what a planet is and the aspects it makes when pointed at', () => {
     const { container } = render(<ToolCard name="create_transit_chart" output={transit} />)
     const points = container.querySelectorAll('.wheel-point')
-    // Natal Sun: the inner ring is drawn last, so it is among the later groups.
-    const sun = [...points].find((g) => g.textContent?.includes('20°38'))!
+    // Natal Mercury: the inner ring is drawn last, so it is among the later groups.
+    const sun = [...points].find((g) => g.textContent?.includes('6°09'))!
     fireEvent.pointerEnter(sun, { pointerType: 'mouse' })
     const tip = screen.getByRole('tooltip')
-    expect(tip).toHaveTextContent('Your Sun')
-    expect(tip).toHaveTextContent('20°38′ Taurus · 6th house')
-    expect(tip).toHaveTextContent('Jupiter in Leo squaring your Sun in Taurus')
+    expect(tip).toHaveTextContent('Your Mercury')
+    expect(tip).toHaveTextContent('6°09′ Gemini · 9th house')
+    expect(tip).toHaveTextContent('Uranus in Gemini conjunct your Mercury in Gemini')
     fireEvent.pointerLeave(sun, { pointerType: 'mouse' })
     expect(screen.queryByRole('tooltip')).toBeNull()
   })
@@ -120,21 +120,22 @@ describe('ChartWheel in a tool card', () => {
     const { container } = render(<ToolCard name="create_transit_chart" output={transit} />)
     const lines = container.querySelectorAll('.wheel-aspect')
     expect(lines.length).toBeGreaterThan(1)
-    fireEvent.pointerEnter(lines[0]!, { pointerType: 'mouse' })
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Mercury in Scorpio sextile your Midheaven in Virgo')
-    expect(screen.getByRole('tooltip')).toHaveTextContent('exact 2026-10-13 16:16, pass 1 of 3 (also 2026-11-01 14:40, 2026-11-26 00:43), orb 0°23′, applying')
+    // The third line is Mars opposite the Node: a hard aspect, drawn at full strength when lit (conjunctions sit at 0.75).
+    fireEvent.pointerEnter(lines[2]!, { pointerType: 'mouse' })
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Mars in Leo opposing your North Node in Aquarius')
+    expect(screen.getByRole('tooltip')).toHaveTextContent('exact 2026-10-12 02:35, orb 0°38′, separating')
     const after = container.querySelectorAll('.wheel-aspect')
-    expect(after[0]!.getAttribute('opacity')).toBe('1')
-    expect(after[1]!.getAttribute('opacity')).toBe('0.18')
+    expect(after[2]!.getAttribute('opacity')).toBe('1')
+    expect(after[0]!.getAttribute('opacity')).toBe('0.18')
   })
 
   it('under a finger, a tap holds the popup clear of the point until a tap elsewhere', () => {
     const { container } = render(<ToolCard name="create_transit_chart" output={transit} />)
-    const sun = [...container.querySelectorAll('.wheel-point')].find((g) => g.textContent?.includes('20°38'))!
+    const sun = [...container.querySelectorAll('.wheel-point')].find((g) => g.textContent?.includes('6°09'))!
     fireEvent.pointerDown(sun, { pointerType: 'touch', pointerId: 1 })
     fireEvent.pointerLeave(sun, { pointerType: 'touch', pointerId: 1 })
     const tip = screen.getByRole('tooltip')
-    expect(tip).toHaveTextContent('Your Sun')
+    expect(tip).toHaveTextContent('Your Mercury')
     expect(tip.className).toMatch(/above|below|left|right/)
     // The click that follows the tap did not open the viewer.
     fireEvent.click(sun)
@@ -146,7 +147,7 @@ describe('ChartWheel in a tool card', () => {
 
   it('with a mouse, the popup sits beside the pointer and follows it', () => {
     const { container } = render(<ToolCard name="create_transit_chart" output={transit} />)
-    const sun = [...container.querySelectorAll('.wheel-point')].find((g) => g.textContent?.includes('20°38'))!
+    const sun = [...container.querySelectorAll('.wheel-point')].find((g) => g.textContent?.includes('6°09'))!
     fireEvent.pointerEnter(sun, { pointerType: 'mouse' })
     expect(screen.getByRole('tooltip').className).toMatch(/above|below|left|right/)
     fireEvent.pointerLeave(sun, { pointerType: 'mouse' })
@@ -154,7 +155,7 @@ describe('ChartWheel in a tool card', () => {
   })
 
   it("shows the transit's reading in the popup once written, and says it is coming until then", () => {
-    const readings = { 'Mercury|Sextile|MC': 'Say the quiet thing out loud today.' }
+    const readings = { 'Mercury|Conjunction|Pluto': 'Say the quiet thing out loud today.' }
     const { container, rerender } = render(<ToolCard name="create_transit_chart" output={transit} />)
     const line = container.querySelectorAll('.wheel-aspect')[0]!
     fireEvent.pointerEnter(line, { pointerType: 'mouse' })
@@ -164,7 +165,7 @@ describe('ChartWheel in a tool card', () => {
     expect(screen.getByRole('tooltip')).not.toHaveTextContent('on its way')
     fireEvent.pointerLeave(line, { pointerType: 'mouse' })
     // The planet's popup carries the reading under its aspect line.
-    const mercury = [...container.querySelectorAll('.wheel-point')].find((g) => g.textContent?.includes('15°11'))!
+    const mercury = [...container.querySelectorAll('.wheel-point')].find((g) => g.textContent?.includes('15°04'))!
     fireEvent.pointerEnter(mercury, { pointerType: 'mouse' })
     const tip = screen.getByRole('tooltip')
     expect(tip).toHaveTextContent('Transiting Mercury')

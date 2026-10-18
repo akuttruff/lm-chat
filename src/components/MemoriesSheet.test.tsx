@@ -5,7 +5,7 @@ import MemoriesSheet from './MemoriesSheet.tsx'
 import type { Memory } from '../types.ts'
 
 const green: Memory = { id: 'a1', text: 'Favorite color is green', createdAt: 1, updatedAt: 1 }
-const born: Memory = { id: 'b2', text: 'Born May 10, 1984', createdAt: 2, updatedAt: 2 }
+const born: Memory = { id: 'b2', text: 'Born June 15, 1990', createdAt: 2, updatedAt: 2 }
 
 function stub(list: Memory[]) {
   const calls: { url: string; method: string; body?: unknown }[] = []
@@ -25,7 +25,7 @@ describe('MemoriesSheet', () => {
   it('lists what has been remembered', async () => {
     stub([born, green])
     render(<MemoriesSheet open onClose={vi.fn()} />)
-    expect(await screen.findByText('Born May 10, 1984')).toBeInTheDocument()
+    expect(await screen.findByText('Born June 15, 1990')).toBeInTheDocument()
     expect(screen.getByText('Favorite color is green')).toBeInTheDocument()
   })
 
@@ -75,7 +75,7 @@ describe('picking memories for a chat', () => {
     stub([born, green])
     const onChange = vi.fn()
     render(<MemoriesSheet open onClose={vi.fn()} selectFor={{ selection: null, onChange }} />)
-    expect(await screen.findByLabelText('Used in this chat: Born May 10, 1984')).toBeChecked()
+    expect(await screen.findByLabelText('Used in this chat: Born June 15, 1990')).toBeChecked()
     expect(screen.getByLabelText('Used in this chat: Favorite color is green')).toBeChecked()
     await user.click(screen.getByLabelText('Used in this chat: Favorite color is green'))
     // Unchecking one turns the automatic "everything" into an explicit list of the rest.
@@ -87,7 +87,7 @@ describe('picking memories for a chat', () => {
     stub([born, green])
     const onChange = vi.fn()
     render(<MemoriesSheet open onClose={vi.fn()} selectFor={{ selection: ['b2'], onChange }} />)
-    expect(await screen.findByLabelText('Used in this chat: Born May 10, 1984')).toBeChecked()
+    expect(await screen.findByLabelText('Used in this chat: Born June 15, 1990')).toBeChecked()
     expect(screen.getByLabelText('Not used in this chat: Favorite color is green')).not.toBeChecked()
     await user.click(screen.getByLabelText('Not used in this chat: Favorite color is green'))
     expect(onChange).toHaveBeenCalledWith(['b2', 'a1'])
