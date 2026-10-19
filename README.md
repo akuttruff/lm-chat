@@ -9,38 +9,42 @@ third-party API.
 
 ## What it looks like
 
-<p><img src="docs/screenshots/desktop.png" alt="Desktop: the chat list beside the thread" /></p>
+<img src="docs/screenshots/desktop.png" alt="Desktop: the chat list beside the thread" />
+
+**On a desktop.** The chat list in a sidebar beside the thread.
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/screenshots/thread-phone.png" alt="A chat with tool calls" /></td>
-    <td width="33%"><img src="docs/screenshots/reasoning-phone.png" alt="The reasoning block open" /></td>
-    <td width="33%"><img src="docs/screenshots/tools-phone.png" alt="The reply written from the tool results" /></td>
+    <td width="50%"><img src="docs/screenshots/thread-phone.png" alt="A chat with tool calls" /></td>
+    <td width="50%"><img src="docs/screenshots/reasoning-phone.png" alt="The reasoning block open" /></td>
   </tr>
   <tr>
     <td><b>A chat.</b> The question, the model's thinking as a row, the MCP tools it called as cards, then the reply.</td>
     <td><b>Reasoning.</b> Kept, not discarded: tap the row to read what the model thought.</td>
-    <td><b>The reply.</b> Markdown, then what the turn cost: model, time, tokens per second, tokens in and out.</td>
   </tr>
   <tr>
+    <td><img src="docs/screenshots/tools-phone.png" alt="The reply written from the tool results" /></td>
     <td><img src="docs/screenshots/table-phone.png" alt="A reply with a table" /></td>
+  </tr>
+  <tr>
+    <td><b>The reply.</b> Markdown, then what the turn cost: model, time, tokens per second, tokens in and out.</td>
+    <td><b>Tables</b> and the rest of Markdown render as you would expect.</td>
+  </tr>
+  <tr>
     <td><img src="docs/screenshots/code-phone.png" alt="A reply with code" /></td>
     <td><img src="docs/screenshots/chats-phone.png" alt="The chat list" /></td>
   </tr>
   <tr>
-    <td><b>Tables</b> and the rest of Markdown render as you would expect.</td>
     <td><b>Code</b> comes with copy and save buttons.</td>
     <td><b>Chats.</b> Folders, stars and search. Each chat can have its own reasoning level and memory setting.</td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/settings-phone.png" alt="Settings" /></td>
     <td><img src="docs/screenshots/memories-phone.png" alt="Memories" /></td>
-    <td></td>
   </tr>
   <tr>
     <td><b>Settings.</b> The LM Studio address and token, the model, reasoning, and how much history each message carries.</td>
     <td><b>Memories.</b> What the model has learned about you, in a file you can read, edit and prune.</td>
-    <td></td>
   </tr>
 </table>
 
@@ -72,28 +76,60 @@ npm run screenshots                                # another; needs Google Chrom
 - **Automatic context compaction.** Long threads have their older turns
   summarized, so each message stays fast without the model losing track.
 
-## Requirements
+## Before you start
 
-- LM Studio 0.4.0 or newer, with a model loaded
-- Node 24 or newer
-- A phone on the same network as your computer
+LM Chat is a Node server that you run on the computer with the model and
+open from a browser on your phone. The server does the talking to LM
+Studio; the phone only ever talks to the server.
+
+| You want to | You need |
+|---|---|
+| Chat | Node 24 or newer, and LM Studio 0.4 or newer serving a chat model (below) |
+| Call tools from a chat | MCP servers set up in LM Studio's `mcp.json`, and authentication on (below) |
+| Memories | The [lm-memory-mcp](https://github.com/akuttruff/lm-memory-mcp) server in `mcp.json`, which the model uses to remember and forget |
+| Read replies aloud | A local speech server: [mlx-audio](https://github.com/Blaizzy/mlx-audio) running Kokoro on an Apple Silicon Mac (below) |
+| Open it on your phone | The phone on the same Wi-Fi, or [Tailscale](https://tailscale.com) on both devices (see *Development*) |
+
+**Node.** Conversations are stored with `node:sqlite`, which arrived in
+Node 24. Check with `node --version`.
+
+**Serving a model.** LM Chat talks to LM Studio's `/api/v1/chat` endpoint,
+so it needs LM Studio 0.4 or newer, on the same computer or one it can
+reach.
+
+1. Install LM Studio and download a chat model in its Discover tab. It is
+   written and tested against `qwen/qwen3.8-27b`; any chat model works, and
+   a smaller one answers faster.
+2. In the **Developer** tab, start the server. It listens on
+   `http://127.0.0.1:1234`, LM Chat's default.
+3. Turn on **Require Authentication** and create a token under **Manage
+   Tokens**. Authentication is required for MCP tools. The token is kept on
+   the server and never sent to the browser.
+4. For tools, enable **Allow calling servers from mcp.json** and list the
+   servers you want in `~/.lmstudio/mcp.json`. LM Chat reads that same
+   file to show each server's tools in its tool picker.
+5. Set the model's **Parallel** value in LM Studio to how many chats you
+   want answered at once, and match it in LM Chat's Settings.
+
+**The voice.** Read-aloud needs an OpenAI-style `/v1/audio/speech` server
+on `127.0.0.1:8020`. `scripts/lm-speech` starts mlx-audio with
+`mlx-community/Kokoro-82M-bf16`; its header says how to set the
+environment up once with `uv`. Without it, the speak button reports that
+no voice is running.
 
 ## Setup
 
-1. In LM Studio's **Developer** tab, start the server.
-2. Turn on **Require Authentication** and create a token under **Manage
-   Tokens**. Authentication is required for MCP tools.
-3. To use MCP tools, also enable **Allow calling servers from mcp.json**.
-4. Install and run:
+1. Get LM Studio serving, as above.
+2. Install and run:
 
    ```bash
    npm install
    npm run dev
    ```
 
-5. Open the **Network** URL that Vite prints (for example
+3. Open the **Network** URL that Vite prints (for example
    `http://192.168.1.50:8000/`) on your phone. Use `http://`, not `https://`.
-6. Tap the gear, paste your API token, tap **Test connection**, and pick a
+4. Tap the gear, paste your API token, tap **Test connection**, and pick a
    model.
 
 > Paste the token rather than typing it. Tokens are case-sensitive, and
@@ -119,6 +155,10 @@ Each message carries its own conversation history rather than relying on
 LM Studio's server-side chat state, so one failed reply cannot make the
 model forget the thread. When that history grows past the budget set in
 Settings, the older turns are replaced by a summary the model writes.
+
+The page itself is served from the browser's cache on every launch, so the
+app opens at once on the phone even before its network is up, and shows a
+notice if the server cannot be reached.
 
 ## Settings
 
@@ -149,7 +189,12 @@ npm run screenshots  # regenerate docs/screenshots/ from the dev server
 
 The persistent instance is a launchd job (`com.amie.lm-chat`) running
 `vite preview` on :8010. Read-aloud needs the companion `com.amie.lm-speech`
-job, which runs Kokoro on :8020 (see `scripts/lm-speech`).
+job, which runs Kokoro on :8020 (see `scripts/lm-speech`). To reach it from
+anywhere, put :8010 behind Tailscale Serve:
+
+```bash
+/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg --https=8443 http://127.0.0.1:8010
+```
 
 ## Limitations
 
