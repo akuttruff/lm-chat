@@ -78,48 +78,79 @@ npm run screenshots                                # another; needs Google Chrom
 
 ## Before you start
 
-LM Chat is a Node server that you run on the computer with the model and
-open from a browser on your phone. The server does the talking to LM
-Studio; the phone only ever talks to the server.
+### How it fits together
 
-| You want to | You need |
+```
+your phone or desktop browser
+        │  http, over your own network
+        ▼
+LM Chat ── one Node process on one computer ── .data/ (SQLite)
+        │
+        ├──▶ a model server on the same computer   (every reply; MCP tools run inside it)
+        └──▶ a speech server, optional             (read aloud)
+```
+
+LM Chat is one Node process that serves the app to any browser on your
+network and keeps your conversations in SQLite on that computer. Your phone
+talks only to LM Chat. LM Chat talks to the model server, streams the reply
+back and saves it, which is why a reply keeps going when the phone locks
+and why the server's token never reaches the browser. MCP tools are set up
+in the model server, not here; LM Chat shows them and lets each chat choose
+among them.
+
+### What you need
+
+| For | You need |
 |---|---|
-| Chat | Node 24 or newer, and LM Studio 0.4 or newer serving a chat model (below) |
-| Call tools from a chat | MCP servers set up in LM Studio's `mcp.json`, and authentication on (below) |
-| Memories | The [lm-memory-mcp](https://github.com/akuttruff/lm-memory-mcp) server in `mcp.json`, which the model uses to remember and forget |
-| Read replies aloud | A local speech server: [mlx-audio](https://github.com/Blaizzy/mlx-audio) running Kokoro on an Apple Silicon Mac (below) |
-| Open it on your phone | The phone on the same Wi-Fi, or [Tailscale](https://tailscale.com) on both devices (see *Development*) |
+| Chatting | Node 24 or newer, and a model server with a chat model (below) |
+| Calling tools from a chat | MCP servers registered with the model server, and its authentication on |
+| Memories | The [lm-memory-mcp](https://github.com/akuttruff/lm-memory-mcp) server registered the same way; the model uses it to remember and forget |
+| Reading replies aloud | A local speech server (below) |
+| Opening it on your phone | The phone on the same Wi-Fi, or [Tailscale](https://tailscale.com) on both devices (see *Development*) |
 
-**Node.** Conversations are stored with `node:sqlite`, which arrived in
-Node 24. Check with `node --version`.
+Node 24 is the floor because conversations are stored with `node:sqlite`,
+which arrived in that version. Check with `node --version`.
 
-**Serving a model.** LM Chat talks to LM Studio's `/api/v1/chat` endpoint,
-so it needs LM Studio 0.4 or newer, on the same computer or one it can
-reach.
+### A model server
 
-1. Install LM Studio and download a chat model in its Discover tab. It is
-   written and tested against `qwen/qwen3.8-27b`; any chat model works, and
-   a smaller one answers faster.
-2. In the **Developer** tab, start the server. It listens on
-   `http://127.0.0.1:1234`, LM Chat's default.
-3. Turn on **Require Authentication** and create a token under **Manage
-   Tokens**. Authentication is required for MCP tools. The token is kept on
-   the server and never sent to the browser.
-4. For tools, enable **Allow calling servers from mcp.json** and list the
-   servers you want in `~/.lmstudio/mcp.json`. LM Chat reads that same
-   file to show each server's tools in its tool picker.
-5. Set the model's **Parallel** value in LM Studio to how many chats you
-   want answered at once, and match it in LM Chat's Settings.
+LM Chat sends each turn to a model server's `/api/v1/chat` endpoint, the
+API that [LM Studio](https://lmstudio.ai) 0.4 introduced, because it
+carries MCP tool calls, reasoning levels, images and streamed replies in
+one request. LM Studio is the server these steps use. Any other server
+that implements that same API works the same way; one that offers only
+the OpenAI chat API does not, yet. The server can run on the same computer
+as LM Chat or on one it can reach.
 
-**The voice.** Read-aloud needs an OpenAI-style `/v1/audio/speech` server
-on `127.0.0.1:8020`. `scripts/lm-speech` starts mlx-audio with
-`mlx-community/Kokoro-82M-bf16`; its header says how to set the
-environment up once with `uv`. Without it, the speak button reports that
-no voice is running.
+1. Install the server and download a chat model. In LM Studio that is the
+   Discover tab. LM Chat is written and tested against `qwen/qwen3.8-27b`;
+   any chat model works, and a smaller one answers faster.
+2. Start the server. In LM Studio that is the **Developer** tab. It listens
+   on `http://127.0.0.1:1234`, LM Chat's default; Settings takes another
+   address.
+3. Turn authentication on and create a token. In LM Studio: **Require
+   Authentication**, then **Manage Tokens**. LM Studio requires this for MCP
+   tools. The token is kept on the LM Chat server and never sent to the
+   browser.
+4. For tools, register the MCP servers you want with the model server. In
+   LM Studio that is `~/.lmstudio/mcp.json` plus **Allow calling servers
+   from mcp.json** in the Developer settings. LM Chat reads that same file
+   to show each server's tools in its tool picker.
+5. Set how many requests the model serves at once (in LM Studio, the
+   model's **Parallel** setting) and match it in LM Chat's Settings.
+
+### A speech server
+
+Read-aloud needs a server that speaks the OpenAI `/v1/audio/speech` API on
+`127.0.0.1:8020`. `scripts/lm-speech` starts
+[mlx-audio](https://github.com/Blaizzy/mlx-audio) with the Kokoro voice on
+an Apple Silicon Mac; its header says how to set that environment up once
+with `uv`. Any server with the same endpoint works, with `LM_SPEECH_URL`
+and `LM_SPEECH_MODEL` pointing at it. Without one, the speak button
+reports that no voice is running.
 
 ## Setup
 
-1. Get LM Studio serving, as above.
+1. Get a model server running, as above.
 2. Install and run:
 
    ```bash
@@ -129,8 +160,8 @@ no voice is running.
 
 3. Open the **Network** URL that Vite prints (for example
    `http://192.168.1.50:8000/`) on your phone. Use `http://`, not `https://`.
-4. Tap the gear, paste your API token, tap **Test connection**, and pick a
-   model.
+4. Tap the gear, enter the model server's address if it is not the
+   default, paste its token, tap **Test connection**, and pick a model.
 
 > Paste the token rather than typing it. Tokens are case-sensitive, and
 > some apps lowercase part of them when copying. The Settings screen warns
