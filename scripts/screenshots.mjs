@@ -27,13 +27,18 @@ const DESKTOP = { width: 1280, height: 840, scale: 2, mobile: false }
  *  wait <ms>             pause (animations, lazy chunks)
  *  scroll <css> <px>     scroll an element, or the window when the selector matches nothing
  */
+// The active chat is kept on the server, so every scenario opens the chat it wants first.
+const lisbon = [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['click', 'Lisbon in November'], ['wait', 1500]]
 const scenarios = [
-  { name: 'thread-phone', view: PHONE, steps: [['wait', 1500], ['scroll', '.thread', 0]] },
-  { name: 'wheel-phone', view: PHONE, steps: [['wait', 1500], ['scroll', '.thread', 420]] },
-  { name: 'reasoning-phone', view: PHONE, steps: [['wait', 1500], ['click', 'Thought for'], ['wait', 500], ['scroll', '.thread', 0]] },
-  { name: 'reply-phone', view: PHONE, steps: [['wait', 1500]] },
-  { name: 'chats-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 900]] },
-  { name: 'desktop', view: DESKTOP, steps: [['wait', 1500], ['scroll', '.thread', 0]] },
+  { name: 'thread-phone', view: PHONE, steps: [...lisbon, ['scroll', '.thread', 0]] },
+  { name: 'reasoning-phone', view: PHONE, steps: [...lisbon, ['click', 'Thought for'], ['wait', 500], ['scroll', '.thread', 0]] },
+  { name: 'tools-phone', view: PHONE, steps: [...lisbon, ['scroll', '.thread', 330]] },
+  { name: 'table-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['click', 'Weekly meal plan'], ['wait', 1500], ['scroll', '.thread', 0]] },
+  { name: 'code-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['click', 'Debounce in TypeScript'], ['wait', 1500], ['scroll', '.thread', 0]] },
+  { name: 'chats-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 900]] },
+  { name: 'settings-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 800], ['click', 'Settings'], ['wait', 1200]] },
+  { name: 'memories-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 800], ['click', 'Settings'], ['wait', 1000], ['click', 'Memories'], ['wait', 1000]] },
+  { name: 'desktop', view: DESKTOP, steps: [['wait', 1500], ['click', 'Lisbon in November'], ['wait', 1500], ['scroll', '.thread', 0]] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

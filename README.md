@@ -11,23 +11,33 @@ third-party API.
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/screenshots/thread-phone.png" alt="A chat with a tool call" /></td>
-    <td width="33%"><img src="docs/screenshots/wheel-phone.png" alt="A tool result drawn as a chart" /></td>
-    <td width="33%"><img src="docs/screenshots/reply-phone.png" alt="A reply with its stats" /></td>
+    <td width="33%"><img src="docs/screenshots/thread-phone.png" alt="A chat with tool calls" /></td>
+    <td width="33%"><img src="docs/screenshots/reasoning-phone.png" alt="The reasoning block open" /></td>
+    <td width="33%"><img src="docs/screenshots/tools-phone.png" alt="The reply written from the tool results" /></td>
   </tr>
   <tr>
-    <td><b>A chat.</b> The question, the model's thinking as a row that opens, and the tool it called.</td>
-    <td><b>A tool result, drawn.</b> An astrology chart comes back as a wheel with its transits tabled under it.</td>
+    <td><b>A chat.</b> The question, the model's thinking as a row, the MCP tools it called as cards, then the reply.</td>
+    <td><b>Reasoning.</b> Kept, not discarded: tap the row to read what the model thought.</td>
     <td><b>The reply.</b> Markdown, then what the turn cost: model, time, tokens per second, tokens in and out.</td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/reasoning-phone.png" alt="The reasoning block open" /></td>
+    <td><img src="docs/screenshots/table-phone.png" alt="A reply with a table" /></td>
+    <td><img src="docs/screenshots/code-phone.png" alt="A reply with code" /></td>
     <td><img src="docs/screenshots/chats-phone.png" alt="The chat list" /></td>
+  </tr>
+  <tr>
+    <td><b>Tables</b> and the rest of Markdown render as you would expect.</td>
+    <td><b>Code</b> comes with copy and save buttons.</td>
+    <td><b>Chats.</b> Folders, stars and search. Each chat can have its own reasoning level and memory setting.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/settings-phone.png" alt="Settings" /></td>
+    <td><img src="docs/screenshots/memories-phone.png" alt="Memories" /></td>
     <td></td>
   </tr>
   <tr>
-    <td><b>Reasoning.</b> Kept, not discarded: tap the row to read what the model thought.</td>
-    <td><b>Chats.</b> Folders, stars and search. Each chat can have its own reasoning level and memory setting.</td>
+    <td><b>Settings.</b> The LM Studio address and token, the model, reasoning, and how much history each message carries.</td>
+    <td><b>Memories.</b> What the model has learned about you, in a file you can read, edit and prune.</td>
     <td></td>
   </tr>
 </table>
@@ -48,8 +58,7 @@ npm run screenshots                                # another; needs Google Chrom
   reasoning, writing, or calling a tool.
 - **Reasoning shown, not discarded**, as a collapsible "Thought for 4.2s"
   block.
-- **MCP tool calls** rendered as cards with their output. An astrology chart
-  is drawn as a wheel, with its transits in a table.
+- **MCP tool calls** rendered as cards with their arguments and output.
 - **Conversations saved on your computer**, so they survive a closed tab or
   a locked phone and are shared across your devices. Folders, stars and
   search keep them in order.

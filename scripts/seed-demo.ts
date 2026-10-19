@@ -7,9 +7,9 @@ import type { Message } from '../src/types.ts'
 
 /**
  * Fills the development database (.data-dev, the one `npm run dev` uses)
- * with demo chats so the app can be screenshotted: a chat with a tool call
- * that draws a chart, one with a table, one with code, and a few memories
- * in a memory file of its own. Run with `npm run seed:demo`, then start the
+ * with demo chats so the app can be screenshotted: a chat with web-search
+ * tool calls, one with a table, one with code, and a few memories in a
+ * memory file of its own. Run with `npm run seed:demo`, then start the
  * dev server pointed at that memory file:
  *
  *   MEMORY_DB=$PWD/.data-dev/memory.sqlite npm run dev
@@ -35,8 +35,8 @@ const chat = (name: string, messages: Message[], extra: { starred?: boolean; fol
   return c.id
 }
 
-const astrology = store.createFolder('Astrology')
 
+const cooking = store.createFolder('Cooking')
 chat('Weekly meal plan', [
   user('u1', 'Plan five weeknight dinners around chicken, salmon and tofu, about 600 kcal each, with a shopping list.'),
   thinking('r1', 'Five dinners, three proteins, roughly 600 kcal. Keep the sides simple and reuse ingredients so the shopping list stays short.', '3.1'),
@@ -58,7 +58,7 @@ chat('Weekly meal plan', [
 - Soy sauce, miso, sesame oil, ginger, garlic
 
 Want me to swap one night for something vegetarian besides the tofu?`, 24.6, 1320, 410, 95),
-])
+], { folderId: cooking.id })
 
 chat('Debounce in TypeScript', [
   user('u1', 'Write a typed debounce with a cancel method.'),
@@ -80,45 +80,54 @@ export function debounce<A extends unknown[]>(fn: (...args: A) => void, waitMs: 
 The generic \`A\` keeps the arguments typed, and \`cancel\` clears the pending timer and nulls it so a second cancel is harmless.`, 11.2, 640, 210, 0),
 ], { folderId: null })
 
-const transit = fs.readFileSync(path.resolve('src/test/fixtures/transit-chart.json'), 'utf8')
-const todayId = chat('Transits today', [
-  user('u1', 'What are my transits today?'),
-  thinking('r1', 'The person wants today’s transits over the natal chart. Birth data is in memory: 1990-06-15 14:30, New York. Call create_transit_chart, then read the aspects by weight: Saturn on Mars is the backdrop, the Mercury contacts the day’s events.', '4.2'),
+const travel = store.createFolder('Travel')
+const lisbonId = chat('Lisbon in November', [
+  user('u1', "I'm in Lisbon the week of Nov 9. What's on that week, and what should I pack?"),
+  thinking('r1', 'Two parts: what is happening in Lisbon that week, and the weather. Search for each, then answer briefly, since this person prefers short answers with the reasoning shown. The cooking memory is not relevant here.', '3.8'),
   {
-    id: 't1', role: 'tool', name: 'create_transit_chart', plugin: 'mcp/astrology-v2',
-    args: { date_time: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' },
-    output: transit,
-    readings: {
-      'Mercury|Conjunction|Pluto': 'A conversation that goes deeper than planned; one message drafted three times.',
-      'Saturn|Conjunction|Mars': 'Effort rationed. A week past exact, still asking you to pace yourself.',
-      'Mars|Opposition|True North Node': 'Yesterday’s argument about direction, cooling.',
-      'Mercury|Trine|MC': 'What you say today is useful at work tomorrow.',
-      'Mercury|Trine|Jupiter': 'A generous reading of the news; a mentor’s word lands.',
-      'Uranus|Conjunction|Mercury': 'The long restlessness of mind: new tools, new names for old things.',
-      'Mercury|Trine|Chiron': 'Talking about the old wound makes it a skill.',
-      'Mercury|Sextile|Neptune': 'Daydreams with a thread of plan in them.',
-    },
+    id: 't1', role: 'tool', name: 'web_search', plugin: 'mcp/web-search',
+    args: { query: 'Lisbon events November 9-15 2026', max_results: 5 },
+    output: [
+      '1. Web Summit 2026 — Lisbon, 9–12 November. Altice Arena and FIL, Parque das Nações. Tickets and side events across the city.',
+      '2. Lisbon Film Festival (LEFFEST), 12–22 November. Screenings at Cinema São Jorge and Nimas.',
+      '3. São Martinho, 11 November: roasted chestnuts and água-pé at street stalls, magustos in Alfama and Graça.',
+      '4. Time Out Market: autumn chef residencies through November.',
+      '5. Lisbon Marathon and Half, 15 November: road closures along the river from early morning.',
+    ].join('\n'),
   },
-  reply('a1', `### Today, October 13
+  {
+    id: 't2', role: 'tool', name: 'web_search', plugin: 'mcp/web-search',
+    args: { query: 'Lisbon weather mid November average', max_results: 3 },
+    output: '1. Lisbon in November: highs around 18 °C (64 °F), lows around 11 °C (52 °F), about 11 rainy days in the month. Mostly mild with showers; sunny spells between fronts.\n2. Sunset about 17:20. Humidity high; evenings feel cooler by the river.',
+  },
+  reply('a1', `### That week
 
-The day belongs to **Mercury**. It sits on your natal **Pluto** this afternoon, exact at 14:42, the first of three passes: a conversation that goes deeper than planned, or a message you draft three times. By tomorrow morning the same Mercury trines your **Midheaven** and **Jupiter**, so what is said today finds its use at work.
+- **Web Summit**, Nov 9–12, out at Parque das Nações. The city fills up; book dinners.
+- **São Martinho**, Nov 11: chestnut stalls everywhere by late afternoon. Go to Graça for the view.
+- **LEFFEST** film festival opens Nov 12 at Cinema São Jorge.
+- **Lisbon Marathon**, Sunday Nov 15: the riverfront is closed until about noon.
 
-**Saturn on your Mars** is a week past exact and still close. Energy is rationed; spend it on one thing. **Mars opposite your North Node** is separating too, so yesterday's argument about direction is already losing heat.
+### Pack
 
-The Moon is in Scorpio in your second house all day, near transiting Mercury: feelings about money and worth are close to the surface. Nothing needs deciding.
+| | |
+| --- | --- |
+| Days | 16–18 °C, often sunny between showers |
+| Nights | 10–12 °C, cooler by the river |
+| Rain | Likely on three or four of your days |
 
-*In one line:* say the true thing once, quietly, and go to bed early.`, 38.1, 7120, 910, 240),
-  user('u2', 'Is Thursday any good for the hard conversation?'),
-  reply('a2', `Thursday is better than today. By then Mercury has moved off your Pluto and is trining your Midheaven, so the conversation lands as clear rather than loaded. Avoid the afternoon of the 25th, when Mars squares your Pluto.`, 9.4, 7900, 160, 60),
-], { starred: true, folderId: astrology.id })
+A light rain jacket, one warm layer for evenings, and shoes with grip: the calçada is slippery when wet. No umbrella; the wind eats them.`, 21.4, 2860, 520, 140),
+  user('u2', 'Is the marathon going to block the way to Belém?'),
+  reply('a2', 'Yes, until around noon on the 15th. The course runs along Avenida da Índia and the river. Go to Belém on Saturday instead, or take the train from Cais do Sodré, which runs behind the closures.', 7.1, 3400, 110, 40),
+], { starred: true, folderId: travel.id })
+store.patch(lisbonId, { memory: true })
 
-store.setActive(todayId)
+store.setActive(lisbonId)
 
 // Memories are written by the lm-memory MCP server in real use; here the table is made by hand, in a file of its own.
 const memoryDb = new DatabaseSync(path.join(dir, 'memory.sqlite'))
 memoryDb.exec('CREATE TABLE IF NOT EXISTS memories (id TEXT PRIMARY KEY, text TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)')
 const insert = memoryDb.prepare('INSERT INTO memories (id, text, created_at, updated_at) VALUES (?, ?, ?, ?)')
-;['Born June 15, 1990 at 14:30 in New York.', 'Prefers short answers with the reasoning shown.', 'Cooks on weeknights; no mushrooms.'].forEach((text, i) => insert.run(`demo-${i + 1}`, text, Date.now() - (3 - i) * 86_400_000, Date.now() - (3 - i) * 86_400_000))
+;['Prefers short answers with the reasoning shown.', 'Cooks on weeknights; no mushrooms.', 'Travelling to Lisbon the week of 9 November 2026.'].forEach((text, i) => insert.run(`demo-${i + 1}`, text, Date.now() - (3 - i) * 86_400_000, Date.now() - (3 - i) * 86_400_000))
 memoryDb.close()
 console.log(new Memories(path.join(dir, 'memory.sqlite')).list().length, 'memories')
 console.log(`seeded ${dir}`)
