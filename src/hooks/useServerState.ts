@@ -4,6 +4,7 @@ import type {
 } from '../types.ts'
 import { chime } from '../lib/chime.ts'
 import type { ChimeTone } from '../lib/chime.ts'
+import { reachFetch } from '../lib/reach.ts'
 
 /**
  * The whole client state, streamed from the app server.
@@ -67,6 +68,8 @@ export interface ServerState {
   deleteFolder: (id: string) => Promise<void>
   saveConfig: (patch: Partial<PublicConfig> & { apiToken?: string }) => Promise<void>
   refreshConfig: () => Promise<void>
+  /** Fetch again what a launch out of the server's reach could not: the config, the folders and the chats. */
+  refresh: () => void
 }
 
 /** One chat's progress, as the server reports it. */
@@ -150,7 +153,7 @@ const toChatStatus = (e: StatusEvent): ChatStatus =>
   ({ state: e.state as Status['state'], text: e.text, startedAt: e.startedAt })
 
 const post = (url: string, body?: unknown): Promise<Response> =>
-  fetch(url, {
+  reachFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -173,23 +176,24 @@ export default function useServerState(): ServerState {
 
   const refreshConfig = useCallback(async () => {
     try {
-      const r = await fetch('/api/config')
+      const r = await reachFetch('/api/config')
       if (r.ok) setConfig(await r.json() as PublicConfig)
     } catch { /* the events stream reports connection health */ }
   }, [])
 
   useEffect(() => { void refreshConfig() }, [refreshConfig])
 
-  useEffect(() => {
-    let live = true
-    fetch('/api/folders')
-      .then((r) => (r.ok ? r.json() as Promise<unknown> : []))
+  const refreshFolders = useCallback(async () => {
+    try {
+      const r = await reachFetch('/api/folders')
+      const list: unknown = r.ok ? await r.json() : []
       // A malformed response reads as "no folders" rather than crashing the
       // grouping in ConversationList, which trusts this is always an array.
-      .then((list) => { if (live && Array.isArray(list)) setFolders(list as Folder[]) })
-      .catch(() => { /* the drawer just shows an unfiled list */ })
-    return () => { live = false }
+      if (Array.isArray(list)) setFolders(list as Folder[])
+    } catch { /* the drawer just shows an unfiled list */ }
   }, [])
+
+  useEffect(() => { void refreshFolders() }, [refreshFolders])
 
   const byName = (list: Folder[]): Folder[] => [...list].sort((a, b) => a.name.localeCompare(b.name))
 
@@ -229,10 +233,18 @@ export default function useServerState(): ServerState {
   /** Fetch the whole store, when a small update couldn't be applied. */
   const resync = useCallback(async () => {
     try {
-      const r = await fetch('/api/chats')
+      const r = await reachFetch('/api/chats')
       if (r.ok) commitStore(await r.json() as ConversationStore)
     } catch { /* the next event or reconnect will try again */ }
   }, [commitStore])
+
+  // The server is answering again after a launch it missed: the stream
+  // reconnects on its own, and these are the reads that went unanswered.
+  const refresh = useCallback(() => {
+    void refreshConfig()
+    void refreshFolders()
+    void resync()
+  }, [refreshConfig, refreshFolders, resync])
 
   // The open chat arrives in outline (the server sends only its count), so
   // fetch its messages. Covers opening one here, another device switching,
@@ -245,7 +257,7 @@ export default function useServerState(): ServerState {
     if (!conv?.messagesOmitted || loading.current.has(conv.id)) return
     const id = conv.id
     loading.current.add(id)
-    fetch(`/api/chats/${encodeURIComponent(id)}`)
+    reachFetch(`/api/chats/${encodeURIComponent(id)}`)
       .then(async (r) => {
         if (!r.ok) return
         const full = await r.json() as Conversation
@@ -490,5 +502,6 @@ export default function useServerState(): ServerState {
     deleteFolder,
     saveConfig,
     refreshConfig,
+    refresh,
   }
 }

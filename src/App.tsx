@@ -10,6 +10,7 @@ import ConversationList from './components/ConversationList';
 import FolderPicker from './components/FolderPicker';
 import ToolPicker from './components/ToolPicker';
 import ReasoningPicker, { labelFor } from './components/ReasoningPicker';
+import Unreachable from './components/Unreachable';
 import useServerState from './hooks/useServerState';
 import { chatMarkdown, downloadText, exportFileName } from './lib/export';
 import useModelConfig from './hooks/useModelConfig';
@@ -132,6 +133,7 @@ export default function App() {
   return (
     <div className={`app${sidebar ? ' with-sidebar' : ''}`}>
       <Toaster position="top-center" theme="dark" toastOptions={{ className: 'lm-chat-toast' }} />
+      <Unreachable app="LM Chat" onBack={server.refresh} />
       {sidebar && list}
       <div
         ref={mainRef}

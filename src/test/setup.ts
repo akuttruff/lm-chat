@@ -1,6 +1,14 @@
 import os from 'node:os'
 import path from 'node:path'
 import '@testing-library/jest-dom/vitest'
+import { REACH } from '../lib/reach.ts'
+
+// The waits around a server that gives no reply, cut to a few ticks: a test
+// that sits through eight seconds of silence learns nothing from the wait.
+REACH.readTimeoutMs = 200
+REACH.retryWaitsMs = [10, 20, 30]
+REACH.unreachableAfterMs = 40
+REACH.probeMs = 40
 
 // jsdom implements neither of these, and Motion calls them while measuring
 // keyframes. Without the stubs every animated test logs a "Not implemented"
