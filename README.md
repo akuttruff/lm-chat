@@ -9,6 +9,8 @@ third-party API.
 
 ## What it looks like
 
+<p><img src="docs/screenshots/desktop.png" alt="Desktop: the chat list beside the thread" /></p>
+
 <table>
   <tr>
     <td width="33%"><img src="docs/screenshots/thread-phone.png" alt="A chat with tool calls" /></td>
@@ -41,8 +43,6 @@ third-party API.
     <td></td>
   </tr>
 </table>
-
-<p><img src="docs/screenshots/desktop.png" alt="Desktop: the chat list beside the thread" /></p>
 
 The screenshots use demo data. To regenerate them:
 
