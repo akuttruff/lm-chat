@@ -24,21 +24,22 @@ const DESKTOP = { width: 1280, height: 840, scale: 2, mobile: false }
  *  click <text>          the innermost element whose text contains it, or its enclosing button
  *  sel <css>             click the first element matching the selector
  *  aria <label>          click the element with that aria-label
+ *  row <text>            click the chat whose name in the list contains it
  *  wait <ms>             pause (animations, lazy chunks)
  *  scroll <css> <px>     scroll an element, or the window when the selector matches nothing
  */
 // The active chat is kept on the server, so every scenario opens the chat it wants first.
-const lisbon = [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['click', 'Lisbon in November'], ['wait', 1500]]
+const lisbon = [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['row', 'Lisbon in November'], ['wait', 1500]]
 const scenarios = [
   { name: 'thread-phone', view: PHONE, steps: [...lisbon, ['scroll', '.thread', 0]] },
   { name: 'reasoning-phone', view: PHONE, steps: [...lisbon, ['click', 'Thought for'], ['wait', 500], ['scroll', '.thread', 0]] },
   { name: 'tools-phone', view: PHONE, steps: [...lisbon, ['scroll', '.thread', 330]] },
-  { name: 'table-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['click', 'Weekly meal plan'], ['wait', 1500], ['scroll', '.thread', 0]] },
-  { name: 'code-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['click', 'Debounce in TypeScript'], ['wait', 1500], ['scroll', '.thread', 0]] },
+  { name: 'table-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['row', 'Weekly meal plan'], ['wait', 1500], ['scroll', '.thread', 0]] },
+  { name: 'code-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['row', 'Debounce in TypeScript'], ['wait', 1500], ['scroll', '.thread', 0]] },
   { name: 'chats-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 900]] },
   { name: 'settings-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 800], ['click', 'Settings'], ['wait', 1200]] },
   { name: 'memories-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 800], ['click', 'Settings'], ['wait', 1000], ['click', 'Memories'], ['wait', 1000]] },
-  { name: 'desktop', view: DESKTOP, steps: [['wait', 1500], ['click', 'Lisbon in November'], ['wait', 1500], ['scroll', '.thread', 0]] },
+  { name: 'desktop', view: DESKTOP, steps: [['wait', 1500], ['row', 'Lisbon in November'], ['wait', 1500], ['scroll', '.thread', 0]] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -85,6 +86,7 @@ async function run(scenario) {
       let result = ''
       if (op === 'click') result = await evaluate(clickText(a))
       else if (op === 'sel') result = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(a)}); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
+      else if (op === 'row') result = await evaluate(clickText(a, '.conv-name'))
       else if (op === 'aria') result = await evaluate(`(() => { const el = document.querySelector('[aria-label=' + ${JSON.stringify(JSON.stringify(a))} + ']'); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
       else if (op === 'wait') { await sleep(a); continue }
       else if (op === 'scroll') result = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(a)}); if (el && el.scrollHeight > el.clientHeight) { el.scrollTop = ${b}; return 'scrolled' } window.scrollTo(0, ${b}); return 'scrolled window' })()`)
