@@ -1,4 +1,4 @@
-# <img src="public/icon-180.png" width="40" alt=""> LM Chat
+# <img src="public/icon-180.png" width="36" align="absmiddle" alt=""> LM Chat
 
 A mobile web client for [LM Studio](https://lmstudio.ai). Run a model on
 your computer and chat with it from your phone over your own Wi-Fi,
