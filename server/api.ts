@@ -10,6 +10,7 @@ import { MIME_BY_EXT, Store } from './store.ts'
 import type { FolderPatch } from './store.ts'
 import { MemoryInputError, Memories } from './memory.ts'
 import { ToolCatalogCache } from './tools.ts'
+import { HealthCheck } from './health.ts'
 import { readModelConfig } from './model-config.ts'
 import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
 import { SpeechError, Tracks, readSpeakRequest, synthesize, trackType } from './speech.ts'
@@ -207,6 +208,23 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
   const tracks = new Tracks(path.join(path.resolve(options.dir ?? '.data'), 'speech'), { encoder: options.trackEncoder })
   const engine = new Engine(store, bus, undefined, state.engine, memories)
   const toolCatalog = options.toolCatalog ?? new ToolCatalogCache()
+  /** `GET /api/health`: the process, its data file, the model server and the memory file. */
+  const health = new HealthCheck({
+    app: 'lm-chat',
+    dataFile: path.join(path.resolve(options.dir ?? '.data'), 'lm-chat.sqlite'),
+    busy: () => ({ replies: engine.activeStatuses().length, background: engine.backgroundJobs() }),
+    deps: {
+      model: async () => {
+        const config = store.getConfig()
+        const r = await fetch(`${config.lmStudioUrl.replace(/\/+$/, '')}/api/v1/models`, {
+          headers: config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {},
+          signal: AbortSignal.timeout(4000),
+        })
+        if (!r.ok) throw new Error(`${r.status} from ${config.lmStudioUrl}`)
+      },
+      memory: async () => { memories.list() },
+    },
+  })
   // A chart whose readings were being written when the server last stopped
   // would say "on its way" for good: pick those up once the server is up.
   if (options.resume !== false) setTimeout(() => engine.readingsAll(), RESUME_DELAY_MS).unref()
@@ -233,6 +251,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     if (url === '/api/busy' && method === 'GET') {
       return json(res, 200, { replies: engine.activeStatuses().length, background: engine.backgroundJobs() })
     }
+    if (url === '/api/health' && method === 'GET') { void health.report().then((h) => json(res, 200, h)); return undefined }
 
     // --- live updates -------------------------------------------------
     if (url === '/api/events' && method === 'GET') {

@@ -795,3 +795,13 @@ describe('routing', () => {
     expect((await get('/api/nope')).status).toBe(404)
   })
 })
+
+describe('health', () => {
+  it('reports the process, its data file, what is busy, and whether the model server and the memory file answer', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"models":[]}', { status: 200 })))
+    const h = await (await get('/api/health')).json() as Record<string, unknown>
+    expect(h).toMatchObject({ ok: true, app: 'lm-chat', busy: { replies: 0, background: 0 }, deps: { model: 'ok', memory: 'ok' }, errors: [] })
+    expect(h.data).toMatchObject({ file: 'lm-chat.sqlite' })
+    expect(typeof h.version).toBe('string')
+  })
+})
