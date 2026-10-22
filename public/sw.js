@@ -19,7 +19,11 @@ const assetsIn = (html) => [...new Set(html.match(/\/assets\/[^"'()\s]+/g) ?? []
 const buildOf = (html) => BUILD + (html.match(/\/assets\/(index-[\w-]+)\.js/)?.[1] ?? 'unknown')
 const isAsset = (url) => url.pathname.startsWith('/assets/')
 
+/** Whether this worker replaces an earlier one: then the pages open are on an old shell and are sent round again once it is in. */
+let upgrading = false
+
 self.addEventListener('install', (event) => {
+  upgrading = Boolean(self.registration.active)
   event.waitUntil(caches.open(SHELL).then(async (shell) => {
     const page = await fetch('/', { cache: 'no-store' })
     if (!page.ok) throw new Error(`${page.status} for /`)
@@ -33,8 +37,28 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && !k.startsWith(BUILD)).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
+      .then(() => self.clients.claim())
+      .then(async () => {
+        if (!upgrading) return
+        for (const client of await self.clients.matchAll({ type: 'window' })) {
+          if ('navigate' in client) await client.navigate(client.url).catch(() => { /* a page that cannot be sent round stays */ })
+        }
+      }),
   )
+})
+
+// A page that finds the server on a newer build than itself asks for the shell to be refreshed now,
+// rather than waiting for the refresh a navigation starts, which can finish before the page is listening.
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'refresh') return
+  event.waitUntil(caches.open(SHELL).then(async (shell) => {
+    const cached = await shell.match('/')
+    if (cached) await refreshShell(shell, cached)
+    else {
+      const res = await fetch('/', { cache: 'no-store' })
+      if (res.ok) await keepBuild(shell, res)
+    }
+  }))
 })
 
 self.addEventListener('fetch', (event) => {
