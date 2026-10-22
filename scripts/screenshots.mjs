@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeRecording, glide, startRecording } from './recording.mjs'
+import { encodeRecording, glide, startRecording, typeInto, waitUntil } from './recording.mjs'
 
 const URL = process.env.LM_CHAT_URL ?? 'http://127.0.0.1:8000'
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -31,6 +31,12 @@ const DESKTOP = { width: 1280, height: 840, scale: 2, mobile: false }
  */
 // The active chat is kept on the server, so every scenario opens the chat it wants first.
 const lisbon = [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['row', 'Lisbon in November'], ['wait', 1500]]
+/** What the recordings ask, and how they know the reply is in: the header says "connected" again and nothing is streaming. */
+const QUESTION = "In three sentences: the one thing I shouldn't miss, and what to wear for it?"
+const REPLIED = `(() => { const s = document.querySelector('.status')?.textContent || ''; return /connected/.test(s) && !document.querySelector('.streaming, .pending') })()`
+/** The model's first word is on screen: the header says it is writing. */
+const WRITING = `/writing/i.test(document.querySelector('.status')?.textContent || '')`
+
 const scenarios = [
   { name: 'thread-phone', view: PHONE, steps: [...lisbon, ['scroll', '.thread', 0]] },
   { name: 'reasoning-phone', view: PHONE, steps: [...lisbon, ['click', 'Thought for'], ['wait', 500], ['scroll', '.thread', 0]] },
@@ -42,8 +48,9 @@ const scenarios = [
   { name: 'memories-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 800], ['click', 'Settings'], ['wait', 1000], ['click', 'Memories'], ['wait', 1000]] },
   { name: 'desktop', view: DESKTOP, steps: [['wait', 1500], ['row', 'Lisbon in November'], ['wait', 1500], ['scroll', '.thread', 0]] },
   // Walkthroughs, recorded (see recording.mjs): the phone's and the desktop's.
-  { name: 'demo-phone', view: PHONE, record: true, steps: [...lisbon, ['wait', 900], ['glide', '.thread', 1300, 2200], ['wait', 1100], ['glide', '.thread', 2700, 2200], ['wait', 1100], ['aria', 'Chats'], ['wait', 1200], ['row', 'Weekly meal plan'], ['wait', 1800], ['glide', '.thread', 1000, 1800], ['wait', 1400]] },
-  { name: 'demo-desktop', view: DESKTOP, record: true, steps: [['wait', 1500], ['row', 'Lisbon in November'], ['wait', 1800], ['glide', '.thread', 1400, 2400], ['wait', 1100], ['glide', '.thread', 2900, 2400], ['wait', 1100], ['row', 'Weekly meal plan'], ['wait', 1900], ['glide', '.thread', 900, 1800], ['wait', 1500]] },
+  // A question typed into the Lisbon chat and answered by the model, for real: the recording waits for the reply, and the encoder closes up the pauses.
+  { name: 'demo-phone', view: PHONE, record: true, speed: 1.3, steps: [...lisbon, ['wait', 500], ['glide', '.thread', 99999, 1300], ['wait', 500], ['type', '.composer-input', QUESTION], ['wait', 400], ['send'], ['wait', 300], ['until', WRITING, 120000], ['until', REPLIED, 150000], ['wait', 700], ['glide', '.thread', 99999, 900], ['wait', 1600]] },
+  { name: 'demo-desktop', view: DESKTOP, record: true, speed: 1.3, steps: [['wait', 1200], ['row', 'Lisbon in November'], ['wait', 1300], ['glide', '.thread', 99999, 1300], ['wait', 500], ['type', '.composer-input', QUESTION], ['wait', 400], ['send'], ['wait', 300], ['until', WRITING, 120000], ['until', REPLIED, 150000], ['wait', 700], ['glide', '.thread', 99999, 900], ['wait', 1600]] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -89,10 +96,15 @@ async function run(scenario) {
     await send('Page.navigate', { url: URL + (scenario.path ?? '') })
     await sleep(2500)
     const recording = scenario.record ? startRecording({ send, on }) : null
+    // The wait between sending a question and the model's first word is run fast in the recording.
+    const fast = { from: 0, to: 0, factor: 5 }
     for (const [op, a, b, c] of scenario.steps) {
       let result = ''
       if (op === 'click') result = await evaluate(clickText(a))
       else if (op === 'glide') result = await glide(evaluate, a, b, c)
+      else if (op === 'type') result = await typeInto(send, evaluate, a, b)
+      else if (op === 'send') { result = await evaluate(`(() => { const el = document.querySelector('[aria-label="Send"]'); if (!el) return 'missing Send'; el.click(); return 'sent' })()`); fast.from = Date.now() / 1000 }
+      else if (op === 'until') { result = await waitUntil(evaluate, a, b); if (result === 'timeout') throw new Error(`${scenario.name}: gave up waiting for ${a}`); if (fast.from && !fast.to) fast.to = Date.now() / 1000 }
       else if (op === 'sel') result = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(a)}); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
       else if (op === 'row') result = await evaluate(clickText(a, '.conv-name'))
       else if (op === 'aria') result = await evaluate(`(() => { const el = document.querySelector('[aria-label=' + ${JSON.stringify(JSON.stringify(a))} + ']'); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
@@ -103,7 +115,7 @@ async function run(scenario) {
     }
     if (recording) {
       const frames = await recording.stop()
-      const made = encodeRecording(frames, { out: OUT, name: scenario.name, wide: !scenario.view.mobile })
+      const made = encodeRecording(frames, { out: OUT, name: scenario.name, wide: !scenario.view.mobile, speed: scenario.speed ?? 1, fast: fast.to ? fast : null })
       console.log(`wrote ${made.gif} and ${made.mp4} (${made.seconds} s, ${made.frames} frames)`)
       return
     }
