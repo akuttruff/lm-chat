@@ -13,9 +13,13 @@ third-party API.
 
 **On a desktop.** The chat list in a sidebar beside the thread.
 
-<p align="center"><img src="docs/screenshots/demo-phone.gif" width="300" alt="LM Chat in use" /></p>
+<img src="docs/screenshots/demo-desktop.gif" alt="LM Chat in use on a desktop" />
 
-<p align="center"><b>In use.</b> A thread with its tool cards, then the chat list.</p>
+<p><b>In use.</b> On a desktop: a thread with its tool cards, then another chat from the list.</p>
+
+<p align="center"><img src="docs/screenshots/demo-phone.gif" width="300" alt="LM Chat in use on a phone" /></p>
+
+<p align="center">The same, on a phone.</p>
 
 <table>
   <tr>

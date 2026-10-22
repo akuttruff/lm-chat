@@ -38,11 +38,12 @@ const scenarios = [
   { name: 'table-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['row', 'Weekly meal plan'], ['wait', 1500], ['scroll', '.thread', 0]] },
   { name: 'code-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['row', 'Debounce in TypeScript'], ['wait', 1500], ['scroll', '.thread', 0]] },
   { name: 'chats-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 900]] },
-  // A walkthrough, recorded: the Lisbon thread with its tool cards, then another chat from the list.
-  { name: 'demo-phone', view: PHONE, record: true, steps: [...lisbon, ['wait', 700], ['glide', '.thread', 1300, 1600], ['wait', 900], ['glide', '.thread', 2700, 1600], ['wait', 900], ['aria', 'Chats'], ['wait', 1100], ['row', 'Weekly meal plan'], ['wait', 1700], ['glide', '.thread', 1000, 1300], ['wait', 1200]] },
   { name: 'settings-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 800], ['click', 'Settings'], ['wait', 1200]] },
   { name: 'memories-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 800], ['click', 'Settings'], ['wait', 1000], ['click', 'Memories'], ['wait', 1000]] },
   { name: 'desktop', view: DESKTOP, steps: [['wait', 1500], ['row', 'Lisbon in November'], ['wait', 1500], ['scroll', '.thread', 0]] },
+  // Walkthroughs, recorded (see recording.mjs): the phone's and the desktop's.
+  { name: 'demo-phone', view: PHONE, record: true, steps: [...lisbon, ['wait', 900], ['glide', '.thread', 1300, 2200], ['wait', 1100], ['glide', '.thread', 2700, 2200], ['wait', 1100], ['aria', 'Chats'], ['wait', 1200], ['row', 'Weekly meal plan'], ['wait', 1800], ['glide', '.thread', 1000, 1800], ['wait', 1400]] },
+  { name: 'demo-desktop', view: DESKTOP, record: true, steps: [['wait', 1500], ['row', 'Lisbon in November'], ['wait', 1800], ['glide', '.thread', 1400, 2400], ['wait', 1100], ['glide', '.thread', 2900, 2400], ['wait', 1100], ['row', 'Weekly meal plan'], ['wait', 1900], ['glide', '.thread', 900, 1800], ['wait', 1500]] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -102,7 +103,7 @@ async function run(scenario) {
     }
     if (recording) {
       const frames = await recording.stop()
-      const made = encodeRecording(frames, { out: OUT, name: scenario.name })
+      const made = encodeRecording(frames, { out: OUT, name: scenario.name, wide: !scenario.view.mobile })
       console.log(`wrote ${made.gif} and ${made.mp4} (${made.seconds} s, ${made.frames} frames)`)
       return
     }
