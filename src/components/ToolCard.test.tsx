@@ -77,6 +77,13 @@ describe('ToolCard', () => {
     expect(screen.getByText('timed out')).toBeInTheDocument()
   })
 
+  it('lays out a tarot draw as its spread', () => {
+    const reading = { spread: { id: 'three', name: 'Past, present, future', description: '' }, question: 'Q?', drawnAt: 'x', seed: 1, cards: [1, 2, 3].map((i) => ({ position: { index: i, name: `P${i}`, meaning: '' }, card: { id: `cups-0${i}`, name: `Card ${i}`, arcana: 'minor', suit: 'cups', number: i }, reversed: i === 2, keywords: [], meaning: '' })), summary: {} }
+    render(<ToolCard name="draw_cards" plugin="mcp/tarot" output={JSON.stringify(reading)} />)
+    expect(screen.getByRole('figure', { name: 'Past, present, future: Q?' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'P2: Card 2, reversed' })).toHaveAttribute('src', '/tarot/cups-02.jpg')
+  })
+
   it('renders without output', () => {
     render(<ToolCard name="t" output="" />)
     expect(screen.getByText('t')).toBeInTheDocument()
