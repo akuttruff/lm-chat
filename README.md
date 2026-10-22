@@ -11,15 +11,15 @@ third-party API.
 
 <img src="docs/screenshots/desktop.png" alt="Desktop: the chat list beside the thread" />
 
-**On a desktop.** The chat list in a sidebar beside the thread.
+On a desktop the chat list sits in a sidebar beside the thread.
 
 <img src="docs/screenshots/demo-desktop.gif" alt="LM Chat in use on a desktop" />
 
-<p><b>In use.</b> On a desktop: a thread with its tool cards, then another chat from the list.</p>
+<p>On a desktop, a thread runs with its tool cards, then another chat opens from the list.</p>
 
 <p align="center"><img src="docs/screenshots/demo-phone.gif" width="300" alt="LM Chat in use on a phone" /></p>
 
-<p align="center">The same, on a phone.</p>
+<p align="center">The same flow on a phone.</p>
 
 <table>
   <tr>
@@ -27,32 +27,32 @@ third-party API.
     <td width="50%"><img src="docs/screenshots/reasoning-phone.png" alt="The reasoning block open" /></td>
   </tr>
   <tr>
-    <td><b>A chat.</b> The question, the model's thinking as a row, the MCP tools it called as cards, then the reply.</td>
-    <td><b>Reasoning.</b> Kept, not discarded: tap the row to read what the model thought.</td>
+    <td>A chat shows the question, the model's thinking as a row, the MCP tools it called as cards, then the reply.</td>
+    <td>Reasoning is kept rather than discarded; tap the row to read what the model thought.</td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/tools-phone.png" alt="The reply written from the tool results" /></td>
     <td><img src="docs/screenshots/table-phone.png" alt="A reply with a table" /></td>
   </tr>
   <tr>
-    <td><b>The reply.</b> Markdown, then what the turn cost: model, time, tokens per second, tokens in and out.</td>
-    <td><b>Tables</b> and the rest of Markdown render as you would expect.</td>
+    <td>The reply renders as Markdown, followed by what the turn cost: model, time, tokens per second, tokens in and out.</td>
+    <td>Tables and the rest of Markdown render as you would expect.</td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/code-phone.png" alt="A reply with code" /></td>
     <td><img src="docs/screenshots/chats-phone.png" alt="The chat list" /></td>
   </tr>
   <tr>
-    <td><b>Code</b> comes with copy and save buttons.</td>
-    <td><b>Chats.</b> Folders, stars and search. Each chat can have its own reasoning level and memory setting.</td>
+    <td>Code blocks come with copy and save buttons.</td>
+    <td>The chat list has folders, stars and search, and each chat can carry its own reasoning level and memory setting.</td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/settings-phone.png" alt="Settings" /></td>
     <td><img src="docs/screenshots/memories-phone.png" alt="Memories" /></td>
   </tr>
   <tr>
-    <td><b>Settings.</b> The LM Studio address and token, the model, reasoning, and how much history each message carries.</td>
-    <td><b>Memories.</b> What the model has learned about you, in a file you can read, edit and prune.</td>
+    <td>Settings holds the LM Studio address and token, the model, reasoning, and how much history each message carries.</td>
+    <td>Memories are what the model has learned about you, kept in a file you can read, edit and prune.</td>
   </tr>
 </table>
 
