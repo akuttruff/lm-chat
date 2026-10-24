@@ -90,7 +90,7 @@ npm run screenshots                                # another; needs Google Chrom
 
 ```
 your phone or desktop browser
-        │  http, over your own network
+        │  https, through Tailscale Serve
         ▼
 LM Chat ── one Node process on one computer ── .data/ (SQLite)
         │
@@ -98,8 +98,9 @@ LM Chat ── one Node process on one computer ── .data/ (SQLite)
         └──▶ a speech server, optional             (read aloud)
 ```
 
-LM Chat is one Node process that serves the app to any browser on your
-network and keeps your conversations in SQLite on that computer. Your phone
+LM Chat is one Node process that serves the app and keeps your
+conversations in SQLite on that computer. It listens only on 127.0.0.1;
+Tailscale Serve is what puts it on your phone. Your phone
 talks only to LM Chat. LM Chat talks to the model server, streams the reply
 back and saves it, which is why a reply keeps going when the phone locks
 and why the server's token never reaches the browser. MCP tools are set up
@@ -114,7 +115,7 @@ among them.
 | Calling tools from a chat | MCP servers registered with the model server, and its authentication on |
 | Memories | The [lm-memory-mcp](https://github.com/akuttruff/lm-memory-mcp) server registered the same way; the model uses it to remember and forget |
 | Reading replies aloud | A local speech server (below) |
-| Opening it on your phone | The phone on the same Wi-Fi, or [Tailscale](https://tailscale.com) on both devices (see *Development*) |
+| Opening it on your phone | [Tailscale](https://tailscale.com) on both devices, with Tailscale Serve in front of LM Chat (see *Development*) |
 
 Node 24 is the floor because conversations are stored with `node:sqlite`,
 which arrived in that version. Check with `node --version`.
@@ -166,8 +167,9 @@ reports that no voice is running.
    npm run dev
    ```
 
-3. Open the **Network** URL that Vite prints (for example
-   `http://192.168.1.50:8000/`) on your phone. Use `http://`, not `https://`.
+3. Open `http://127.0.0.1:8000/` on the same computer. To open it on your
+   phone, put it behind Tailscale Serve (see *Development*) and open the
+   `https://` address that prints.
 4. Tap the gear, enter the model server's address if it is not the
    default, paste its token, tap **Test connection**, and pick a model.
 
@@ -178,8 +180,22 @@ reports that no voice is running.
 ## How it works
 
 ```
-phone ──http──▶ LM Chat server (your computer) ──▶ LM Studio on 127.0.0.1:1234
+Phone browser                     Your computer (one Node process, :8010)        LM Studio :1234
+┌──────────────┐  HTTPS via      ┌───────────────────────────────────────┐        ┌───────────┐
+│ service      │  tailscale      │ Vite preview serving the built page   │        │ the model │
+│ worker:      │  serve          │ + the API as a Vite plugin            │──────▶ │ + MCP     │
+│ cached shell │ ─────────────▶  │   api.ts → engine.ts → store.ts       │ stream │ tools     │
+│ React app    │ ◀── SSE ──────  │              bus.ts (pub/sub)         │◀────── │           │
+└──────────────┘ /api/events     │   SQLite + files in .data/            │        └───────────┘
+                                 └───────────────────────────────────────┘
 ```
+
+The page is a cached shell; everything else is the server's. The browser
+sends what you asked for and draws what the server reports over one
+server-sent event stream, `/api/events`: the whole chat list when it
+connects, then only what changes (a reply in progress, a rename, a status).
+Two devices on the same chat always agree, because neither keeps its own
+copy.
 
 The phone never talks to LM Studio directly. The LM Chat server sends each
 message to LM Studio, streams the reply back, and saves it. So:
@@ -217,7 +233,7 @@ notice if the server cannot be reached.
 ## Development
 
 ```bash
-npm run dev          # dev server on :8000, reachable on your network
+npm run dev          # dev server on 127.0.0.1:8000
 npm test             # run the test suite
 npm run coverage     # coverage report
 npm run check        # typecheck, lint and test
@@ -237,9 +253,10 @@ anywhere, put :8010 behind Tailscale Serve:
 
 ## Limitations
 
-- **No authentication on the app itself.** Anyone who can reach the port
-  can read your conversations and change settings. Only run it on a network
-  you trust.
+- **No authentication on the app itself.** It listens only on 127.0.0.1,
+  so what reaches it is Tailscale Serve, and through it, the devices on
+  your tailnet. Anyone on your tailnet can read your conversations and
+  change settings.
 - **Single user.** There are no accounts, and two devices editing the same
   conversation at once can overwrite each other.
 
