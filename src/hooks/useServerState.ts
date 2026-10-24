@@ -262,7 +262,11 @@ export default function useServerState(): ServerState {
         if (!r.ok) return
         const full = await r.json() as Conversation
         const s = storeRef.current
-        commitStore({ ...s, items: s.items.map((c) => (c.id === id ? { ...full, messagesOmitted: false } : c)) })
+        // Only the messages come from the fetch: a rename, star or move that
+        // arrived while it was in flight is newer than the copy it answered.
+        const withMessages = (c: Conversation): Conversation =>
+          ({ ...c, messages: full.messages, messageCount: full.messages.length, messagesOmitted: false })
+        commitStore({ ...s, items: s.items.map((c) => (c.id === id ? withMessages(c) : c)) })
       })
       .catch(() => { /* opening it again, or the next reconnect, will retry */ })
       .finally(() => loading.current.delete(id))

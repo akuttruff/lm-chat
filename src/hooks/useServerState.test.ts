@@ -135,6 +135,30 @@ describe('useServerState', () => {
     expect(calls.filter((c) => c.url === '/api/chats/c2')).toHaveLength(1)
   })
 
+  it('keeps a rename that arrives while an outlined chat is loading', async () => {
+    const full = conv({ id: 'c2', name: 'Old name', messages: [{ id: 'm1', role: 'user', text: 'from the server' }], messageCount: 1 })
+    let answer: () => void = () => {}
+    stubApi()
+    const routed = vi.mocked(fetch)
+    vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => (url === '/api/chats/c2'
+      ? new Promise((resolve) => { answer = () => resolve({ ok: true, json: () => Promise.resolve(full) }) })
+      : routed(url, init))))
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    const outline = conv({ id: 'c2', name: 'Old name', messages: [], messageCount: 1, messagesOmitted: true })
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv(), outline], 'c2') })
+    })
+    const { messages: _m, ...meta } = { ...outline, name: 'New name', starred: true }
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'patch', payload: { conversationId: 'c2', meta } })
+    })
+    act(() => answer())
+    await waitFor(() => expect(result.current.loadingActive).toBe(false))
+    expect(result.current.active).toMatchObject({ name: 'New name', starred: true })
+    expect(result.current.active!.messages.map((m) => m.text)).toEqual(['from the server'])
+  })
+
   it('switches threads at once, before the server answers', async () => {
     const calls = stubApi()
     const { result } = renderHook(() => useServerState())
