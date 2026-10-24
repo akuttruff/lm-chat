@@ -26,6 +26,7 @@ const DESKTOP = { width: 1280, height: 840, scale: 2, mobile: false }
  *  sel <css>             click the first element matching the selector
  *  aria <label>          click the element with that aria-label
  *  row <text>            click the chat whose name in the list contains it
+ *  every <css>           click every element matching the selector
  *  wait <ms>             pause (animations, lazy chunks)
  *  scroll <css> <px>     scroll an element, or the window when the selector matches nothing
  */
@@ -46,6 +47,9 @@ const scenarios = [
   { name: 'chats-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 900]] },
   { name: 'settings-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 800], ['click', 'Settings'], ['wait', 1200]] },
   { name: 'memories-phone', view: PHONE, steps: [...lisbon, ['aria', 'Chats'], ['wait', 800], ['click', 'Settings'], ['wait', 1000], ['click', 'Memories'], ['wait', 1000]] },
+  // The memory tools at work (for lm-memory-mcp's README), each card opened to show what was sent and what came back.
+  { name: 'memory-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['row', 'Dinner party for six'], ['wait', 1500], ['every', '.tool-head'], ['wait', 600], ['scroll', '.thread', 0]] },
+  { name: 'memory-desktop', view: DESKTOP, steps: [['wait', 1500], ['row', 'Dinner party for six'], ['wait', 1500], ['every', '.tool-head'], ['wait', 600], ['scroll', '.thread', 0]] },
   { name: 'desktop', view: DESKTOP, steps: [['wait', 1500], ['row', 'Lisbon in November'], ['wait', 1500], ['scroll', '.thread', 0]] },
   // Walkthroughs, recorded (see recording.mjs): the phone's and the desktop's.
   // A question typed into the Lisbon chat and answered by the model, for real: the recording waits for the reply, and the encoder closes up the pauses.
@@ -106,6 +110,7 @@ async function run(scenario) {
       else if (op === 'send') { result = await evaluate(`(() => { const el = document.querySelector('[aria-label="Send"]'); if (!el) return 'missing Send'; el.click(); return 'sent' })()`); fast.from = Date.now() / 1000 }
       else if (op === 'until') { result = await waitUntil(evaluate, a, b); if (result === 'timeout') throw new Error(`${scenario.name}: gave up waiting for ${a}`); if (fast.from && !fast.to) fast.to = Date.now() / 1000 }
       else if (op === 'sel') result = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(a)}); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
+      else if (op === 'every') result = await evaluate(`(() => { const els = [...document.querySelectorAll(${JSON.stringify(a)})]; if (!els.length) return 'missing ' + ${JSON.stringify(a)}; els.forEach((el) => el.click()); return 'clicked ' + els.length })()`)
       else if (op === 'row') result = await evaluate(clickText(a, '.conv-name'))
       else if (op === 'aria') result = await evaluate(`(() => { const el = document.querySelector('[aria-label=' + ${JSON.stringify(JSON.stringify(a))} + ']'); if (!el) return 'missing ' + ${JSON.stringify(a)}; el.click(); return 'clicked' })()`)
       else if (op === 'wait') { await sleep(a); continue }
