@@ -27,6 +27,9 @@ let realFetch: typeof fetch
 beforeEach(async () => {
   vi.unstubAllGlobals()
   realFetch = globalThis.fetch.bind(globalThis)
+  // Picking a model now loads it (model-load.ts): a test that sets one must
+  // never reach the LM Studio on this machine. Tests that want an answer stub their own.
+  vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('no LM Studio in tests'))))
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-api-'))
   api = createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null, resume: false })
   server = http.createServer((req, res) => {
@@ -794,6 +797,69 @@ describe('models', () => {
     const body = await (await get('/api/models')).json() as { ok: boolean; error: string }
     expect(body.ok).toBe(false)
     expect(body.error).toMatch(/Invalid token/)
+  })
+})
+
+describe('loading the model when it is picked', () => {
+  /** LM Studio with nothing loaded; every load succeeds. */
+  function lmStudio() {
+    const f = vi.fn((url: string, _init?: RequestInit) => Promise.resolve(new Response(
+      JSON.stringify(url.endsWith('/load') ? { status: 'loaded' } : { models: [{ type: 'llm', key: 'gemma', loaded_instances: [] }] }),
+      { status: 200 },
+    )))
+    vi.stubGlobal('fetch', f)
+    return { loads: () => f.mock.calls.filter(([url]) => url.endsWith('/api/v1/models/load')) }
+  }
+
+  /** Every frame the events stream sends, as it arrives. */
+  async function listen(): Promise<{ frames: { type: string; payload: unknown }[]; close: () => Promise<void> }> {
+    const res = await realFetch(`${base}/api/events`)
+    const reader = res.body!.getReader()
+    const frames: { type: string; payload: unknown }[] = []
+    let open = true
+    void (async () => {
+      const dec = new TextDecoder()
+      while (open) {
+        const { value, done } = await reader.read().catch(() => ({ value: undefined, done: true }))
+        if (done) break
+        for (const line of dec.decode(value).split('\n')) if (line.startsWith('data: ')) frames.push(JSON.parse(line.slice(6)))
+      }
+    })()
+    return { frames, close: async () => { open = false; await reader.cancel() } }
+  }
+
+  it('starts loading a newly picked model and tells every client how it goes', async () => {
+    const { loads } = lmStudio()
+    const events = await listen()
+    try {
+      await send('/api/config', 'PUT', { model: 'gemma' })
+      await waitFor(() => expect(events.frames.filter((f) => f.type === 'model').map((f) => (f.payload as { state: string }).state))
+        .toEqual(['loading', 'ready']))
+      expect(loads()).toHaveLength(1)
+      expect(JSON.parse(String(loads()[0]![1]!.body))).toEqual({ model: 'gemma' })
+    } finally { await events.close() }
+    // A client connecting afterwards learns the outcome with its first frames.
+    const later = await listen()
+    try {
+      await waitFor(() => expect(later.frames.find((f) => f.type === 'model')?.payload).toMatchObject({ model: 'gemma', state: 'ready' }))
+    } finally { await later.close() }
+  })
+
+  it('loads nothing when the model stays the same, or only the background model changes', async () => {
+    const { loads } = lmStudio()
+    api.store.setConfig({ model: 'gemma' })
+    await send('/api/config', 'PUT', { model: 'gemma', systemPrompt: 'hi' })
+    await send('/api/config', 'PUT', { backgroundModel: 'tiny' })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(loads()).toHaveLength(0)
+  })
+
+  it('loads the current model again on request, for Retry', async () => {
+    const { loads } = lmStudio()
+    expect((await send('/api/model/load', 'POST')).status).toBe(400)
+    api.store.setConfig({ model: 'gemma' })
+    expect((await send('/api/model/load', 'POST')).status).toBe(202)
+    await waitFor(() => expect(loads()).toHaveLength(1))
   })
 })
 

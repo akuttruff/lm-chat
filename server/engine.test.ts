@@ -12,7 +12,7 @@ import { buildHistoryPrompt, planCompaction, planFullCompaction, summarizerInput
 import { Store } from './store.ts'
 import { Memories } from './memory.ts'
 import { DatabaseSync } from 'node:sqlite'
-import type { ImageUpload, Message, ServerConfig } from '../src/types.ts'
+import type { ImageUpload, Message, ModelLoadState, ServerConfig } from '../src/types.ts'
 
 let dir: string
 let store: Store
@@ -661,6 +661,49 @@ describe('retrying the last message', () => {
     await expect(engine.retryTurn(convId)).rejects.toThrow(/already in flight/)
     release?.()
     await running
+  })
+})
+
+describe('a model still loading', () => {
+  /** An engine whose `qwen` is mid-load until `finish` is called. */
+  function loading() {
+    let finish: () => void = () => {}
+    const load = new Promise<ModelLoadState>((r) => { finish = () => r({ model: 'qwen', state: 'ready', startedAt: 0, error: null }) })
+    const statuses: string[] = []
+    vi.spyOn(bus, 'send').mockImplementation((e) => { if (e.type === 'status') statuses.push(e.payload.text) })
+    const waiting = new Engine(store, bus, () => Promise.resolve(null), newEngineState(), undefined, {
+      inFlight: (model) => (model === 'qwen' ? load : undefined),
+    })
+    return { waiting, statuses, finish }
+  }
+
+  it('holds the turn until the load is done, saying so, so LM Studio does not load a second copy', async () => {
+    const { waiting, statuses, finish } = loading()
+    const f = streams([evt({ type: 'message.delta', content: 'Hi.' }), evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', f)
+    const turn = waiting.runTurn(convId, 'hello')
+    await vi.waitFor(() => expect(statuses).toContain('loading qwen...'))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(f).not.toHaveBeenCalled()
+    finish()
+    await turn
+    expect(f).toHaveBeenCalledTimes(1)
+    expect(statuses.indexOf('thinking...')).toBeGreaterThan(statuses.indexOf('loading qwen...'))
+    expect(messages().at(-1)!.text).toBe('Hi.')
+  })
+
+  it('can be stopped while it waits', async () => {
+    const { waiting } = loading()
+    const f = streams([])
+    vi.stubGlobal('fetch', f)
+    const turn = waiting.runTurn(convId, 'hello')
+    await vi.waitFor(() => expect(waiting.isRunning(convId)).toBe(true))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(waiting.stop(convId)).toBe(true)
+    await turn
+    expect(f).not.toHaveBeenCalled()
+    expect(messages().at(-1)).toMatchObject({ role: 'error', text: 'Stopped.' })
+    expect(waiting.isRunning(convId)).toBe(false)
   })
 })
 

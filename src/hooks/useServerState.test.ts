@@ -255,6 +255,28 @@ describe('useServerState', () => {
     expect(result.current.status.text).toBe('writing...')
   })
 
+  it('says the picked model is loading while the open chat has nothing in flight, and asks again on Retry', async () => {
+    const calls = stubApi()
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv()], 'c1') })
+      FakeEventSource.latest().emit({ type: 'model', payload: { model: 'gemma', state: 'loading', startedAt: 77, error: null } })
+    })
+    expect(result.current.modelLoad).toMatchObject({ model: 'gemma', state: 'loading' })
+    expect(result.current.status).toEqual({ state: 'pending', text: 'loading gemma...' })
+    expect(result.current.startedAt).toBe(77)
+    // Nothing is being written, so the composer stays free: a message sent now waits on the server.
+    expect(result.current.busy).toBe(false)
+
+    act(() => {
+      FakeEventSource.latest().emit({ type: 'model', payload: { model: 'gemma', state: 'failed', startedAt: 77, error: 'no room' } })
+    })
+    expect(result.current.status.text).toBe('connected')
+    await act(() => result.current.loadModel())
+    expect(calls.some((c) => c.url === '/api/model/load' && c.init?.method === 'POST')).toBe(true)
+  })
+
   it('keeps each chat\'s status separate, so switching never locks the next one', async () => {
     stubApi()
     const { result } = renderHook(() => useServerState())

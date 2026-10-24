@@ -3,7 +3,7 @@ import type { Mock } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import SettingsSheet from './SettingsSheet.tsx'
-import type { ModelConfig, PublicConfig } from '../types.ts'
+import type { ModelConfig, ModelLoadState, PublicConfig } from '../types.ts'
 
 const base: PublicConfig = {
   lmStudioUrl: 'http://127.0.0.1:1234',
@@ -30,6 +30,8 @@ interface Overrides {
   modelConfig?: ModelConfig | null
   onSave?: Mock
   onClose?: Mock
+  modelLoad?: ModelLoadState | null
+  onLoadModel?: Mock
 }
 
 function setup(overrides: Overrides = {}) {
@@ -233,6 +235,59 @@ describe('layout', () => {
     setup()
     const scroll = document.querySelector('.drawer-scroll')!
     expect(scroll.contains(screen.getByLabelText(/system prompt/i))).toBe(true)
+  })
+})
+
+describe('loading the picked model', () => {
+  const listing = () => vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ ok: true, models: ['gemma', 'qwen'], loaded: ['qwen'], error: null }),
+  })))
+
+  it('saves a picked model at once, so the server can start loading it', async () => {
+    listing()
+    const user = userEvent.setup()
+    const { onSave } = setup()
+    const select = await screen.findByLabelText('Model') as HTMLSelectElement
+    await waitFor(() => expect([...select.options].map((o) => o.value)).toContain('gemma'))
+    await user.selectOptions(select, 'gemma')
+    expect(onSave).toHaveBeenCalledWith({ model: 'gemma' })
+  })
+
+  it('shows the load under the picker as it goes, ticking', async () => {
+    listing()
+    vi.spyOn(Date, 'now').mockReturnValue(10_000)
+    setup({ config: { model: 'gemma' }, modelLoad: { model: 'gemma', state: 'loading', startedAt: 4_000, error: null } })
+    expect(await screen.findByText('Loading gemma… 6s')).toBeInTheDocument()
+    vi.mocked(Date.now).mockRestore()
+  })
+
+  it('says when it has loaded, and marks it loaded in the list', async () => {
+    listing()
+    setup({ config: { model: 'gemma' }, modelLoad: { model: 'gemma', state: 'ready', startedAt: 1, error: null } })
+    expect(await screen.findByText('Loaded')).toBeInTheDocument()
+    const select = await screen.findByLabelText('Model') as HTMLSelectElement
+    await waitFor(() => expect([...select.options].map((o) => o.textContent)).toContain('gemma (loaded)'))
+  })
+
+  it("says why it couldn't load, with a Retry", async () => {
+    listing()
+    const user = userEvent.setup()
+    const { onLoadModel } = setup({
+      config: { model: 'gemma' },
+      modelLoad: { model: 'gemma', state: 'failed', startedAt: 1, error: 'Model gemma not found in downloaded models' },
+      onLoadModel: vi.fn(),
+    })
+    expect(await screen.findByText('Model gemma not found in downloaded models')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(onLoadModel).toHaveBeenCalledTimes(1)
+  })
+
+  it("says nothing about a model that isn't the one picked", async () => {
+    listing()
+    setup({ config: { model: 'qwen' }, modelLoad: { model: 'gemma', state: 'loading', startedAt: 1, error: null } })
+    await screen.findByLabelText('Model')
+    expect(screen.queryByText(/Loading gemma/)).not.toBeInTheDocument()
   })
 })
 
