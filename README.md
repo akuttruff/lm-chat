@@ -15,7 +15,7 @@ On a desktop the chat list sits in a sidebar beside the thread.
 
 <img src="docs/screenshots/demo-desktop.gif" alt="LM Chat in use on a desktop" />
 
-<p>On a desktop, a thread runs with its tool cards, then another chat opens from the list.</p>
+<p>On a desktop, a question is typed into a chat and the local model answers it, streaming as it writes.</p>
 
 <p align="center"><img src="docs/screenshots/demo-phone.gif" width="300" alt="LM Chat in use on a phone" /></p>
 

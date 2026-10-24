@@ -81,21 +81,24 @@ export async function waitUntil(evaluate, expression, timeoutMs = 120_000, pollM
  * A stretch where nothing changed for longer than `maxGap` seconds is
  * shortened to it (a model's pause before its first word, a page settling),
  * so the recording keeps its motion but not its waiting; `fast` names a
- * window (in the frames' own timestamps) to run `factor` times faster, for
- * a wait that repaints a counter; `speed` then plays the whole thing that
- * much faster.
+ * window, or a list of them (in the frames' own timestamps, `{ from, to,
+ * factor }`), to run `factor` times faster, for a wait that repaints a
+ * counter or a long answer streaming in; `speed` then plays the whole
+ * thing that much faster.
  */
 export function encodeRecording(frames, { out, name, wide = false, fps = 24, gifFps = 20, tail = 1.2, maxGap = 0.9, speed = 1, fast = null }) {
   if (frames.length < 2) throw new Error(`${name}: only ${frames.length} frame(s) were recorded`)
   const dir = mkdtempSync(join(tmpdir(), `${name}-frames-`))
   try {
-    // A timeline with the long gaps closed up, and a window (a wait for the model) run that much faster.
+    // A timeline with the long gaps closed up, and the windows (a wait for the model) run that much faster.
+    const windows = fast ? [fast].flat() : []
     const timed = []
     let t = 0
     for (let i = 0; i < frames.length; i++) {
       if (i > 0) {
         let dt = Math.min(frames[i].t - frames[i - 1].t, maxGap)
-        if (fast && frames[i].t >= fast.from && frames[i].t <= fast.to) dt /= fast.factor
+        const w = windows.find((x) => frames[i].t >= x.from && frames[i].t <= x.to)
+        if (w) dt /= w.factor
         t += dt
       }
       timed.push({ t: t / speed, jpeg: frames[i].jpeg })
