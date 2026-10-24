@@ -164,6 +164,24 @@ A light rain jacket, one warm layer for evenings, and shoes with grip: the calç
 ], { starred: true, folderId: travel.id })
 store.patch(lisbonId, { memory: true })
 
+// A tarot draw, laid out as its spread: draw_cards's real output (tarot-mcp, seed 11), with a reading in its voice.
+const TAROT_Q = 'What do I need to know as I start this new job?'
+chat('A new job', [
+  user('u1', `Pull three cards for me. ${TAROT_Q}`),
+  {
+    id: 't1', role: 'tool', name: 'draw_cards', plugin: 'mcp/tarot',
+    args: { spread: 'three', question: TAROT_Q },
+    output: fs.readFileSync(path.resolve('scripts/demo-tarot-three.json'), 'utf8'),
+  },
+  reply('a1', `**Three of Wands** in the past: you have already been looking out past the shore, choosing this before it arrived. Whatever brought you here was a decision, and it was yours.
+
+**The Emperor** now: structure. A new place comes with its own rules and rhythms, and this card invites you to find the ones that hold you up and to set a few of your own. You get to decide how much of yourself to bring on day one.
+
+**The Star** in what is opening up: room to breathe again. It is not a promise about how the job goes; it points at what wants tending as you settle in: rest, hope, and the parts of you that were stretched getting there.
+
+What would feeling steady in your first week look like to you?`, 16.8, 3900, 260, 0),
+], { folderId: null })
+
 store.setActive(lisbonId)
 
 console.log(new Memories(path.join(dir, 'memory.sqlite')).list().length, 'memories')

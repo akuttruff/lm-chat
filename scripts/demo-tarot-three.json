@@ -1,0 +1,89 @@
+{
+  "spread": {
+    "id": "three",
+    "name": "Past, present, future",
+    "description": "Three cards in a row: where this came from, where it stands, where it is heading."
+  },
+  "guidance": "Read these cards trauma-informed and expansive. Name what a card may hold without judgement, assume the person's responses have made sense, and lead with safety, choice and agency: offer what could be true and what they might do with it, never a diagnosis or a verdict on them. Do not predict the future. A position about what is ahead describes what is opening up, what wants attention or what the person could move toward as things stand; it never says what will happen. A reversal is a shading of the card, not its opposite and not a bad omen. Stay with the question asked and the person's own words.",
+  "question": "What do I need to know as I start this new job?",
+  "drawnAt": "2026-10-24T03:09:00.017Z",
+  "seed": 11,
+  "cards": [
+    {
+      "position": {
+        "index": 1,
+        "name": "Past",
+        "meaning": "What led here."
+      },
+      "card": {
+        "id": "wands-03",
+        "name": "Three of Wands",
+        "arcana": "minor",
+        "suit": "wands",
+        "number": 3
+      },
+      "reversed": false,
+      "keywords": [
+        "expansion",
+        "progress",
+        "looking ahead",
+        "trade"
+      ],
+      "meaning": "The plan is under way and the first returns are coming in. Keep looking outward; there is more to come.",
+      "image": "tarot://card/wands-03"
+    },
+    {
+      "position": {
+        "index": 2,
+        "name": "Present",
+        "meaning": "Where things stand now."
+      },
+      "card": {
+        "id": "major-04",
+        "name": "The Emperor",
+        "arcana": "major",
+        "suit": null,
+        "number": 4
+      },
+      "reversed": false,
+      "keywords": [
+        "structure",
+        "authority",
+        "stability",
+        "discipline"
+      ],
+      "meaning": "Order, boundaries and a steady hand. Build the frame that lets the rest hold; take charge where charge is needed.",
+      "image": "tarot://card/major-04"
+    },
+    {
+      "position": {
+        "index": 3,
+        "name": "Future",
+        "meaning": "What is opening up, as things stand: what wants attention next, not what will happen."
+      },
+      "card": {
+        "id": "major-17",
+        "name": "The Star",
+        "arcana": "major",
+        "suit": null,
+        "number": 17
+      },
+      "reversed": false,
+      "keywords": [
+        "hope",
+        "renewal",
+        "faith",
+        "serenity"
+      ],
+      "meaning": "Calm after the storm and a reason to believe. Be open and unguarded; this is a time of healing and quiet promise.",
+      "image": "tarot://card/major-17"
+    }
+  ],
+  "summary": {
+    "majors": 2,
+    "reversed": 0,
+    "suits": {
+      "wands": 1
+    }
+  }
+}

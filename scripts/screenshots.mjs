@@ -50,6 +50,9 @@ const scenarios = [
   // The memory tools at work (for lm-memory-mcp's README), each card opened to show what was sent and what came back.
   { name: 'memory-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['row', 'Dinner party for six'], ['wait', 1500], ['every', '.tool-head'], ['wait', 600], ['scroll', '.thread', 0]] },
   { name: 'memory-desktop', view: DESKTOP, steps: [['wait', 1500], ['row', 'Dinner party for six'], ['wait', 1500], ['every', '.tool-head'], ['wait', 600], ['scroll', '.thread', 0]] },
+  // A draw_cards result laid out as its spread (for tarot-mcp's README).
+  { name: 'tarot-phone', view: PHONE, steps: [['wait', 1500], ['aria', 'Chats'], ['wait', 800], ['row', 'A new job'], ['wait', 2000], ['scroll', '.thread', 0]] },
+  { name: 'tarot-desktop', view: DESKTOP, steps: [['wait', 1500], ['row', 'A new job'], ['wait', 2000], ['scroll', '.thread', 0]] },
   { name: 'desktop', view: DESKTOP, steps: [['wait', 1500], ['row', 'Lisbon in November'], ['wait', 1500], ['scroll', '.thread', 0]] },
   // Walkthroughs, recorded (see recording.mjs): the phone's and the desktop's.
   // A question typed into the Lisbon chat and answered by the model, for real: the recording waits for the reply, and the encoder closes up the pauses.
