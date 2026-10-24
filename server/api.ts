@@ -162,23 +162,29 @@ const UNDO_MAX = 300
 /** The largest body a request may carry: a full set of images as base64, plus room for the words. */
 const MAX_BODY_BYTES = Math.ceil(MAX_IMAGES_PER_MESSAGE * MAX_IMAGE_BYTES * 4 / 3) + 1024 * 1024
 
-function readBody(req: IncomingMessage): Promise<unknown> {
+export function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    let body = ''
+    // Raw bytes, decoded once at the end: a character can be split across
+    // two chunks, and decoding each chunk alone would garble it.
+    let chunks: Buffer[] = []
+    let bytes = 0
     let tooLarge = false
     req.on('data', (c: Buffer | string) => {
       if (tooLarge) return
-      body += c
+      const chunk = typeof c === 'string' ? Buffer.from(c) : c
+      chunks.push(chunk)
+      bytes += chunk.byteLength
       // Guard against a runaway client filling memory. The rest is drained,
       // not cut off: destroying the socket would lose the 400 that explains.
-      if (body.length > MAX_BODY_BYTES) {
+      if (bytes > MAX_BODY_BYTES) {
         tooLarge = true
-        body = ''
+        chunks = []
         reject(new Error(`body too large (over ${Math.round(MAX_BODY_BYTES / 1024 / 1024)} MB)`))
       }
     })
     req.on('end', () => {
       if (tooLarge) return
+      const body = Buffer.concat(chunks).toString('utf8')
       if (!body) return resolve({})
       try { resolve(JSON.parse(body)) } catch (err) { reject(err as Error) }
     })
@@ -186,11 +192,20 @@ function readBody(req: IncomingMessage): Promise<unknown> {
   })
 }
 
-/** What must outlive a dev-server restart: the data, its listeners, and what's in flight. */
+/**
+ * What must outlive a dev-server restart: the data, its listeners, and
+ * what's in flight -- tracks being rendered, the chats kept for Undo, and
+ * the tool catalog already fetched.
+ */
 export interface ApiState {
   store: Store
   bus: Bus
   engine: EngineState
+  /** Replies rendered as one audio file each, beside the database. */
+  tracks: Tracks
+  /** Recently deleted chats, whole, so Undo can restore one the client only held in outline. */
+  deleted: Map<string, { conv: Conversation; at: number }>
+  toolCatalog: ToolCatalogCache
 }
 
 export function createApiState(options: ApiOptions = {}): ApiState {
@@ -198,16 +213,18 @@ export function createApiState(options: ApiOptions = {}): ApiState {
   // Only on a fresh process: a dev-server reload keeps this state, and its turns.
   const cut = store.settleInterrupted()
   if (cut) console.log(`[chats] ${cut} ${cut === 1 ? 'reply was' : 'replies were'} cut off by the last restart`)
-  return { store, bus: new Bus(), engine: newEngineState() }
+  return {
+    store, bus: new Bus(), engine: newEngineState(),
+    tracks: new Tracks(path.join(path.resolve(options.dir ?? '.data'), 'speech'), { encoder: options.trackEncoder }),
+    deleted: new Map(),
+    toolCatalog: options.toolCatalog ?? new ToolCatalogCache(),
+  }
 }
 
 export function createApi(options: ApiOptions = {}, state: ApiState = createApiState(options)) {
-  const { store, bus } = state
+  const { store, bus, tracks, deleted, toolCatalog } = state
   const memories = new Memories(options.memoryDb)
-  /** Replies rendered as one audio file each, beside the database. */
-  const tracks = new Tracks(path.join(path.resolve(options.dir ?? '.data'), 'speech'), { encoder: options.trackEncoder })
   const engine = new Engine(store, bus, undefined, state.engine, memories)
-  const toolCatalog = options.toolCatalog ?? new ToolCatalogCache()
   /** `GET /api/health`: the process, its data file, the model server and the memory file. */
   const health = new HealthCheck({
     app: 'lm-chat',
@@ -229,13 +246,21 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
   // would say "on its way" for good: pick those up once the server is up.
   if (options.resume !== false) setTimeout(() => engine.readingsAll(), RESUME_DELAY_MS).unref()
 
-  /** Recently deleted chats, whole, so Undo can restore one the client only held in outline. */
-  const deleted = new Map<string, { conv: Conversation; at: number }>()
   const remember = (conv: Conversation): void => {
     const now = Date.now()
     for (const [k, v] of deleted) if (now - v.at > UNDO_MS) deleted.delete(k)
     deleted.set(conv.id, { conv, at: now })
     while (deleted.size > UNDO_MAX) deleted.delete(deleted.keys().next().value!)
+  }
+  /** Delete a chat, keeping it for Undo, and tell every client. */
+  const deleteChat = (id: string): void => {
+    const before = new Set(store.getConversations().items.map((c) => c.id))
+    remember(structuredClone(store.get(id)!))
+    store.remove(id)
+    const after = store.getConversations()
+    // Deleting the last thread leaves a fresh blank one in its place.
+    const replacement = after.items.find((c) => !before.has(c.id))
+    bus.send({ type: 'removed', payload: { conversationId: id, activeId: after.activeId, replacement } })
   }
 
   const middleware: Middleware = (req, res, next) => {
@@ -251,7 +276,10 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     if (url === '/api/busy' && method === 'GET') {
       return json(res, 200, { replies: engine.activeStatuses().length, background: engine.backgroundJobs() })
     }
-    if (url === '/api/health' && method === 'GET') { void health.report().then((h) => json(res, 200, h)); return undefined }
+    if (url === '/api/health' && method === 'GET') {
+      void health.report().then((h) => json(res, 200, h)).catch((err: Error) => json(res, 500, { error: err.message }))
+      return undefined
+    }
 
     // --- live updates -------------------------------------------------
     if (url === '/api/events' && method === 'GET') {
@@ -521,15 +549,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         }
         const ids = [...new Set(raw as string[])].filter((id) => store.get(id))
         if (ids.length > UNDO_MAX) return json(res, 400, { error: `at most ${UNDO_MAX} chats at once` })
-        for (const id of ids) {
-          const before = new Set(store.getConversations().items.map((c) => c.id))
-          remember(structuredClone(store.get(id)!))
-          store.remove(id)
-          const after = store.getConversations()
-          // Deleting the last thread leaves a fresh blank one in its place.
-          const replacement = after.items.find((c) => !before.has(c.id))
-          bus.send({ type: 'removed', payload: { conversationId: id, activeId: after.activeId, replacement } })
-        }
+        for (const id of ids) deleteChat(id)
         return json(res, 200, { ok: true, deleted: ids, activeId: store.getConversations().activeId })
       }).catch((err: Error) => json(res, 400, { error: err.message }))
       return undefined
@@ -595,14 +615,8 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         return undefined
       }
       if (!action && method === 'DELETE') {
-        const before = new Set(store.getConversations().items.map((c) => c.id))
-        remember(structuredClone(store.get(id)!))
-        store.remove(id)
-        const after = store.getConversations()
-        // Deleting the last thread leaves a fresh blank one in its place.
-        const replacement = after.items.find((c) => !before.has(c.id))
-        bus.send({ type: 'removed', payload: { conversationId: id, activeId: after.activeId, replacement } })
-        return json(res, 200, { ok: true, activeId: after.activeId })
+        deleteChat(id)
+        return json(res, 200, { ok: true, activeId: store.getConversations().activeId })
       }
       // The /compact command: summarize everything so far, now. Answers once
       // the summary is in place (it takes the model a few seconds), so the

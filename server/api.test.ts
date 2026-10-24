@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import http from 'node:http'
+import type { IncomingMessage } from 'node:http'
+import { Readable } from 'node:stream'
 import type { Server } from 'node:http'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { createApi } from './api.ts'
+import { createApi, createApiState, readBody } from './api.ts'
+import { HealthCheck } from './health.ts'
 import { ToolCatalogCache } from './tools.ts'
 import { wavOf } from './speech.ts'
 import type { Conversation, ConversationStore, PublicConfig } from '../src/types.ts'
@@ -74,6 +77,53 @@ describe('chat PATCH takes only settable fields', () => {
     const res = await send('/api/chats/' + created.id, 'PATCH', { name: huge })
     expect(res.status).toBe(400)
     expect(((await res.json()) as { error: string }).error).toMatch(/too large/)
+  })
+})
+
+describe('reading a body', () => {
+  it('decodes a character split across two chunks whole', async () => {
+    const bytes = Buffer.from(JSON.stringify({ name: 'caf\u00e9 \u{1F319}' }))
+    const cut = bytes.indexOf(0xf0) + 2 // the middle of the moon's four bytes
+    const req = Readable.from([bytes.subarray(0, cut), bytes.subarray(cut)]) as unknown as IncomingMessage
+    expect(await readBody(req)).toEqual({ name: 'caf\u00e9 \u{1F319}' })
+  })
+})
+
+describe('what a config reload keeps', () => {
+  /** A second API over the same state, as Vite makes when it re-runs the config. */
+  async function serve(own: ReturnType<typeof createApi>): Promise<{ url: string; close: () => Promise<void> }> {
+    const srv = http.createServer((req, res) => own.middleware(req, res, () => { res.statusCode = 404; res.end() }))
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()))
+    return {
+      url: `http://127.0.0.1:${(srv.address() as { port: number }).port}`,
+      close: () => new Promise<void>((r) => srv.close(() => r())),
+    }
+  }
+
+  it('the chats kept for Undo, and the tool catalog already fetched', async () => {
+    const load = vi.fn(async () => ({ fetchedAt: Date.now(), servers: [] }))
+    const options = { dir: path.join(dir, 'reload'), memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null, resume: false, toolCatalog: new ToolCatalogCache(load) }
+    const state = createApiState(options)
+    const first = await serve(createApi(options, state))
+    const second = await serve(createApi(options, state))
+    try {
+      const id = state.store.getConversations().activeId!
+      state.store.setMessages(id, [{ id: 'u1', role: 'user', text: 'keep me' }])
+      expect((await realFetch(`${first.url}/api/chats/${id}`, { method: 'DELETE' })).status).toBe(200)
+      // The client only held it in outline; the reloaded API still has it whole.
+      const restored = await realFetch(`${second.url}/api/chats/restore`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, messages: [], messagesOmitted: true }),
+      })
+      expect(restored.status).toBe(200)
+      expect(state.store.get(id)!.messages[0]!.text).toBe('keep me')
+      await realFetch(`${first.url}/api/tools`)
+      await realFetch(`${second.url}/api/tools`)
+      expect(load).toHaveBeenCalledTimes(1)
+    } finally {
+      await first.close()
+      await second.close()
+    }
   })
 })
 
@@ -803,5 +853,12 @@ describe('health', () => {
     expect(h).toMatchObject({ ok: true, app: 'lm-chat', busy: { replies: 0, background: 0 }, deps: { model: 'ok', memory: 'ok' }, errors: [] })
     expect(h.data).toMatchObject({ file: 'lm-chat.sqlite' })
     expect(typeof h.version).toBe('string')
+  })
+
+  it('answers a 500 when the report itself fails', async () => {
+    vi.spyOn(HealthCheck.prototype, 'report').mockRejectedValueOnce(new Error('boom'))
+    const res = await get('/api/health')
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'boom' })
   })
 })
