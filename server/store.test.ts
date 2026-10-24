@@ -687,6 +687,40 @@ describe('temporary chats', () => {
   })
 })
 
+describe("a temporary chat's images in memory", () => {
+  const tempChatWithImage = () => {
+    const id = store.getConversations().activeId!
+    store.patch(id, { temporary: true })
+    const img = store.saveImage(id, { name: 'a.jpg', mime: 'image/jpeg', bytes: Buffer.from('jpegish') })
+    store.setMessages(id, [{ id: 'u', role: 'user', text: 'look', images: [img] }])
+    return { id, img }
+  }
+
+  it('go when the chat is deleted', () => {
+    const { id, img } = tempChatWithImage()
+    store.remove(id)
+    expect(store.readImage(img.id)).toBeUndefined()
+  })
+
+  it('stay while a temporary branch still shows them', () => {
+    const { id, img } = tempChatWithImage()
+    store.setMessages(id, [...store.get(id)!.messages, { id: 'u2', role: 'user', text: 'more' }])
+    store.branch(id, 'u2')
+    store.remove(id)
+    expect(store.readImage(img.id)).toBeDefined()
+  })
+
+  it('go when the chat falls off the end of the list', () => {
+    const { id, img } = tempChatWithImage()
+    store.patch(id, { updatedAt: 1 }) // the oldest, so the first to be dropped
+    const other = store.create()
+    store.setMessages(other.id, [{ id: 'q', role: 'user', text: 'q' }])
+    for (let i = 0; i < 60; i++) store.branch(other.id, 'q')
+    expect(store.get(id)).toBeUndefined()
+    expect(store.readImage(img.id)).toBeUndefined()
+  })
+})
+
 describe('branching', () => {
   it('starts a new chat from the middle of another, carrying its settings, and leaves the original alone', () => {
     const src = store.getConversations().activeId!
@@ -715,6 +749,25 @@ describe('branching', () => {
     store.patch(src, { summary: { text: 'the gist', through: 'a2' } })
     expect(store.branch(src, 'u3').summary).toEqual({ text: 'the gist', through: 'a2' })
     expect(store.branch(src, 'u2').summary).toBeNull()
+  })
+
+  it("leaves the source's image files alone when a branch that shares them turns temporary", () => {
+    const src = store.getConversations().activeId!
+    const bytes = Buffer.from('pngish')
+    const img = store.saveImage(src, { name: 'a.png', mime: 'image/png', bytes })
+    store.setMessages(src, [
+      { id: 'u1', role: 'user', text: 'look', images: [img] }, { id: 'a1', role: 'assistant', text: 'a cat' },
+      { id: 'u2', role: 'user', text: 'again' },
+    ])
+    const branch = store.branch(src, 'u2')
+    const file = path.join(dir, 'images', `${img.id}.png`)
+    store.patch(branch.id, { temporary: true })
+    expect(fs.existsSync(file)).toBe(true)
+    expect(store.readImage(img.id)).toEqual({ mime: 'image/png', bytes })
+    // And back off again: still there, still served.
+    store.patch(branch.id, { temporary: false })
+    expect(fs.existsSync(file)).toBe(true)
+    expect(new Store({ dir }).readImage(img.id)).toEqual({ mime: 'image/png', bytes })
   })
 
   it('refuses a message that is not yours, or not there', () => {

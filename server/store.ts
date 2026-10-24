@@ -858,7 +858,21 @@ export class Store {
       this.stmts.deleteConversation.run(id)
       this.savedCounts.delete(id)
     }
-    return items.filter((c) => !drop.has(c.id))
+    const kept = items.filter((c) => !drop.has(c.id))
+    this.dropPendingImages(drop, kept)
+    return kept
+  }
+
+  /**
+   * Forget the in-memory image bytes of temporary chats that are gone, so
+   * they don't outlive the chat in this process. An image a remaining chat
+   * still shows (a temporary branch of it, say) is kept for that chat.
+   */
+  private dropPendingImages(gone: Set<string>, remaining: Conversation[]): void {
+    const inUse = new Set(remaining.flatMap((c) => imagesOf(c).map((img) => img.id)))
+    for (const [imageId, pending] of this.pendingImages) {
+      if (gone.has(pending.conversationId) && !inUse.has(imageId)) this.pendingImages.delete(imageId)
+    }
   }
 
   /**
@@ -973,7 +987,13 @@ export class Store {
       this.stmts.deleteMessagesFor.run(id)
       this.stmts.scrubConversationName.run(id)
       this.savedCounts.set(id, 0)
+      // A branch shares its source's image files, so one that a kept chat
+      // still shows stays on disk: taking it would break that chat's image.
+      const keptElsewhere = new Set(this.conversations.items
+        .filter((c) => c.id !== id && !c.temporary)
+        .flatMap((c) => imagesOf(c).map((img) => img.id)))
       for (const img of imagesOf(conv)) {
+        if (keptElsewhere.has(img.id)) continue
         const file = this.imageFile(img.id)
         if (!file) continue
         this.pendingImages.set(img.id, { conversationId: id, mime: img.mime, bytes: fs.readFileSync(file) })
@@ -1038,6 +1058,7 @@ export class Store {
     const items = this.conversations.items.filter((c) => c.id !== id)
     this.stmts.deleteConversation.run(id) // cascades to messages
     this.savedCounts.delete(id)
+    this.dropPendingImages(new Set([id]), items)
     if (!items.length) {
       const fresh = blankConversation()
       this.conversations = { items: [fresh], activeId: fresh.id }
