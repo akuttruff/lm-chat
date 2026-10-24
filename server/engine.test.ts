@@ -4,8 +4,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { Bus } from './bus.ts'
 import {
-  Engine, formatToolOutput, parseIntegrations, wholeSentences, newEngineState, cleanTitle, DATE_NOTE, toolArgs,
+  Engine, formatToolOutput, parseIntegrations, newEngineState, DATE_NOTE, toolArgs,
 } from './engine.ts'
+import { cleanTitle, wholeSentences } from './background.ts'
 import { buildHistoryPrompt, planCompaction, planFullCompaction, summarizerInput, summaryTokenCap } from './history.ts'
 import { Store } from './store.ts'
 import { Memories } from './memory.ts'
