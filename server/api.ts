@@ -246,11 +246,17 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
   // would say "on its way" for good: pick those up once the server is up.
   if (options.resume !== false) setTimeout(() => engine.readingsAll(), RESUME_DELAY_MS).unref()
 
-  const remember = (conv: Conversation): void => {
+  /** A chat past Undo is forgotten, and so are the images a temporary one held in memory. */
+  const forget = (id: string): void => { deleted.delete(id); store.releaseImages(id) }
+  const prune = (): void => {
     const now = Date.now()
-    for (const [k, v] of deleted) if (now - v.at > UNDO_MS) deleted.delete(k)
-    deleted.set(conv.id, { conv, at: now })
-    while (deleted.size > UNDO_MAX) deleted.delete(deleted.keys().next().value!)
+    for (const [k, v] of deleted) if (now - v.at > UNDO_MS) forget(k)
+  }
+  const remember = (conv: Conversation): void => {
+    prune()
+    deleted.set(conv.id, { conv, at: Date.now() })
+    while (deleted.size > UNDO_MAX) forget(deleted.keys().next().value!)
+    setTimeout(prune, UNDO_MS + 1000).unref()
   }
   /** Delete a chat, keeping it for Undo, and tell every client. */
   const deleteChat = (id: string): void => {

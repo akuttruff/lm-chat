@@ -696,10 +696,21 @@ describe("a temporary chat's images in memory", () => {
     return { id, img }
   }
 
-  it('go when the chat is deleted', () => {
+  it('stay through a delete, for Undo, and go once the chat is released', () => {
     const { id, img } = tempChatWithImage()
     store.remove(id)
+    expect(store.readImage(img.id)).toBeDefined()
+    store.releaseImages(id)
     expect(store.readImage(img.id)).toBeUndefined()
+  })
+
+  it('stay when a chat released after Undo brought it back', () => {
+    const { id, img } = tempChatWithImage()
+    const kept = structuredClone(store.get(id)!)
+    store.remove(id)
+    store.restore(kept)
+    store.releaseImages(id)
+    expect(store.readImage(img.id)).toBeDefined()
   })
 
   it('stay while a temporary branch still shows them', () => {
@@ -707,6 +718,7 @@ describe("a temporary chat's images in memory", () => {
     store.setMessages(id, [...store.get(id)!.messages, { id: 'u2', role: 'user', text: 'more' }])
     store.branch(id, 'u2')
     store.remove(id)
+    store.releaseImages(id)
     expect(store.readImage(img.id)).toBeDefined()
   })
 

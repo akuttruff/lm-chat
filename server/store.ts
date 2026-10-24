@@ -863,6 +863,12 @@ export class Store {
     return kept
   }
 
+  /** A deleted chat is past Undo: its in-memory images go, unless a chat still here shows them. */
+  releaseImages(id: string): void {
+    if (this.get(id)) return
+    this.dropPendingImages(new Set([id]), this.conversations.items)
+  }
+
   /**
    * Forget the in-memory image bytes of temporary chats that are gone, so
    * they don't outlive the chat in this process. An image a remaining chat
@@ -1058,7 +1064,7 @@ export class Store {
     const items = this.conversations.items.filter((c) => c.id !== id)
     this.stmts.deleteConversation.run(id) // cascades to messages
     this.savedCounts.delete(id)
-    this.dropPendingImages(new Set([id]), items)
+    // A temporary chat's images stay in memory for now: Undo can bring the chat back. releaseImages lets them go once it can't.
     if (!items.length) {
       const fresh = blankConversation()
       this.conversations = { items: [fresh], activeId: fresh.id }
