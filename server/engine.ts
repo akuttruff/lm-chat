@@ -1,19 +1,19 @@
 import type { Bus } from './bus.ts'
 import type { Store } from './store.ts'
 import { newId } from './store.ts'
-import { fitReasoning, manifestCapability, reasoningCapability } from './capabilities.ts'
+import { reasoningCapability } from './capabilities.ts'
 import { describeHttpError, lmStudioBase, lmStudioFetch } from './lm-studio.ts'
 import type { ReasoningCapability } from './capabilities.ts'
 import { Slots, parallelLimit } from './slots.ts'
-import { MEMORY_PLUGIN, Memories } from './memory.ts'
-import { buildHistoryPrompt, historyLimit } from './history.ts'
+import { Memories } from './memory.ts'
+import { requestFor } from './request.ts'
 import { BackgroundJobs } from './background.ts'
 import { TailPublisher, replyStats, sseEvents } from './stream.ts'
 import { Transcript, formatToolOutput, toolArgs, type ReplyMeta } from './transcript.ts'
 import { metaOf } from '../src/types.ts'
 export { formatToolOutput, toolArgs }
 import { parseIntegrations } from '../src/lib/integrations.ts'
-import type { Conversation, Folder, ImageUpload, Message, MessageImage, ServerConfig } from '../src/types.ts'
+import type { ImageUpload, Message, MessageImage, ServerConfig } from '../src/types.ts'
 
 /**
  * Runs a turn against LM Studio, server-side.
@@ -22,43 +22,6 @@ import type { Conversation, Folder, ImageUpload, Message, MessageImage, ServerCo
  * or a reload killed the generation outright -- LM Studio would log "Client
  * disconnected" and throw the work away. Here the turn outlives any client.
  */
-
-/** A Settings number field: blank, junk or 0 means "no cap". */
-export function outputCap(raw: string): number {
-  const n = Number.parseInt(raw, 10)
-  return Number.isFinite(n) && n > 0 ? n : 0
-}
-
-// --- the date, in every message ---------------------------------------------
-
-/**
- * The message as sent to the model: your text, then a line saying when it
- * was sent. The model has no clock, and "what's my forecast for today" or
- * "how many days until Friday" needs one; a tool call for it costs a whole
- * extra round trip (prompt re-read and all), every time. Stamped on the
- * message -- the part of the prompt that is new anyway -- it costs nothing
- * and leaves LM Studio's cached prefix alone, where a line at the top of
- * the system prompt would invalidate it every turn. The saved message is
- * never changed; only what's sent.
- */
-/**
- * Tells the model what the stamp is, so it reads as "now" and not as a
- * footer to ignore: in tests the model worked that out unprompted, but a
- * stated rule is cheaper than a lucky inference, and it covers filling
- * date parameters for tools too.
- */
-export const DATE_NOTE =
-  'Each message from the user ends with a [Sent ...] line: the date and time it was sent. That is the current ' +
-  "date and time -- treat it as 'now' for anything time-relative (today, tomorrow, this week, how long until) " +
-  'and when filling date parameters for tools.'
-
-export function stampInput(text: string, now: Date = new Date()): string {
-  const when = now.toLocaleString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
-  })
-  return text ? `${text}\n\n[Sent ${when}]` : `[Sent ${when}]`
-}
 
 /**
  * Decode an upload from the browser. The browser sends a base64 data URL
@@ -217,20 +180,6 @@ export class Engine {
   }
 
   /** Generate the reply to the last message you sent again, discarding what followed it. */
-  /** The request's `input`: plain text, or text-and-image parts when the message has images. */
-  private inputFor(text: string, images: MessageImage[] | undefined): string | Record<string, string>[] {
-    const stamped = stampInput(text)
-    if (!images?.length) return stamped
-    const parts: Record<string, string>[] = [{ type: 'text', content: stamped }]
-    for (const img of images) {
-      const stored = this.store.readImage(img.id)
-      // Gone from disk (a backup restored elsewhere): the name still tells the model something was here.
-      if (!stored) { parts[0]!.content = `[image ${img.name} is no longer available]\n\n${stamped}`; continue }
-      parts.push({ type: 'image', data_url: `data:${stored.mime};base64,${stored.bytes.toString('base64')}` })
-    }
-    return parts
-  }
-
   async retryTurn(conversationId: string): Promise<void> {
     const conv = this.store.get(conversationId)
     if (!conv) throw new Error('no such conversation')
@@ -325,7 +274,12 @@ export class Engine {
     const startedAt = Date.now()
     const status = (text: string): void => this.publish(conversationId, 'pending', text, startedAt)
     status('thinking...')
-    const { body, cap, memory } = await this.requestFor(conv, folder, config, history, text, sent)
+    const sources = {
+      readImage: (id: string) => this.store.readImage(id),
+      capabilities: (c: ServerConfig) => this.capabilities(c),
+      memories: this.memories,
+    }
+    const { body, cap, memory } = await requestFor(sources, conv, folder, config, history, text, sent)
 
     const stallSeconds = Number(config.stallSeconds) || 0
     let watchdog: ReturnType<typeof setTimeout> | undefined
@@ -518,64 +472,5 @@ export class Engine {
     }
     // Even after a stopped or failed turn: the chart it drew is there to read.
     await this.background.readingsFor(conversationId)
-  }
-
-  /**
-   * The request for one turn: the model, the input (with this turn's
-   * pictures), the limits, the reasoning level, the tools, and the whole
-   * conversation replayed as the system prompt. Settings resolve chat, then
-   * folder, then global.
-   */
-  private async requestFor(
-    conv: Conversation,
-    folder: Folder | undefined,
-    config: ServerConfig,
-    history: Message[],
-    text: string,
-    sent: Message,
-  ): Promise<{ body: Record<string, unknown>; cap: number; memory: ReturnType<Memories['context']> | null }> {
-    // With images, the input is parts: the text, then each image as a data
-    // URL (LM Studio's /api/v1/chat takes {type:'image', data_url}). Only
-    // this turn carries them; the transcript names them afterwards.
-    const body: Record<string, unknown> = { model: config.model, input: this.inputFor(text, sent.images), stream: true }
-    const ctx = Number.parseInt(config.contextLength, 10)
-    // Applied at load time: sending it every turn makes LM Studio JIT-load a new
-    // model instance per message instead of reusing the loaded one.
-    if (Number.isFinite(ctx) && ctx > 0) body.context_length = ctx
-    const cap = outputCap(config.maxOutputTokens)
-    if (cap) body.max_output_tokens = cap
-    // Chat, then folder, then Settings. `||` for the folder and Settings:
-    // an unset level is stored as '' and means inherit, not "no reasoning".
-    // A chat's saved level may predate a model switch (medium, say, on a
-    // model that only takes off|on), which LM Studio rejects outright.
-    const requested = conv.reasoning ?? (folder?.reasoning || config.reasoning || null)
-    const reasoning = requested
-      ? fitReasoning(requested, (await this.capabilities(config)) ?? manifestCapability(config.model))
-      : null
-    if (reasoning) body.reasoning = reasoning
-    // Memory is per chat, then the folder's, then the Settings default; when
-    // on, the model gets the memory tools and what it has saved so far. The
-    // toggle owns the memory plugin outright: if it's also (still) listed in
-    // the general Settings tools field, that must not override "off" for this
-    // chat, so it's stripped from there and re-added only when memory is on.
-    const memoryOn = conv.memory ?? folder?.memory ?? config.memoryDefault === 'on'
-    // Chat, then folder, then Settings. `??` throughout: '' is "no tools",
-    // null "same as the level above".
-    const integrations = parseIntegrations(conv.tools ?? folder?.mcpTools ?? config.mcpTools)
-      .filter((i) => i.id !== MEMORY_PLUGIN)
-    if (memoryOn) integrations.push({ type: 'plugin', id: MEMORY_PLUGIN })
-    if (integrations.length) body.integrations = integrations
-    // Every turn carries its own context, so no turn depends on the last one
-    // having succeeded.
-    const limit = historyLimit(config.historyChars)
-    // Which memories: the chat's own pick, else the folder's, else automatic.
-    const memory = memoryOn ? this.memories.context(4000, conv.memorySelection ?? folder?.memorySelection) : null
-    // The date note goes first and never changes, so it costs the prompt
-    // cache nothing; the stamp it refers to rides on each message (see
-    // stampInput).
-    const systemPrompt = [DATE_NOTE, config.systemPrompt.trim(), memory?.block].filter(Boolean).join('\n\n')
-    const prompt = buildHistoryPrompt(systemPrompt, history, limit, conv.summary)
-    if (prompt) body.system_prompt = prompt
-    return { body, cap, memory }
   }
 }
