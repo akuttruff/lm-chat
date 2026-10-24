@@ -1,9 +1,8 @@
 import type { Bus } from './bus.ts'
 import type { Store } from './store.ts'
 import { deriveName, newId } from './store.ts'
-import { readModelConfig } from './model-config.ts'
-import { canTurnOff, cheapestReasoning, fitReasoning, reasoningCapability } from './capabilities.ts'
-import { lmStudioBase, lmStudioFetch } from './lm-studio.ts'
+import { cheapestReasoning, fitReasoning, manifestCapability, reasoningCapability } from './capabilities.ts'
+import { describeHttpError, lmStudioBase, lmStudioFetch } from './lm-studio.ts'
 import type { ReasoningCapability } from './capabilities.ts'
 import { Slots, parallelLimit } from './slots.ts'
 import { MEMORY_PLUGIN, Memories } from './memory.ts'
@@ -165,36 +164,7 @@ export function cleanTitle(raw: string): string {
   return title.length > 60 ? `${title.slice(0, 60).trimEnd()}...` : title
 }
 
-/** Reasoning options from the model's manifest, for when LM Studio can't be asked. */
-function manifestCapability(model: string): ReasoningCapability | null {
-  const cfg = readModelConfig(model)
-  if ('error' in cfg || !cfg.reasoning) return null
-  const allowed = cfg.reasoning.options.map((o) => o.value)
-  // Otherwise a chosen 'off' would be dropped and the model would think at its default.
-  if (canTurnOff(cfg, null) && !allowed.includes('off')) allowed.push('off')
-  return { allowed, default: cfg.reasoning.default }
-}
-
 export { parseIntegrations }
-
-async function describeHttpError(res: Response): Promise<string> {
-  let detail = ''
-  try {
-    const text = await res.text()
-    try {
-      detail = (JSON.parse(text) as { error?: { message?: string } })?.error?.message || ''
-    } catch {
-      detail = text.slice(0, 200)
-    }
-  } catch { /* body already consumed or absent */ }
-  if (res.status === 401 || res.status === 403) {
-    return detail || 'LM Studio rejected the API token. Check it in Settings.'
-  }
-  if (res.status === 404) {
-    return detail || 'Endpoint not found. /api/v1/chat needs LM Studio 0.4.0 or newer.'
-  }
-  return detail || `LM Studio returned HTTP ${res.status}.`
-}
 
 /**
  * While a reply streams, clients get the one conversation that changed at

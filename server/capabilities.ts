@@ -1,5 +1,6 @@
 import type { ModelConfig, ServerConfig } from '../src/types.ts'
 import { lmStudioFetch } from './lm-studio.ts'
+import { readModelConfig } from './model-config.ts'
 
 /**
  * What LM Studio itself says a model accepts, from /api/v1/models.
@@ -115,4 +116,14 @@ export function toModelConfig(model: string, cap: ReasoningCapability): ModelCon
     },
     thinking: null,
   }
+}
+
+/** Reasoning options from the model's manifest, for when LM Studio can't be asked. */
+export function manifestCapability(model: string): ReasoningCapability | null {
+  const cfg = readModelConfig(model)
+  if ('error' in cfg || !cfg.reasoning) return null
+  const allowed = cfg.reasoning.options.map((o) => o.value)
+  // Otherwise a chosen 'off' would be dropped and the model would think at its default.
+  if (canTurnOff(cfg, null) && !allowed.includes('off')) allowed.push('off')
+  return { allowed, default: cfg.reasoning.default }
 }

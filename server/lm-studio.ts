@@ -20,3 +20,23 @@ export function lmStudioFetch(
     headers: { ...init.headers, ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}) },
   })
 }
+
+/** What went wrong with a request LM Studio refused, in words for the chat. */
+export async function describeHttpError(res: Response): Promise<string> {
+  let detail = ''
+  try {
+    const text = await res.text()
+    try {
+      detail = (JSON.parse(text) as { error?: { message?: string } })?.error?.message || ''
+    } catch {
+      detail = text.slice(0, 200)
+    }
+  } catch { /* body already consumed or absent */ }
+  if (res.status === 401 || res.status === 403) {
+    return detail || 'LM Studio rejected the API token. Check it in Settings.'
+  }
+  if (res.status === 404) {
+    return detail || 'Endpoint not found. /api/v1/chat needs LM Studio 0.4.0 or newer.'
+  }
+  return detail || `LM Studio returned HTTP ${res.status}.`
+}
