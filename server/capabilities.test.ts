@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
-import { fitReasoning, cheapestReasoning, withOffOption } from './capabilities.ts'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { NO_REASONING, clearCapabilityCache, fitReasoning, cheapestReasoning, reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
+import type { ServerConfig } from '../src/types.ts'
 import type { ModelConfig } from '../src/types.ts'
 
 const qwen: ModelConfig = {
@@ -51,6 +52,32 @@ describe('fitReasoning', () => {
   it('maps a level the model lacks onto on, and drops what has no match', () => {
     expect(fitReasoning('medium', { allowed: ['off', 'on'], default: 'on' })).toBe('on')
     expect(fitReasoning('off', { allowed: ['low', 'high'], default: 'low' })).toBeNull()
+  })
+
+  it('sends nothing to a model that takes no reasoning setting', () => {
+    for (const level of ['low', 'on', 'off']) expect(fitReasoning(level, NO_REASONING)).toBeNull()
+  })
+})
+
+describe('reasoningCapability', () => {
+  const config = (model: string) => ({ lmStudioUrl: 'http://lm.test', apiToken: 't', model }) as ServerConfig
+  const models = {
+    models: [
+      { key: 'qwen3.5-122b-a10b', capabilities: { vision: true, trained_for_tool_use: true } },
+      { key: 'qwen/qwen3.5-9b', capabilities: { reasoning: { allowed_options: ['off', 'on'], default: 'on' } } },
+    ],
+  }
+  afterEach(() => { vi.unstubAllGlobals(); clearCapabilityCache() })
+
+  it('tells a model with no reasoning setting from one LM Studio does not list', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(models))))
+    expect(await reasoningCapability(config('qwen3.5-122b-a10b'))).toEqual(NO_REASONING)
+    expect(await reasoningCapability(config('qwen/qwen3.5-9b'))).toEqual({ allowed: ['off', 'on'], default: 'on' })
+    expect(await reasoningCapability(config('not-downloaded'))).toBeNull()
+  })
+
+  it('offers no reasoning picker for such a model', () => {
+    expect(toModelConfig('qwen3.5-122b-a10b', NO_REASONING).reasoning).toBeNull()
   })
 })
 

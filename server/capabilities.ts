@@ -16,6 +16,14 @@ export interface ReasoningCapability {
   default: string | null
 }
 
+/**
+ * LM Studio lists the model but no reasoning setting at all (a build with no
+ * manifest, like qwen3.5-122b-a10b): any `reasoning` sent is a 400, "does not
+ * expose reasoning configuration", so none is sent. Not the same as null,
+ * which means LM Studio couldn't be asked and the manifest is the fallback.
+ */
+export const NO_REASONING: ReasoningCapability = { allowed: [], default: null }
+
 interface ModelsResponse {
   models?: {
     key?: string
@@ -53,6 +61,8 @@ export async function reasoningCapability(config: ServerConfig): Promise<Reasoni
     const r = entry?.capabilities?.reasoning
     if (r?.allowed_options?.length) {
       value = { allowed: r.allowed_options, default: r.default ?? null }
+    } else if (entry) {
+      value = NO_REASONING
     }
   } catch {
     // Unreachable: don't cache, so the next turn asks again.
@@ -69,6 +79,7 @@ export async function reasoningCapability(config: ServerConfig): Promise<Reasoni
  */
 export function fitReasoning(requested: string | null, cap: ReasoningCapability | null): string | null {
   if (!requested || !cap) return requested
+  if (!cap.allowed.length) return null
   if (cap.allowed.includes(requested)) return requested
   if (requested !== 'off' && cap.allowed.includes('on')) return 'on'
   return null
@@ -110,10 +121,10 @@ export function toModelConfig(model: string, cap: ReasoningCapability): ModelCon
   return {
     found: true,
     model,
-    reasoning: {
+    reasoning: cap.allowed.length ? {
       default: cap.default,
       options: cap.allowed.map((value) => ({ value, label: LABELS[value] ?? value })),
-    },
+    } : null,
     thinking: null,
   }
 }

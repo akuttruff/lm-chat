@@ -376,7 +376,8 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       const config = { ...store.getConfig(), model: manifest.model! }
       void reasoningCapability(config)
         .then((cap) => {
-          if (manifest.found) return json(res, 200, withOffOption(manifest, cap))
+          // A model LM Studio says takes no reasoning setting gets none offered, whatever its manifest lists.
+          if (manifest.found && !(cap && !cap.allowed.length)) return json(res, 200, withOffOption(manifest, cap))
           return json(res, 200, cap ? toModelConfig(config.model, cap) : manifest)
         })
         .catch(() => json(res, 200, manifest))
