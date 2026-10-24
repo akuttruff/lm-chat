@@ -49,8 +49,8 @@ const scenarios = [
   { name: 'desktop', view: DESKTOP, steps: [['wait', 1500], ['row', 'Lisbon in November'], ['wait', 1500], ['scroll', '.thread', 0]] },
   // Walkthroughs, recorded (see recording.mjs): the phone's and the desktop's.
   // A question typed into the Lisbon chat and answered by the model, for real: the recording waits for the reply, and the encoder closes up the pauses.
-  { name: 'demo-phone', view: PHONE, record: true, speed: 1.3, steps: [...lisbon, ['wait', 500], ['glide', '.thread', 99999, 1300], ['wait', 500], ['type', '.composer-input', QUESTION], ['wait', 400], ['send'], ['wait', 300], ['until', WRITING, 120000], ['until', REPLIED, 150000], ['wait', 700], ['glide', '.thread', 99999, 900], ['wait', 1600]] },
-  { name: 'demo-desktop', view: DESKTOP, record: true, speed: 1.3, steps: [['wait', 1200], ['row', 'Lisbon in November'], ['wait', 1300], ['glide', '.thread', 99999, 1300], ['wait', 500], ['type', '.composer-input', QUESTION], ['wait', 400], ['send'], ['wait', 300], ['until', WRITING, 120000], ['until', REPLIED, 150000], ['wait', 700], ['glide', '.thread', 99999, 900], ['wait', 1600]] },
+  { name: 'demo-phone', view: PHONE, record: true, steps: [...lisbon, ['wait', 500], ['glide', '.thread', 99999, 1300], ['wait', 500], ['type', '.composer-input', QUESTION], ['wait', 400], ['send'], ['wait', 300], ['until', WRITING, 120000], ['until', REPLIED, 150000], ['wait', 700], ['glide', '.thread', 99999, 900], ['wait', 1600]] },
+  { name: 'demo-desktop', view: DESKTOP, record: true, steps: [['wait', 1200], ['row', 'Lisbon in November'], ['wait', 1300], ['glide', '.thread', 99999, 1300], ['wait', 500], ['type', '.composer-input', QUESTION], ['wait', 400], ['send'], ['wait', 300], ['until', WRITING, 120000], ['until', REPLIED, 150000], ['wait', 700], ['glide', '.thread', 99999, 900], ['wait', 1600]] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

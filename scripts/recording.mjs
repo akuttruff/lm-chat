@@ -24,7 +24,14 @@ export function startRecording({ send, on }) {
     frames,
     async stop() {
       await started
-      await sleep(400)
+      // Chrome's frames can run seconds behind the page while it streams a
+      // long answer: wait for them to catch up (a quiet second) before stopping.
+      const until = Date.now() + 20_000
+      let count = -1
+      while (Date.now() < until && count !== frames.length) {
+        count = frames.length
+        await sleep(1000)
+      }
       await send('Page.stopScreencast')
       return frames
     },
