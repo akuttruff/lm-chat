@@ -1,0 +1,112 @@
+/* Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery. */
+/* A chart wheel drawn from an astrology tool's result, square, as wide as the card allows. */
+.wheel { margin: 10px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.wheel-svg { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto; border-radius: 8px; }
+.wheel-caption { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--paper-dim); }
+.wheel-title { flex: 1 1 100%; color: var(--paper); }
+.wheel-legend { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; flex: 1 1 auto; }
+.wheel-legend i { display: inline-block; width: 14px; height: 2px; margin-left: 6px; border-radius: 1px; }
+.wheel-legend i:first-child, .wheel-legend b:first-child { margin-left: 0; }
+.wheel-legend b { font-weight: 400; font-size: 10px; margin-left: 6px; }
+/* A tarot draw: the cards as they fell, in the spread's shape. */
+.tarot { margin: 12px 0 4px; display: flex; flex-direction: column; gap: 10px; }
+.tarot-row { display: grid; gap: 12px; max-width: 680px; margin: 0 auto; width: 100%; }
+.tarot-row.cards-1 { grid-template-columns: minmax(0, 260px); justify-content: center; }
+.tarot-row.cards-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tarot-row.cards-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tarot-row.cards-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tarot-row.cards-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tarot-card { margin: 0; min-width: 0; }
+.tarot-card img, .tarot-slot img { display: block; width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45); }
+.tarot-card figcaption { margin-top: 8px; font-size: 13px; line-height: 1.3; text-align: center; }
+.cards-1 .tarot-name { font-size: 14px; font-weight: 600; }
+.tarot-pos { display: block; color: var(--paper-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.tarot-name { display: block; color: var(--paper); }
+.tarot-cross { position: relative; width: 100%; max-width: 560px; margin: 0 auto; }
+.tarot-slot { position: absolute; }
+.tarot-num { position: absolute; top: 4px; left: 4px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: rgba(0, 0, 0, 0.7); color: #fff; font-size: 11px; font-weight: 700; text-align: center; line-height: 18px; }
+.tarot-legend { margin: 0; padding: 0 0 0 1.4em; columns: 2; column-gap: 18px; font-size: 12px; line-height: 1.3; }
+.tarot-legend li { break-inside: avoid; margin-bottom: 4px; }
+.tarot-title { font-size: 12px; color: var(--paper-dim); text-align: center; }
+@media (max-width: 480px) { .tarot-legend { columns: 1; } }
+
+/* The aspect's glyph before its words, in the popup and the legend. */
+/* The transits in play, as a table under a transit wheel. */
+.tt-wrap { margin-top: 10px; overflow-x: auto; }
+.tt { width: 100%; border-collapse: collapse; font-size: 12px; color: var(--paper); }
+.tt caption { text-align: left; padding: 0 0 6px; font-size: 12px; color: var(--paper-dim); }
+.tt th { font-weight: 500; font-size: 11px; color: var(--paper-dim); }
+/* A header is a button: a click sorts the column up, another down, a third puts the table back. */
+.tt-sort { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: none; background: none; color: inherit; font: inherit; cursor: pointer; }
+.tt-sort:hover, .tt-sort:focus-visible { color: var(--paper); }
+.tt-sort.on { color: var(--moss); }
+.tt-reset { font-size: 12px; }
+.tt th, .tt td { padding: 4px 5px 4px 0; border-bottom: 1px solid var(--line); text-align: left; vertical-align: baseline; }
+.tt td:last-child, .tt th:last-child { padding-right: 0; }
+.tt-body, .tt-aspect, .tt-num { white-space: nowrap; }
+.tt tr:last-child td { border-bottom: 0; }
+/* A week's or a month's two groups: a heading row over each, and the fold at the backdrop's foot. */
+.tt-group th { padding: 12px 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: color-mix(in srgb, var(--paper-dim) 72%, transparent); }
+.tt tbody:first-of-type .tt-group th { padding-top: 6px; }
+.tt-more td { padding: 6px 0; font-size: 12px; border-bottom: 0; }
+.tt-glyph { display: inline-block; min-width: 1.1em; margin-right: 2px; font-size: 1.05em; line-height: 1; font-family: -apple-system, "SF Pro Text", system-ui, "Segoe UI Symbol", "Noto Sans Symbols 2", sans-serif; }
+.tt-num, .tt-when { font-variant-numeric: tabular-nums; color: var(--paper-dim); }
+/* The weight: the number over a bar of it, Pluto on the Sun filling the bar. */
+.tt-weight { color: var(--paper); min-width: 2.6em; }
+/* What the weight is, under its header while a pointer rests on it; a phone goes without. */
+.tt-th-help { position: relative; }
+.tt-help { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .tt-th-help:hover .tt-help, .tt-th-help:focus-within .tt-help {
+    display: block; position: absolute; top: 100%; right: 0; z-index: 70; width: 340px; margin-top: 4px;
+    padding: 8px 11px; border-radius: 8px; text-align: left; white-space: normal; font-weight: 400;
+    background: var(--bg-raised); border: 1px solid var(--line); color: var(--paper);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); font-size: 12.5px; line-height: 1.45;
+  }
+  .tt-help p { margin: 4px 0 0; }
+  .tt-formula { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--moss); }
+  .tt-scale { margin: 6px 0 0; }
+  .tt-scale dt { margin-top: 5px; font-weight: 600; color: var(--paper-dim); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .tt-scale dd { margin: 1px 0 0; }
+  /* A row's own working, under its number. */
+  .tt-th-help:hover .tt-working, .tt-th-help:focus-within .tt-working { width: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+}
+.tt-bar { height: 3px; margin-top: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.tt-bar-fill { height: 100%; border-radius: 2px; background: var(--moss); }
+/* A date and its time may sit on two lines where the card is narrow. */
+.tt-when { white-space: normal; min-width: 3.8em; }
+.tt-house { color: var(--paper-dim); font-size: 11px; }
+.tt-pos { color: var(--paper-dim); font-size: 11px; white-space: nowrap; margin-top: 1px; }
+/* The When cell wraps wherever it must, so the other three columns keep their width on a phone. */
+.tt-exact { color: var(--paper); }
+.tt-near { color: var(--paper-dim); }
+.tt-when .tt-pos { white-space: normal; }
+.tt-date { white-space: nowrap; }
+.tt .wheel-rx { color: #E8906C; font-size: 11px; }
+.tt-conjunction { color: #EDE8DC; }
+.tt-hard { color: #E8906C; }
+.tt-soft { color: #8FBCE6; }
+.tt-minor { color: #9FB592; }
+.wheel-glyph { display: inline-block; min-width: 1.1em; margin-right: 4px; font-size: 1.05em; line-height: 1; color: var(--paper-dim); }
+.wheel-save { flex: 0 0 auto; }
+/* The wheel in the card is a button or a link: a tap opens it full size. */
+.wheel-open { display: block; width: 100%; padding: 0; margin: 0; border: none; background: none; cursor: zoom-in; }
+
+.wheel-point, .wheel-aspect { cursor: help; }
+/* The popup beside a pointed-at planet or aspect: what it is, in words. */
+.wheel-tip {
+  position: fixed; z-index: 70; pointer-events: none;
+  padding: 8px 11px; border-radius: 8px;
+  background: var(--bg-raised); border: 1px solid var(--line); color: var(--paper);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  font-size: 13px; line-height: 1.4;
+}
+/* Placed by lib/tipPlacement.ts once measured, clear of the planet or line it describes. */
+.wheel-tip-title { font-weight: 600; }
+.wheel-tip-sub { color: var(--paper-dim); font-size: 12px; margin-top: 2px; }
+.wheel-tip ul { margin: 6px 0 0; padding-left: 16px; }
+.wheel-tip li { margin: 2px 0; }
+/* The transit's reading: what it means for you that day. */
+.wheel-tip-reading { margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--paper); }
+.wheel-tip li .wheel-tip-reading { margin: 2px 0 6px; color: var(--paper-dim); }
+.wheel-tip-reading.pending { color: var(--paper-dim); font-style: italic; }

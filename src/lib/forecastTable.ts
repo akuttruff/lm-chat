@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * A forecast's key transits as table rows.
  *
@@ -7,7 +8,15 @@
  * contacts exact within it first). The table under the result keeps the
  * ones whose weight reaches the horizon's bar, in date order, with the
  * moment each is exact and both positions. TransitTable.tsx draws it.
+ *
+ * A week may also carry `week_transits`, and a month `month_transits`
+ * (Orrery's server folds them in; the tool alone never does): every
+ * contact in orb over its days from the ephemeris scan, with no cap. Then the table shows all of them in two groups, the
+ * period's events (exact inside it, in date order) and its backdrop (in
+ * orb without perfecting, heaviest first), each weighed here the way the
+ * forecasts weigh theirs.
  */
+import { transitWeight } from './weight.ts'
 
 export type Horizon = 'week' | 'month' | 'year'
 
@@ -43,7 +52,14 @@ export interface ForecastTable {
   end: string
   /** Every headline the tool sent, in its order. */
   rows: ForecastRow[]
+  /** The chart ruler, as the tool names it, for the weights. */
+  ruler: string | null
+  /** A week's or a month's scan: every contact in orb over its days, as rows; null for a year, or a period cast without one. */
+  scan: ForecastRow[] | null
 }
+
+/** A scanned period's rows in their two groups: exact inside the period in date order, then the rest heaviest first. */
+export interface ScanGroups { events: ForecastRow[]; backdrop: ForecastRow[] }
 
 /**
  * A contact is key when its weight reaches this: the house rule, by weight
@@ -77,6 +93,7 @@ export function parseForecast(text: string): ForecastTable | null {
   const start = str(data.range.start)
   const end = str(data.range.end)
   if (!start || !end) return null
+  const ruler = isRecord(data.natal) ? str(data.natal.chart_ruler) : null
   const rows: ForecastRow[] = []
   for (const h of data.headline_transits) {
     if (!isRecord(h)) continue
@@ -102,17 +119,74 @@ export function parseForecast(text: string): ForecastTable | null {
       weight: num(h.weight) ?? 0,
     })
   }
-  return { horizon, start, end, rows }
+  return { horizon, start, end, rows, ruler, scan: horizon === 'year' ? null : scanRows(data[`${horizon}_transits`], rows, start, end, ruler) }
+}
+
+const contactKey = (r: { from: string; to: string; type: string }): string => `${r.from}|${r.type}|${r.to}`
+
+/**
+ * The scan's contacts as rows. A contact the headlines also carry takes
+ * their movement, passes and weight, which the scan does not give; the
+ * rest are weighed here. An exact moment outside the period's days (the
+ * scan looks a little past them) counts as the nearest one, not an event.
+ */
+function scanRows(scan: unknown, headlines: ForecastRow[], start: string, end: string, ruler: string | null): ForecastRow[] | null {
+  if (!isRecord(scan) || !Array.isArray(scan.transits)) return null
+  const byKey = new Map(headlines.map((h) => [contactKey(h), h]))
+  const rows: ForecastRow[] = []
+  for (const t of scan.transits) {
+    if (!isRecord(t)) continue
+    const from = str(t.from_object)
+    const to = str(t.to_object)
+    const type = str(t.type)
+    const first = str(t.start)
+    const last = str(t.end)
+    if (!from || !to || !type || !first || !last) continue
+    const moment = str(t.exact)
+    const inside = moment !== null && moment.slice(0, 10) >= start && moment.slice(0, 10) <= end
+    const headline = byKey.get(contactKey({ from, to, type }))
+    rows.push({
+      from, to, type,
+      fromRetrograde: t.from_retrograde === true,
+      toHouse: num(t.to_house),
+      exact: inside ? moment : null,
+      nearestExact: moment ?? headline?.nearestExact ?? null,
+      movement: inside ? null : headline?.movement ?? null,
+      start: first, end: last,
+      fromPosition: position(t.from_position),
+      toPosition: position(t.to_position),
+      orb: num(t.orb) ?? 0,
+      pass: headline?.pass ?? null,
+      passes: headline?.passes ?? (moment ? [moment] : []),
+      weight: headline?.weight ?? transitWeight(from, to, type, ruler) ?? 0,
+    })
+  }
+  return rows
+}
+
+/** A scanned period's two groups, or null when it has no scan. */
+export function scanGroups(table: ForecastTable): ScanGroups | null {
+  if (!table.scan) return null
+  const events = table.scan.filter((r) => r.exact).sort((a, b) => a.exact!.localeCompare(b.exact!))
+  const backdrop = table.scan.filter((r) => !r.exact).sort((a, b) => b.weight - a.weight || a.orb - b.orb)
+  return { events, backdrop }
 }
 
 /** When a row happens, for ordering: the exact moment, or the first day in orb when it is never exact in the period. */
 const moment = (r: ForecastRow): string => r.exact ?? r.start
 
-/** The rows the table shows: the headlines that reach KEY_WEIGHT, in date order, the weightier first on the same moment. */
-export const keyTransits = (table: ForecastTable): ForecastRow[] =>
-  table.rows
+/**
+ * The rows the table shows. With a scan, every contact: the events then
+ * the backdrop. Without one, the headlines that reach KEY_WEIGHT, in date
+ * order, the weightier first on the same moment.
+ */
+export function keyTransits(table: ForecastTable): ForecastRow[] {
+  const groups = scanGroups(table)
+  if (groups) return [...groups.events, ...groups.backdrop]
+  return table.rows
     .filter((r) => r.weight >= KEY_WEIGHT[table.horizon])
     .sort((a, b) => moment(a).localeCompare(moment(b)) || b.weight - a.weight)
+}
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 

@@ -26,4 +26,10 @@ describe('TarotSpread', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(10)
     expect(screen.getAllByRole('listitem')[9]).toHaveTextContent('Position 10Card 10')
   })
+
+  it('takes the pictures from wherever the app serves them', () => {
+    const reading: Reading = { spread: { id: 'single', name: 'One card', description: '' }, question: null, seed: 3, cards: [card(1, 'The Moon', 'major-18')] }
+    render(<TarotSpread reading={reading} image={(id) => `/api/tarot/${id}.jpg`} />)
+    expect(screen.getByRole('img', { name: 'Position 1: The Moon' })).toHaveAttribute('src', '/api/tarot/major-18.jpg')
+  })
 })

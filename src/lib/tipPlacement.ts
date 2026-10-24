@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * Where to put the popup for a pointed-at planet or aspect so that it
  * never covers what it describes. Pure geometry, in page pixels.

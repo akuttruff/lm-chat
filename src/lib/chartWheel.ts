@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * A chart wheel read out of an astrology tool's result.
  *
@@ -356,3 +357,8 @@ export function describePoint(wheel: Wheel, ring: Ring, point: WheelPoint): Poin
     aspects: aspectsOfPoint(wheel, ring, point.name).map((i) => aspectSentence(wheel, wheel.aspects[i]!)),
   }
 }
+
+/** The wheel's heading, on the card and on its own page. */
+export const wheelTitle = (wheel: Wheel): string => wheel.kind === 'transit'
+  ? `Transits ${wheel.dateTime ?? ''} over the natal chart of ${wheel.natalDateTime ?? ''}`.trim()
+  : `Chart wheel for ${wheel.dateTime ?? 'the chart'}`

@@ -1,3 +1,4 @@
+@import './wheel.css';
 :root {
   --bg: #1B1D1A;
   --bg-raised: #23261F;
@@ -332,87 +333,7 @@ html, body, #root {
   color: var(--paper-dim);
 }
 .tool-card.failed { border-color: var(--danger); }
-
-/* A chart wheel drawn from an astrology tool's result, square, as wide as the card allows. */
-.wheel { margin: 10px 0 0; display: flex; flex-direction: column; gap: 6px; }
-.wheel-svg { display: block; width: 100%; max-width: 680px; height: auto; margin: 0 auto; border-radius: 8px; }
-.wheel-caption { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--paper-dim); }
-.wheel-title { flex: 1 1 100%; color: var(--paper); }
-.wheel-legend { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; flex: 1 1 auto; }
-.wheel-legend i { display: inline-block; width: 14px; height: 2px; margin-left: 6px; border-radius: 1px; }
-.wheel-legend i:first-child, .wheel-legend b:first-child { margin-left: 0; }
-.wheel-legend b { font-weight: 400; font-size: 10px; margin-left: 6px; }
-/* A tarot draw: the cards as they fell, in the spread's shape. */
-.tarot { margin: 12px 0 4px; display: flex; flex-direction: column; gap: 10px; }
-.tarot-row { display: grid; gap: 12px; max-width: 680px; margin: 0 auto; width: 100%; }
-.tarot-row.cards-1 { grid-template-columns: minmax(0, 260px); justify-content: center; }
-.tarot-row.cards-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.tarot-row.cards-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.tarot-row.cards-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.tarot-row.cards-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.tarot-card { margin: 0; min-width: 0; }
-.tarot-card img, .tarot-slot img { display: block; width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45); }
-.tarot-card figcaption { margin-top: 8px; font-size: 13px; line-height: 1.3; text-align: center; }
-.cards-1 .tarot-name { font-size: 14px; font-weight: 600; }
-.tarot-pos { display: block; color: var(--paper-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-.tarot-name { display: block; color: var(--paper); }
-.tarot-cross { position: relative; width: 100%; max-width: 560px; margin: 0 auto; }
-.tarot-slot { position: absolute; }
-.tarot-num { position: absolute; top: 4px; left: 4px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: rgba(0, 0, 0, 0.7); color: #fff; font-size: 11px; font-weight: 700; text-align: center; line-height: 18px; }
-.tarot-legend { margin: 0; padding: 0 0 0 1.4em; columns: 2; column-gap: 18px; font-size: 12px; line-height: 1.3; }
-.tarot-legend li { break-inside: avoid; margin-bottom: 4px; }
-.tarot-title { font-size: 12px; color: var(--paper-dim); text-align: center; }
-@media (max-width: 480px) { .tarot-legend { columns: 1; } }
-
-/* The aspect's glyph before its words, in the popup and the legend. */
-/* The transits in play, as a table under a transit wheel. */
-.tt-wrap { margin-top: 10px; overflow-x: auto; }
-.tt { width: 100%; border-collapse: collapse; font-size: 12px; color: var(--paper); }
-.tt caption { text-align: left; padding: 0 0 6px; font-size: 12px; color: var(--paper-dim); }
-.tt th { font-weight: 500; font-size: 11px; color: var(--paper-dim); }
-.tt th, .tt td { padding: 4px 5px 4px 0; border-bottom: 1px solid var(--line); text-align: left; vertical-align: baseline; }
-.tt td:last-child, .tt th:last-child { padding-right: 0; }
-.tt-body, .tt-aspect, .tt-num { white-space: nowrap; }
-.tt tr:last-child td { border-bottom: 0; }
-.tt-glyph { display: inline-block; min-width: 1.1em; margin-right: 2px; font-size: 1.05em; line-height: 1; font-family: -apple-system, "SF Pro Text", system-ui, "Segoe UI Symbol", "Noto Sans Symbols 2", sans-serif; }
-.tt-num, .tt-when { font-variant-numeric: tabular-nums; color: var(--paper-dim); }
-/* A date and its time may sit on two lines where the card is narrow. */
-.tt-when { white-space: normal; min-width: 3.8em; }
-.tt-house { color: var(--paper-dim); font-size: 11px; }
-.tt-pos { color: var(--paper-dim); font-size: 11px; white-space: nowrap; margin-top: 1px; }
-/* The When cell wraps wherever it must, so the other three columns keep their width on a phone. */
-.tt-exact { color: var(--paper); }
-.tt-near { color: var(--paper-dim); }
-.tt-when .tt-pos { white-space: normal; }
-.tt-date { white-space: nowrap; }
-.tt .wheel-rx { color: #E8906C; font-size: 11px; }
-.tt-conjunction { color: #EDE8DC; }
-.tt-hard { color: #E8906C; }
-.tt-soft { color: #8FBCE6; }
-.tt-minor { color: #9FB592; }
-.wheel-glyph { display: inline-block; min-width: 1.1em; margin-right: 4px; font-size: 1.05em; line-height: 1; color: var(--paper-dim); }
-.wheel-save { flex: 0 0 auto; }
-/* The wheel in the card is a button: a tap opens it full screen to pinch into. */
-.wheel-open { display: block; width: 100%; padding: 0; margin: 0; border: none; background: none; cursor: zoom-in; }
-
-.wheel-point, .wheel-aspect { cursor: help; }
-/* The popup beside a pointed-at planet or aspect: what it is, in words. */
-.wheel-tip {
-  position: fixed; z-index: 70; pointer-events: none;
-  padding: 8px 11px; border-radius: 8px;
-  background: var(--bg-raised); border: 1px solid var(--line); color: var(--paper);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
-  font-size: 13px; line-height: 1.4;
-}
-/* Placed by lib/tipPlacement.ts once measured, clear of the planet or line it describes. */
-.wheel-tip-title { font-weight: 600; }
-.wheel-tip-sub { color: var(--paper-dim); font-size: 12px; margin-top: 2px; }
-.wheel-tip ul { margin: 6px 0 0; padding-left: 16px; }
-.wheel-tip li { margin: 2px 0; }
-/* The transit's reading: what it means for you that day. */
-.wheel-tip-reading { margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--paper); }
-.wheel-tip li .wheel-tip-reading { margin: 2px 0 6px; color: var(--paper-dim); }
-.wheel-tip-reading.pending { color: var(--paper-dim); font-style: italic; }
+/* The wheel in a card, the transit tables and a tarot draw: wheel.css, shared with Orrery. */
 
 /* ====== Wheel viewer: the wheel full screen, under the fingers ====== */
 .wheel-viewer { height: 100%; }

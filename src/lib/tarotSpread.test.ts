@@ -33,5 +33,6 @@ describe('tarotSpread', () => {
     expect(turnOf({ x: 0, y: 0, turn: 90 }, false)).toBe(90)
     expect(turnOf({ x: 0, y: 0, turn: 90 }, true)).toBe(270)
     expect(imageFor('swords-03')).toBe('/tarot/swords-03.jpg')
+    expect(imageFor('swords-03', '/api/tarot/')).toBe('/api/tarot/swords-03.jpg')
   })
 })

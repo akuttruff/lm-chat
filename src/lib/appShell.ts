@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /** A launch younger than this reloads straight into a newer build; an older one keeps going and reloads when it is next brought back on screen. */
 const JUST_OPENED_MS = 20_000
 

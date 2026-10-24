@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /**
  * Whether the server answers from here, judged from the requests the app
  * makes.
@@ -56,7 +57,7 @@ export interface ReachOptions {
  * fetch, with care for a server out of reach. A read (GET) that has not
  * answered within REACH.readTimeoutMs is given up on and tried again after
  * each of REACH.retryWaitsMs; a write is sent once and waits as long as it
- * takes, since sending it twice could send a message twice. Either
+ * takes, since sending it twice could save the same thing twice. Either
  * way the outcome is reported to `reach`. A request the caller aborts is
  * neither retried nor counted against the server.
  */

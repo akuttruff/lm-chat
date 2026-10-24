@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 import { aspectDetail, displayName, natalLongitude, fromLongitude, signName, type Wheel, type WheelAspect } from './chartWheel.ts'
 
 /**

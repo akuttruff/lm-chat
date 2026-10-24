@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 /** Formatting for tool-call cards. */
 
 /** "create_progressed_chart" -> "create progressed chart". */

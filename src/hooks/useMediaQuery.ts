@@ -1,3 +1,4 @@
+// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 import { useSyncExternalStore } from 'react'
 
 /** Whether a CSS media query matches, kept current as the window changes. */
@@ -14,5 +15,5 @@ export default function useMediaQuery(query: string): boolean {
   )
 }
 
-/** A window wide enough for the chat list to sit beside the thread. */
+/** A window wide enough for the list (of chats, of castings) to sit in a sidebar beside the one open. */
 export const WIDE = '(min-width: 900px)'

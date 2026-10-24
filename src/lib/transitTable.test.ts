@@ -14,6 +14,10 @@ describe('transits as rows', () => {
     expect(rows.slice(dated.length).map((r) => r.orb)).toEqual(rows.slice(dated.length).map((r) => r.orb).sort((a, b) => a - b))
     const saturn = rows.find((r) => r.from === 'Saturn' && r.to === 'Mars')!
     expect(saturn).toMatchObject({ type: 'Conjunction', toHouse: 7, fromRetrograde: true, movement: 'separating', toPosition: '11°14′ Aries' })
+    // Saturn 4 times a conjunction: the forecasts' own weight. Mercury 0.5 is doubled on the MC; a trine is 0.7 of it.
+    expect(saturn.weight).toBe(4)
+    expect(rows.find((r) => r.from === 'Mercury' && r.to === 'MC')!.weight).toBe(0.7)
+    expect(rows.find((r) => r.from === 'Mercury' && r.to === 'Jupiter')!.weight).toBe(0.35)
     // Saturn's 2026-27 loop crosses Mars three times: this is the second.
     expect(saturn).toMatchObject({ exact: '2026-10-05 04:39', pass: '2 of 3', passes: ['2026-05-20 16:45', '2026-10-05 04:39', '2027-02-11 08:30'] })
     expect(rows.every((r) => r.passes.includes(r.exact!) && (r.pass === null) === (r.passes.length === 1))).toBe(true)
