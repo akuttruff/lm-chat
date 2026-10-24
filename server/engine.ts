@@ -8,11 +8,12 @@ import { Slots, parallelLimit } from './slots.ts'
 import { MEMORY_PLUGIN, Memories } from './memory.ts'
 import { buildHistoryPrompt, historyLimit } from './history.ts'
 import { BackgroundJobs } from './background.ts'
+import { TailPublisher, replyStats, sseEvents } from './stream.ts'
 import { Transcript, formatToolOutput, toolArgs, type ReplyMeta } from './transcript.ts'
 import { metaOf } from '../src/types.ts'
 export { formatToolOutput, toolArgs }
 import { parseIntegrations } from '../src/lib/integrations.ts'
-import type { ChatEvent, Conversation, Folder, ImageUpload, Message, MessageImage, ReplyStats, ServerConfig } from '../src/types.ts'
+import type { Conversation, Folder, ImageUpload, Message, MessageImage, ServerConfig } from '../src/types.ts'
 
 /**
  * Runs a turn against LM Studio, server-side.
@@ -21,22 +22,6 @@ import type { ChatEvent, Conversation, Folder, ImageUpload, Message, MessageImag
  * or a reload killed the generation outright -- LM Studio would log "Client
  * disconnected" and throw the work away. Here the turn outlives any client.
  */
-
-
-/** LM Studio's turn stats, in this app's shape. Null when it sent none. */
-export function replyStats(raw: NonNullable<ChatEvent['result']>['stats'], cap: number): ReplyStats | null {
-  if (!raw || typeof raw.tokens_per_second !== 'number') return null
-  const outputTokens = raw.total_output_tokens ?? 0
-  const stats: ReplyStats = {
-    inputTokens: raw.input_tokens ?? 0,
-    outputTokens,
-    reasoningTokens: raw.reasoning_output_tokens ?? 0,
-    tokensPerSecond: Math.round(raw.tokens_per_second * 10) / 10,
-    firstTokenSeconds: Math.round((raw.time_to_first_token_seconds ?? 0) * 10) / 10,
-  }
-  if (cap > 0 && outputTokens >= cap) stats.capped = true
-  return stats
-}
 
 /** A Settings number field: blank, junk or 0 means "no cap". */
 export function outputCap(raw: string): number {
@@ -89,81 +74,9 @@ export function decodeUpload(u: ImageUpload): { name: string; mime: string; byte
 
 export { parseIntegrations }
 
-/**
- * While a reply streams, clients get the one conversation that changed at
- * most this often, rather than the whole store on every token.
- */
-export const PUBLISH_INTERVAL_MS = 150
-
-/** And the disk copy is refreshed at most this often; the end of a turn always saves. */
-export const PERSIST_INTERVAL_MS = 2000
-
 interface TurnState {
   controller: AbortController
   stalled: boolean
-}
-
-/**
- * Sends a turn's progress to clients and disk: at once on a commit, and
- * coalesced while streaming, so a fast model can't flood either. A commit
- * cancels any pending throttled update, so a stale snapshot can never land
- * after the final state.
- */
-class TailPublisher {
-  private timer: ReturnType<typeof setTimeout> | undefined
-  private lastPersist = Date.now()
-
-  constructor(
-    private readonly save: (messages: Message[], opts: { touch: boolean; persist?: boolean }) => void,
-    private readonly send: () => void,
-  ) {}
-
-  commit(messages: Message[], { touch = false }: { touch?: boolean } = {}): void {
-    this.close()
-    this.save(messages, { touch })
-    this.lastPersist = Date.now()
-    this.send()
-  }
-
-  /** Streaming progress: sent within PUBLISH_INTERVAL_MS, saved every PERSIST_INTERVAL_MS. */
-  snapshot(current: () => Message[]): void {
-    if (this.timer !== undefined) return
-    this.timer = setTimeout(() => {
-      this.timer = undefined
-      const now = Date.now()
-      const persist = now - this.lastPersist >= PERSIST_INTERVAL_MS
-      if (persist) this.lastPersist = now
-      this.save(current(), { persist, touch: false })
-      this.send()
-    }, PUBLISH_INTERVAL_MS)
-  }
-
-  close(): void {
-    clearTimeout(this.timer)
-    this.timer = undefined
-  }
-}
-
-/** LM Studio's stream, event by event; `onChunk` on every read, for a watchdog. */
-async function* sseEvents(body: ReadableStream<Uint8Array>, onChunk: () => void): AsyncGenerator<ChatEvent> {
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-  let buf = ''
-  for (;;) {
-    const { value, done } = await reader.read()
-    if (done) return
-    onChunk() // progress: the server is still talking
-    buf += decoder.decode(value, { stream: true })
-    const lines = buf.split('\n')
-    buf = lines.pop() ?? ''
-    for (const rawLine of lines) {
-      const line = rawLine.replace(/\r$/, '')
-      if (!line.startsWith('data:')) continue
-      const payload = line.slice(5).trim()
-      if (!payload) continue
-      try { yield JSON.parse(payload) as ChatEvent } catch { /* not an event */ }
-    }
-  }
 }
 
 function lastUserIndex(messages: Message[]): number {
