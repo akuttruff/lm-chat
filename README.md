@@ -1,8 +1,8 @@
 # <img src="public/icon-180.png" width="32" alt=""> LM Chat
 
 A mobile web client for [LM Studio](https://lmstudio.ai). Run a model on
-your computer and chat with it from your phone over your own Wi-Fi,
-including the MCP tools you already have set up in LM Studio.
+your computer and chat with it from your phone over Tailscale, including
+the MCP tools you already have set up in LM Studio.
 
 Everything stays on your network: no cloud service, no account, no
 third-party API.
@@ -23,36 +23,9 @@ On a desktop the chat list sits in a sidebar beside the thread.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/thread-phone.png" alt="A chat with tool calls" /></td>
-    <td width="50%"><img src="docs/screenshots/reasoning-phone.png" alt="The reasoning block open" /></td>
-  </tr>
-  <tr>
-    <td>A chat shows the question, the model's thinking as a row, the MCP tools it called as cards, then the reply.</td>
-    <td>Reasoning is kept rather than discarded; tap the row to read what the model thought.</td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/tools-phone.png" alt="The reply written from the tool results" /></td>
-    <td><img src="docs/screenshots/table-phone.png" alt="A reply with a table" /></td>
-  </tr>
-  <tr>
-    <td>The reply renders as Markdown, followed by what the turn cost: model, time, tokens per second, tokens in and out.</td>
-    <td>Tables and the rest of Markdown render as you would expect.</td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/code-phone.png" alt="A reply with code" /></td>
-    <td><img src="docs/screenshots/chats-phone.png" alt="The chat list" /></td>
-  </tr>
-  <tr>
-    <td>Code blocks come with copy and save buttons.</td>
-    <td>The chat list has folders, stars and search, and each chat can carry its own reasoning level and memory setting.</td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/settings-phone.png" alt="Settings" /></td>
-    <td><img src="docs/screenshots/memories-phone.png" alt="Memories" /></td>
-  </tr>
-  <tr>
-    <td>Settings holds the LM Studio address and token, the model, reasoning, and how much history each message carries.</td>
-    <td>Memories are what the model has learned about you, kept in a file you can read, edit and prune.</td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/thread-phone.png" width="200" alt="A chat with the model's thinking as a row and its tool calls as cards" /><br /><b>Tools and reasoning</b><br /><sub>The model's thinking as a row, each MCP tool it called as a card, then the reply</sub></td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/tarot-phone.png" width="200" alt="A tarot draw laid out as cards, with the reading under it" /><br /><b>Rich tool results</b><br /><sub>Some tools draw: a tarot spread as its cards, a birth chart as a wheel</sub></td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/chats-phone.png" width="200" alt="The chat list with folders, stars and search" /><br /><b>Chats</b><br /><sub>Folders, stars and search; each chat keeps its own reasoning and memory settings</sub></td>
   </tr>
 </table>
 
