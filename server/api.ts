@@ -13,7 +13,8 @@ import { ToolCatalogCache } from './tools.ts'
 import { HealthCheck } from './health.ts'
 import { lmStudioBase, lmStudioFetch } from './lm-studio.ts'
 import { readModelConfig } from './model-config.ts'
-import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
+import { clearCapabilityCache, reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
+import { ModelLoader } from './model-load.ts'
 import { SpeechError, Tracks, readSpeakRequest, synthesize, trackType } from './speech.ts'
 import { isVoice, speedOf } from '../src/lib/speech.ts'
 import { metaOf } from '../src/types.ts'
@@ -207,15 +208,24 @@ export interface ApiState {
   /** Recently deleted chats, whole, so Undo can restore one the client only held in outline. */
   deleted: Map<string, { conv: Conversation; at: number }>
   toolCatalog: ToolCatalogCache
+  /**
+   * The chat model's load, started when it's picked. Kept here so a turn
+   * sent after a dev-server reload still waits on a load begun before it.
+   * Optional: state kept from before a code change may predate it.
+   */
+  models?: ModelLoader
 }
+
+const newModelLoader = (bus: Bus): ModelLoader => new ModelLoader((payload) => bus.send({ type: 'model', payload }))
 
 export function createApiState(options: ApiOptions = {}): ApiState {
   const store = new Store({ dir: options.dir })
   // Only on a fresh process: a dev-server reload keeps this state, and its turns.
   const cut = store.settleInterrupted()
   if (cut) console.log(`[chats] ${cut} ${cut === 1 ? 'reply was' : 'replies were'} cut off by the last restart`)
+  const bus = new Bus()
   return {
-    store, bus: new Bus(), engine: newEngineState(),
+    store, bus, engine: newEngineState(), models: newModelLoader(bus),
     tracks: new Tracks(path.join(path.resolve(options.dir ?? '.data'), 'speech'), { encoder: options.trackEncoder }),
     deleted: new Map(),
     toolCatalog: options.toolCatalog ?? new ToolCatalogCache(),
@@ -225,7 +235,8 @@ export function createApiState(options: ApiOptions = {}): ApiState {
 export function createApi(options: ApiOptions = {}, state: ApiState = createApiState(options)) {
   const { store, bus, tracks, deleted, toolCatalog } = state
   const memories = new Memories(options.memoryDb)
-  const engine = new Engine(store, bus, undefined, state.engine, memories)
+  const models = state.models ??= newModelLoader(bus)
+  const engine = new Engine(store, bus, undefined, state.engine, memories, models)
   /** `GET /api/health`: the process, its data file, the model server and the memory file. */
   const health = new HealthCheck({
     app: 'lm-chat',
@@ -298,6 +309,9 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       res.write(`data: ${JSON.stringify({ type: 'conversations', payload: listView(store.getConversations()) })}\n\n`)
       // And which chats are mid-reply, so every one shows its own progress.
       res.write(`data: ${JSON.stringify({ type: 'statuses', payload: engine.activeStatuses() })}\n\n`)
+      // And how the model picked last is loading, so Settings and the header can say.
+      const load = models.state()
+      if (load) res.write(`data: ${JSON.stringify({ type: 'model', payload: load })}\n\n`)
       const remove = bus.add(res)
       // Comment frames keep intermediaries from closing an idle stream.
       const ping = setInterval(() => { try { res.write(': ping\n\n') } catch { /* gone */ } }, 25_000)
@@ -317,10 +331,25 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         // An unknown voice or a silly speed is dropped, not stored.
         if (patch.speechVoice !== undefined && !isVoice(patch.speechVoice)) delete patch.speechVoice
         if (patch.speechSpeed !== undefined) patch.speechSpeed = String(speedOf(patch.speechSpeed))
-        store.setConfig(patch)
+        const before = store.getConfig().model
+        const after = store.setConfig(patch)
+        // A new chat model is loaded now, not on its first message. Not the
+        // background model: that one is for work no one is waiting on.
+        if (after.model !== before) {
+          clearCapabilityCache()
+          void models.ensure(after)
+        }
         json(res, 200, store.getPublicConfig())
       }).catch((err: Error) => json(res, 400, { error: err.message }))
       return undefined
+    }
+    // Load the chat model again: Settings' Retry after a failed load.
+    if (url === '/api/model/load' && method === 'POST') {
+      const config = store.getConfig()
+      if (!config.model) return json(res, 400, { error: 'No model selected.' })
+      // Answered at once; how it goes arrives as `model` events.
+      void models.ensure(config)
+      return json(res, 202, { ok: true })
     }
 
     // --- speech -------------------------------------------------------------

@@ -13,7 +13,7 @@ import { Transcript, formatToolOutput, toolArgs, type ReplyMeta } from './transc
 import { metaOf } from '../src/types.ts'
 export { formatToolOutput, toolArgs }
 import { parseIntegrations } from '../src/lib/integrations.ts'
-import type { ImageUpload, Message, MessageImage, ServerConfig } from '../src/types.ts'
+import type { ImageUpload, Message, MessageImage, ModelLoadState, ServerConfig } from '../src/types.ts'
 
 /**
  * Runs a turn against LM Studio, server-side.
@@ -40,6 +40,21 @@ export { parseIntegrations }
 interface TurnState {
   controller: AbortController
   stalled: boolean
+}
+
+/** What a turn needs of the ModelLoader (model-load.ts): the load it should wait for. */
+export interface LoadsInFlight {
+  inFlight: (model: string) => Promise<ModelLoadState> | undefined
+}
+
+/** Resolves true once `load` settles, or false when the turn is stopped first. */
+function loadedOrStopped(load: Promise<unknown>, signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) return Promise.resolve(false)
+  return new Promise((resolve) => {
+    const stop = (): void => resolve(false)
+    signal.addEventListener('abort', stop, { once: true })
+    void load.finally(() => { signal.removeEventListener('abort', stop); resolve(true) })
+  })
 }
 
 function lastUserIndex(messages: Message[]): number {
@@ -93,6 +108,8 @@ export class Engine {
     state: EngineState = newEngineState(),
     /** The shared memory pool, read into the prompt for chats with memory on. */
     private memories: Memories = new Memories(),
+    /** Models being loaded since they were picked in Settings; none in tests that don't say. */
+    private loads: LoadsInFlight = { inFlight: () => undefined },
   ) {
     this.running = state.running
     // ??= : state kept from before a code change may predate a field.
@@ -273,6 +290,19 @@ export class Engine {
 
     const startedAt = Date.now()
     const status = (text: string): void => this.publish(conversationId, 'pending', text, startedAt)
+    // The model picked in Settings is still loading: sent now, the request
+    // would have LM Studio JIT-load a second copy alongside it. Whatever
+    // the load's outcome, the turn then goes ahead; a failed load's reason
+    // comes back from LM Studio as it would have anyway.
+    const load = this.loads.inFlight(config.model)
+    if (load) {
+      status(`loading ${config.model}...`)
+      if (!await loadedOrStopped(load, controller.signal)) {
+        this.running.delete(conversationId)
+        fail('Stopped.', 'stopped')
+        return
+      }
+    }
     status('thinking...')
     const sources = {
       readImage: (id: string) => this.store.readImage(id),

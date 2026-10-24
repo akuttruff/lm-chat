@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 import { Drawer } from 'vaul';
-import { Eye, EyeOff, Check, CircleAlert, Square, Volume2 } from 'lucide-react';
+import { Eye, EyeOff, Check, CircleAlert, LoaderCircle, Square, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { levelsFor } from './ReasoningPicker';
 import { DEFAULT_REPLY_STYLE, REPLY_FONTS, REPLY_SIZES } from '../lib/replyStyle';
 import type { ReplyFont, ReplySize, ReplyStyle } from '../lib/replyStyle';
-import type { ModelConfig, PublicConfig } from '../types.ts';
+import type { ModelConfig, ModelLoadState, PublicConfig } from '../types.ts';
 import { DEFAULT_SPEED, DEFAULT_VOICE, SPEEDS, VOICES } from '../lib/speech';
 import { speaker } from './SpeakButton';
 
@@ -20,6 +20,10 @@ interface SettingsSheetProps {
   /** This device's reply typography -- applied as it's changed, no Save needed. */
   replyStyle?: ReplyStyle;
   onReplyStyleChange?: (style: ReplyStyle) => void;
+  /** How the chat model picked last is loading (see server/model-load.ts). */
+  modelLoad?: ModelLoadState | null;
+  /** Load the chat model again, after a failed load. */
+  onLoadModel?: () => void;
 }
 
 interface ProbeResult {
@@ -35,6 +39,44 @@ interface ModelList {
   error: string | null;
 }
 
+/** Under the model picker: the picked model loading, loaded, or why it couldn't be. */
+function ModelLoadNote({ load, onRetry }: { load: ModelLoadState; onRetry?: () => void }) {
+  const [elapsed, setElapsed] = useState(0);
+  const loading = load.state === 'loading';
+  // Ticking, as the header does: a big model takes minutes, and a still label reads as stuck.
+  useEffect(() => {
+    if (!loading) return undefined;
+    const tick = (): void => setElapsed(Math.floor((Date.now() - load.startedAt) / 1000));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [loading, load.startedAt]);
+
+  if (loading) {
+    return (
+      <div className="hint model-load" role="status">
+        <LoaderCircle size={13} className="spin" aria-hidden="true" />
+        <span>Loading {load.model}… {elapsed}s</span>
+      </div>
+    );
+  }
+  if (load.state === 'ready') {
+    return (
+      <div className="hint model-load ok" role="status">
+        <Check size={13} aria-hidden="true" />
+        <span>Loaded</span>
+      </div>
+    );
+  }
+  return (
+    <div className="hint model-load bad" role="status">
+      <CircleAlert size={13} aria-hidden="true" />
+      <span>{load.error || "Couldn't load it."}</span>
+      {onRetry && <button type="button" className="reveal" onClick={onRetry}>Retry</button>}
+    </div>
+  );
+}
+
 /** The preview's id in the speaker, apart from any reply's. */
 const PREVIEW_ID = 'settings-voice-preview';
 const VOICE_SAMPLE = "Here's how replies will sound. If this voice suits you, save, and tap the speaker under any reply.";
@@ -46,7 +88,7 @@ const VOICE_SAMPLE = "Here's how replies will sound. If this voice suits you, sa
  */
 export default function SettingsSheet({
   open, config, modelConfig, onSave, onClose, onOpenMemories,
-  replyStyle = DEFAULT_REPLY_STYLE, onReplyStyleChange,
+  replyStyle = DEFAULT_REPLY_STYLE, onReplyStyleChange, modelLoad = null, onLoadModel,
 }: SettingsSheetProps) {
   const [lmStudioUrl, setLmStudioUrl] = useState('');
   const [model, setModel] = useState('');
@@ -153,8 +195,21 @@ export default function SettingsSheet({
     }
   }, [apiToken, lmStudioUrl, onSave, fetchModels]);
 
+
+  /**
+   * Picking a model saves it at once, unlike the other fields: the server
+   * starts loading it then, so it's ready by the time you've closed the
+   * sheet and typed -- not left to LM Studio to load on the first message.
+   */
+  const pickModel = (next: string): void => {
+    setModel(next);
+    if (next && next !== config?.model) void onSave({ model: next });
+  };
+
   /** "qwen (loaded)": what can answer right now, vs. what LM Studio would load first. */
-  const modelLabel = (m: string): string => (loaded.includes(m) ? `${m} (loaded)` : m);
+  // A load that finished while the sheet was open makes its "(loaded)" true too.
+  const modelLabel = (m: string): string =>
+    (loaded.includes(m) || (modelLoad?.state === 'ready' && modelLoad.model === m) ? `${m} (loaded)` : m);
 
   const save = async (): Promise<void> => {
     await onSave({
@@ -250,7 +305,7 @@ export default function SettingsSheet({
 
           <div className="field">
             <label htmlFor="cfg-model">Model</label>
-            <select id="cfg-model" value={model} onChange={(e) => setModel(e.target.value)}>
+            <select id="cfg-model" value={model} onChange={(e) => pickModel(e.target.value)}>
               {models.length === 0 && <option value={model}>{model || 'No models listed yet -- test the connection'}</option>}
               {/* A saved choice LM Studio no longer lists stays selectable rather than silently changing. */}
               {models.length > 0 && model && !models.includes(model) && <option value={model}>{model} (not in LM Studio's list)</option>}
@@ -258,8 +313,9 @@ export default function SettingsSheet({
             </select>
             <div className="hint">
               Every LLM LM Studio has downloaded; the ones marked <b>(loaded)</b> answer at once, any other is
-              loaded on its first message.
+              loaded as soon as you pick it.
             </div>
+            {modelLoad && modelLoad.model === model && <ModelLoadNote load={modelLoad} onRetry={onLoadModel} />}
           </div>
 
           <div className="field">

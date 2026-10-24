@@ -27,7 +27,7 @@ export default function App() {
     conversations, activeId, active, loadingActive, config, status, startedAt, busy, working,
     send, stop, retry, compact, branch, search, newChat, openChat, deleteChat, deleteChats, restoreChat, renameChat, setReasoning, setMemory,
     setMemorySelection, setStarred, setFolder, setTemporary, setTools, folders, createFolder, updateFolder, deleteFolder,
-    saveConfig,
+    saveConfig, modelLoad, loadModel,
   } = server;
 
   const modelConfig = useModelConfig(config?.model);
@@ -222,6 +222,8 @@ export default function App() {
         config={config}
         modelConfig={modelConfig}
         onSave={saveConfig}
+        modelLoad={modelLoad}
+        onLoadModel={() => void loadModel()}
         onClose={() => setSettingsOpen(false)}
         onOpenMemories={() => { setSettingsOpen(false); setMemoriesOpen('browse'); }}
         replyStyle={replyStyle}

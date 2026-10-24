@@ -1,5 +1,5 @@
 import type { ServerResponse } from 'node:http'
-import type { Conversation, ConversationMeta, Message } from '../src/types.ts'
+import type { Conversation, ConversationMeta, Message, ModelLoadState } from '../src/types.ts'
 
 /**
  * A tiny pub/sub so every connected client sees the same conversation state.
@@ -28,6 +28,8 @@ export type BusEvent =
   | { type: 'removed'; payload: { conversationId: string; activeId: string | null; replacement?: Conversation } }
   | { type: 'status'; payload: { conversationId: string; state: string; text: string; startedAt: number | null } }
   | { type: 'statuses'; payload: { conversationId: string; state: string; text: string; startedAt: number | null }[] }
+  /** The chat model loading after it was picked in Settings: on connect, and as it changes. */
+  | { type: 'model'; payload: ModelLoadState }
 
 /**
  * How much unsent data a client may accumulate before it is cut loose.

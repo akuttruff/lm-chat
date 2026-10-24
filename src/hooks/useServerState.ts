@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type {
-  Conversation, ConversationMeta, ConversationStore, Folder, FolderUpdate, ImageUpload, Message, PublicConfig, Status, SearchHit,
+  Conversation, ConversationMeta, ConversationStore, Folder, FolderUpdate, ImageUpload, Message, ModelLoadState, PublicConfig, Status,
+  SearchHit,
 } from '../types.ts'
 import { chime } from '../lib/chime.ts'
 import type { ChimeTone } from '../lib/chime.ts'
@@ -67,6 +68,10 @@ export interface ServerState {
   updateFolder: (id: string, patch: FolderUpdate) => Promise<void>
   deleteFolder: (id: string) => Promise<void>
   saveConfig: (patch: Partial<PublicConfig> & { apiToken?: string }) => Promise<void>
+  /** How the chat model picked last is loading, as the server reports it; null before anything was picked. */
+  modelLoad: ModelLoadState | null
+  /** Ask the server to load the chat model again, after a failed load. */
+  loadModel: () => Promise<void>
   refreshConfig: () => Promise<void>
   /** Fetch again what a launch out of the server's reach could not: the config, the folders and the chats. */
   refresh: () => void
@@ -90,6 +95,7 @@ type ServerEvent =
   | { type: 'removed'; payload: { conversationId: string; activeId: string | null; replacement?: Conversation } }
   | { type: 'status'; payload: StatusEvent }
   | { type: 'statuses'; payload: StatusEvent[] }
+  | { type: 'model'; payload: ModelLoadState }
 
 /**
  * Apply one small server event to the store. Returns null when it can't be
@@ -166,6 +172,7 @@ export default function useServerState(): ServerState {
   // Status is per chat: switching away from one that's replying must neither
   // lock the next chat's composer nor lose the first one's progress.
   const [statuses, setStatuses] = useState<Record<string, ChatStatus>>({})
+  const [modelLoad, setModelLoad] = useState<ModelLoadState | null>(null)
   const [link, setLink] = useState<'connecting' | 'live' | 'reconnecting'>('connecting')
   const [connected, setConnected] = useState(false)
   const activeIdRef = useRef<string | null>(null)
@@ -286,6 +293,10 @@ export default function useServerState(): ServerState {
       // Anything arriving proves the stream is up, whatever onopen said.
       setLink('live')
       const event = JSON.parse(e.data) as ServerEvent
+      if (event.type === 'model') {
+        setModelLoad(event.payload)
+        return
+      }
       if (event.type !== 'status' && event.type !== 'statuses') {
         // Decided here, not in a state updater, which React may run later.
         const next = applyEvent(storeRef.current, event)
@@ -328,9 +339,13 @@ export default function useServerState(): ServerState {
   const active = store.items.find((c) => c.id === store.activeId) ?? null
   const mine = store.activeId ? statuses[store.activeId] : undefined
   // A lost connection outranks any chat's last word; otherwise show the
-  // active chat's own status, or plain "connected" if it has none.
+  // active chat's own status. A chat with nothing in flight shows the model
+  // loading, if it is, since that is what its next message would wait on;
+  // else plain "connected".
+  const loadingModel = modelLoad?.state === 'loading' && mine?.state !== 'pending' ? modelLoad : null
   const status: Status = link !== 'live'
     ? { state: '', text: link === 'connecting' ? 'connecting...' : 'reconnecting...' }
+    : loadingModel ? { state: 'pending', text: `loading ${loadingModel.model}...` }
     : mine ? { state: mine.state, text: mine.text } : { state: 'live', text: 'connected' }
   const working = Object.fromEntries(
     Object.entries(statuses).filter(([, st]) => st.state === 'pending'),
@@ -461,6 +476,10 @@ export default function useServerState(): ServerState {
     if (r.ok) setConfig(await r.json() as PublicConfig)
   }, [])
 
+  const loadModel = useCallback(async () => {
+    await post('/api/model/load')
+  }, [])
+
   // Starred chats first, each group newest first. `starred` is optional --
   // Number(undefined) is NaN, which is falsy and silently skips the whole
   // comparison, so this needs Boolean() first, not just Number(). Memoised
@@ -477,7 +496,7 @@ export default function useServerState(): ServerState {
     loadingActive: active?.messagesOmitted === true,
     config,
     status,
-    startedAt: mine?.startedAt ?? null,
+    startedAt: loadingModel && link === 'live' ? loadingModel.startedAt : mine?.startedAt ?? null,
     connected,
     busy: mine?.startedAt != null,
     working,
@@ -505,6 +524,8 @@ export default function useServerState(): ServerState {
     updateFolder,
     deleteFolder,
     saveConfig,
+    modelLoad,
+    loadModel,
     refreshConfig,
     refresh,
   }

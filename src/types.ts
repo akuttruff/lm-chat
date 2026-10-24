@@ -273,6 +273,19 @@ export interface FolderUpdate {
 /** What the browser is allowed to see of the config. */
 export type PublicConfig = Omit<ServerConfig, 'apiToken'> & { hasToken: boolean }
 
+/**
+ * The chat model being loaded into LM Studio after it was picked in
+ * Settings (see server/model-load.ts), so the first message doesn't wait on
+ * the load.
+ */
+export interface ModelLoadState {
+  model: string
+  state: 'loading' | 'ready' | 'failed'
+  startedAt: number
+  /** Why it failed, in words for Settings; null otherwise. */
+  error: string | null
+}
+
 export interface Status {
   state: '' | 'pending' | 'live'
   text: string
