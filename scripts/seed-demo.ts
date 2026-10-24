@@ -164,6 +164,25 @@ A light rain jacket, one warm layer for evenings, and shoes with grip: the calç
 ], { starred: true, folderId: travel.id })
 store.patch(lisbonId, { memory: true })
 
+// A birth chart, drawn as a wheel: astro-mcp's real output for the public reference chart the tests use.
+chat("Sam's birth chart", [
+  user('u1', 'Draw my birth chart: 15 June 1990, 2:30 pm, New York. What stands out?'),
+  {
+    id: 't1', role: 'tool', name: 'create_natal_chart', plugin: 'mcp/astrology-v2',
+    args: { date_time: '1990-06-15 14:30', city: 'New York', state: 'NY', country: 'USA' },
+    output: fs.readFileSync(path.resolve('scripts/demo-natal-chart.json'), 'utf8'),
+    // Readings for the wheel's popups are written by the model in real use; none here, so seeding asks the model for nothing.
+    readings: {},
+  },
+  reply('a1', `Three things stand out:
+
+- **Sun in Gemini in the 9th**, near the top of the chart: curiosity that wants to travel, teach and argue ideas out loud.
+- **Libra rising** with **Mars in Aries on the Descendant**: easy-going on first meeting, but drawn to direct, even combative, people, and at your best with a sparring partner.
+- **Moon in Pisces in the 6th**: you feel your way through the day's work, and routines that leave room for imagination keep you steady.
+
+Tap any planet or aspect line on the wheel for what it means.`, 14.2, 4100, 230, 0),
+], { folderId: null })
+
 // A tarot draw, laid out as its spread: draw_cards's real output (tarot-mcp, seed 11), with a reading in its voice.
 const TAROT_Q = 'What do I need to know as I start this new job?'
 chat('A new job', [

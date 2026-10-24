@@ -9,10 +9,6 @@ third-party API.
 
 ## What it looks like
 
-<img src="docs/screenshots/desktop.png" alt="Desktop: the chat list beside the thread" />
-
-On a desktop the chat list sits in a sidebar beside the thread.
-
 <img src="docs/screenshots/demo-desktop.gif" alt="LM Chat in use on a desktop" />
 
 <p>On a desktop, a question is typed into a chat and the local model answers it, streaming as it writes.</p>
@@ -24,7 +20,7 @@ On a desktop the chat list sits in a sidebar beside the thread.
 <table>
   <tr>
     <td align="center" valign="top" width="33%"><img src="docs/screenshots/thread-phone.png" width="200" alt="A chat with the model's thinking as a row and its tool calls as cards" /><br /><b>Tools and reasoning</b><br /><sub>The model's thinking as a row, each MCP tool it called as a card, then the reply</sub></td>
-    <td align="center" valign="top" width="33%"><img src="docs/screenshots/tarot-phone.png" width="200" alt="A tarot draw laid out as cards, with the reading under it" /><br /><b>Rich tool results</b><br /><sub>Some tools draw: a tarot spread as its cards, a birth chart as a wheel</sub></td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/chart-phone.png" width="200" alt="A birth chart from an astrology MCP tool drawn as a wheel" /><br /><b>Rich tool results</b><br /><sub>Some tools draw: a birth chart from an astrology MCP server comes back as a wheel</sub></td>
     <td align="center" valign="top" width="33%"><img src="docs/screenshots/chats-phone.png" width="200" alt="The chat list with folders, stars and search" /><br /><b>Chats</b><br /><sub>Folders, stars and search; each chat keeps its own reasoning and memory settings</sub></td>
   </tr>
 </table>
