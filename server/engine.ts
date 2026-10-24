@@ -3,6 +3,7 @@ import type { Store } from './store.ts'
 import { deriveName, newId } from './store.ts'
 import { readModelConfig } from './model-config.ts'
 import { canTurnOff, cheapestReasoning, fitReasoning, reasoningCapability } from './capabilities.ts'
+import { lmStudioBase, lmStudioFetch } from './lm-studio.ts'
 import type { ReasoningCapability } from './capabilities.ts'
 import { Slots, parallelLimit } from './slots.ts'
 import { AUTO_LOADED, MEMORY_PLUGIN, Memories } from './memory.ts'
@@ -677,7 +678,7 @@ export class Engine {
     // Everything before here stays as it is for the whole turn, so clients
     // are only ever sent what comes after.
     const tailFrom = retry ? retryFrom : history.length
-    const base = config.lmStudioUrl.replace(/\/+$/, '')
+    const base = lmStudioBase(config)
     const tail = new TailPublisher(
       (messages, opts) => this.store.setMessages(conversationId, messages, { ...opts, from: tailFrom }),
       () => this.publishTail(conversationId, tailFrom),
@@ -756,12 +757,9 @@ export class Engine {
       }
       armWatchdog()
 
-      const res = await fetch(`${base}/api/v1/chat`, {
+      const res = await lmStudioFetch(config, '/api/v1/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: controller.signal,
       })
@@ -1018,9 +1016,9 @@ export class Engine {
       }
       const reasoning = cheapestReasoning((await this.capabilities({ ...config, model })) ?? manifestCapability(model))
       if (reasoning) body.reasoning = reasoning
-      const res = await fetch(`${config.lmStudioUrl.replace(/\/+$/, '')}/api/v1/chat`, {
+      const res = await lmStudioFetch(config, '/api/v1/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(READINGS_TIMEOUT_MS),
       })
@@ -1111,12 +1109,9 @@ export class Engine {
       )
       if (reasoning) body.reasoning = reasoning
 
-      const res = await fetch(`${config.lmStudioUrl.replace(/\/+$/, '')}/api/v1/chat`, {
+      const res = await lmStudioFetch(config, '/api/v1/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(TITLE_TIMEOUT_MS),
       })
@@ -1156,9 +1151,9 @@ export class Engine {
       }
       const reasoning = cheapestReasoning((await this.capabilities({ ...config, model })) ?? manifestCapability(model))
       if (reasoning) body.reasoning = reasoning
-      const res = await fetch(`${config.lmStudioUrl.replace(/\/+$/, '')}/api/v1/chat`, {
+      const res = await lmStudioFetch(config, '/api/v1/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
       })
@@ -1211,12 +1206,9 @@ export class Engine {
       )
       if (reasoning) body.reasoning = reasoning
 
-      const res = await fetch(`${config.lmStudioUrl.replace(/\/+$/, '')}/api/v1/chat`, {
+      const res = await lmStudioFetch(config, '/api/v1/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
       })

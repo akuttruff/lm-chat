@@ -1,4 +1,5 @@
 import type { ModelConfig, ServerConfig } from '../src/types.ts'
+import { lmStudioFetch } from './lm-studio.ts'
 
 /**
  * What LM Studio itself says a model accepts, from /api/v1/models.
@@ -41,8 +42,7 @@ export async function reasoningCapability(config: ServerConfig): Promise<Reasoni
 
   let value: ReasoningCapability | null = null
   try {
-    const res = await fetch(`${config.lmStudioUrl.replace(/\/+$/, '')}/api/v1/models`, {
-      headers: config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {},
+    const res = await lmStudioFetch(config, '/api/v1/models', {
       signal: AbortSignal.timeout(5000),
     })
     if (!res.ok) return null

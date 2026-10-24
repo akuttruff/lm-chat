@@ -11,6 +11,7 @@ import type { FolderPatch } from './store.ts'
 import { MemoryInputError, Memories } from './memory.ts'
 import { ToolCatalogCache } from './tools.ts'
 import { HealthCheck } from './health.ts'
+import { lmStudioBase, lmStudioFetch } from './lm-studio.ts'
 import { readModelConfig } from './model-config.ts'
 import { reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
 import { SpeechError, Tracks, readSpeakRequest, synthesize, trackType } from './speech.ts'
@@ -233,8 +234,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     deps: {
       model: async () => {
         const config = store.getConfig()
-        const r = await fetch(`${config.lmStudioUrl.replace(/\/+$/, '')}/api/v1/models`, {
-          headers: config.apiToken ? { Authorization: `Bearer ${config.apiToken.trim()}` } : {},
+        const r = await lmStudioFetch(config, '/api/v1/models', {
           signal: AbortSignal.timeout(4000),
         })
         if (!r.ok) throw new Error(`${r.status} from ${config.lmStudioUrl}`)
@@ -383,9 +383,8 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     // pick -- LM Studio loads it when the first message asks for it.
     if (url === '/api/models' && method === 'GET') {
       const cfg = store.getConfig()
-      const base = cfg.lmStudioUrl.replace(/\/+$/, '')
-      void fetch(`${base}/api/v1/models`, {
-        headers: cfg.apiToken ? { Authorization: `Bearer ${cfg.apiToken.trim()}` } : {},
+      const base = lmStudioBase(cfg)
+      void lmStudioFetch(cfg, '/api/v1/models', {
         signal: AbortSignal.timeout(5000),
       })
         .then(async (r) => {
