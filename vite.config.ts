@@ -25,8 +25,9 @@ export default defineConfig(({ command, isPreview }) => {
     // /api/model-config (the manifest, then LM Studio's own capability list).
     plugins: [react(), api({ dir })],
     server: {
-      // Bind to all interfaces so a phone can reach the dev server over Wi-Fi.
-      host: true,
+      // Loopback only: the API has no login of its own, and `tailscale serve`
+      // proxies to 127.0.0.1, so nothing else on the network should reach it.
+      host: '127.0.0.1',
       port: 8000,
       strictPort: true,
       // Also reachable over Tailscale, via `tailscale serve`.
@@ -38,6 +39,7 @@ export default defineConfig(({ command, isPreview }) => {
     // A separate port from `server` above: this is the persistent, built
     // instance Tailscale points at, so it can run alongside `npm run dev`
     // (unbundled, for local iteration) without a port clash.
-    preview: { host: true, port: 8010, strictPort: true, allowedHosts: [TAILNET] },
+    // Loopback only, for the same reason as `server` above.
+    preview: { host: '127.0.0.1', port: 8010, strictPort: true, allowedHosts: [TAILNET] },
   }
 })
