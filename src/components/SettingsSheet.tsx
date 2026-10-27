@@ -95,7 +95,6 @@ export default function SettingsSheet({
   const [apiToken, setApiToken] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [mcpTools, setMcpTools] = useState('');
-  const [houseSystem, setHouseSystem] = useState<'whole_sign' | 'placidus'>('whole_sign');
   const [contextLength, setContextLength] = useState('');
   const [reasoning, setReasoning] = useState('');
   const [stallSeconds, setStallSeconds] = useState('180');
@@ -124,7 +123,6 @@ export default function SettingsSheet({
     setModel(config.model);
     setSystemPrompt(config.systemPrompt);
     setMcpTools(config.mcpTools);
-    setHouseSystem(config.houseSystem === 'placidus' ? 'placidus' : 'whole_sign');
     setContextLength(config.contextLength);
     setReasoning(config.reasoning);
     setStallSeconds(config.stallSeconds);
@@ -219,7 +217,6 @@ export default function SettingsSheet({
       model,
       systemPrompt,
       mcpTools: mcpTools.trim(),
-      houseSystem,
       contextLength: contextLength.trim(),
       reasoning,
       stallSeconds: stallSeconds.trim(),
@@ -584,18 +581,6 @@ export default function SettingsSheet({
               Requires <b>&quot;Allow calling servers from mcp.json&quot;</b> in Server Settings.
               This is the default; a folder can set its own list, and any chat can pick its own tools from the{' '}
               <b>Tools</b> button by the message box. Every tool the model is shown costs ~500 prompt tokens a turn.
-            </div>
-          </div>
-
-          <div className="field">
-            <label htmlFor="house-system">Astrology houses</label>
-            <select id="house-system" value={houseSystem} onChange={(e) => setHouseSystem(e.target.value === 'placidus' ? 'placidus' : 'whole_sign')}>
-              <option value="whole_sign">Whole sign</option>
-              <option value="placidus">Placidus</option>
-            </select>
-            <div className="hint">
-              When a chat has the astrology tools, the model casts charts in these houses. A chat can still ask for the other
-              system in words.
             </div>
           </div>
 

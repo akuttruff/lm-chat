@@ -331,8 +331,6 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         // An unknown voice or a silly speed is dropped, not stored.
         if (patch.speechVoice !== undefined && !isVoice(patch.speechVoice)) delete patch.speechVoice
         if (patch.speechSpeed !== undefined) patch.speechSpeed = String(speedOf(patch.speechSpeed))
-        // Only the two systems astro-mcp casts in.
-        if (patch.houseSystem !== undefined && patch.houseSystem !== 'whole_sign' && patch.houseSystem !== 'placidus') delete patch.houseSystem
         const before = store.getConfig().model
         const after = store.setConfig(patch)
         // A new chat model is loaded now, not on its first message. Not the

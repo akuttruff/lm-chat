@@ -216,12 +216,6 @@ export interface ServerConfig {
    * A title you typed yourself is never overwritten.
    */
   autoTitle: 'on' | 'off'
-  /**
-   * The houses astrology charts are cast in. When a chat has the astrology
-   * tools, the model is told to pass this as house_system on every chart
-   * tool; a chat can still ask for the other system in words.
-   */
-  houseSystem: 'whole_sign' | 'placidus'
   /** The voice replies are read aloud in: a Kokoro voice id (see src/lib/speech.ts). */
   speechVoice: string
   /** How fast it reads, 1 being normal. */

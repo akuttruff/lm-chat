@@ -30,7 +30,6 @@ const DEFAULT_CONFIG: ServerConfig = {
   backgroundModel: '',
   maxOutputTokens: '',
   autoTitle: 'on',
-  houseSystem: 'whole_sign',
   speechVoice: DEFAULT_VOICE,
   speechSpeed: DEFAULT_SPEED,
 }
@@ -159,8 +158,7 @@ CREATE TABLE IF NOT EXISTS config (
   max_output_tokens TEXT NOT NULL DEFAULT '',
   auto_title TEXT NOT NULL DEFAULT 'on',
   speech_voice TEXT NOT NULL DEFAULT 'af_heart',
-  speech_speed TEXT NOT NULL DEFAULT '1',
-  house_system TEXT NOT NULL DEFAULT 'whole_sign'
+  speech_speed TEXT NOT NULL DEFAULT '1'
 );
 `
 
@@ -296,10 +294,8 @@ function migrateSchema(db: DatabaseSync): void {
     db.exec('PRAGMA user_version = 15')
   }
   if (version < 16) {
-    const has = (table: string, column: string): boolean =>
-      (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column)
-    // The houses astrology charts are cast in (see request.ts houseNote).
-    if (!has('config', 'house_system')) db.exec("ALTER TABLE config ADD COLUMN house_system TEXT NOT NULL DEFAULT 'whole_sign'")
+    // Step 16 once added a house_system column for an astrology setting that was later removed. Databases that ran it
+    // keep the unused column; the number stays taken so the next step (17) runs everywhere.
     db.exec('PRAGMA user_version = 16')
   }
 }
@@ -379,7 +375,6 @@ interface ConfigRow {
   auto_title: string
   speech_voice: string
   speech_speed: string
-  house_system: string
 }
 
 /** A row surviving corruption or a hand-edited value reads as "automatic" rather than throwing. */
@@ -442,15 +437,15 @@ function convMetaParams(c: Conversation): SQLInputValue[] {
 
 const CONFIG_COLUMNS =
   'lm_studio_url, api_token, model, system_prompt, mcp_tools, context_length, reasoning, stall_seconds, history_chars, parallel, memory_default, ' +
-  'background_model, max_output_tokens, auto_title, speech_voice, speech_speed, house_system'
-const CONFIG_PLACEHOLDERS = Array(17).fill('?').join(',')
+  'background_model, max_output_tokens, auto_title, speech_voice, speech_speed'
+const CONFIG_PLACEHOLDERS = Array(16).fill('?').join(',')
 
 /** In CONFIG_COLUMNS order. */
 function configParams(c: ServerConfig): SQLInputValue[] {
   return [
     c.lmStudioUrl, c.apiToken, c.model, c.systemPrompt, c.mcpTools, c.contextLength,
     c.reasoning, c.stallSeconds, c.historyChars, c.parallel, c.memoryDefault,
-    c.backgroundModel, c.maxOutputTokens, c.autoTitle, c.speechVoice, c.speechSpeed, c.houseSystem,
+    c.backgroundModel, c.maxOutputTokens, c.autoTitle, c.speechVoice, c.speechSpeed,
   ]
 }
 
@@ -574,7 +569,6 @@ function configFromRow(row: ConfigRow): ServerConfig {
     autoTitle: row.auto_title === 'off' ? 'off' : 'on',
     speechVoice: isVoice(row.speech_voice) ? row.speech_voice : DEFAULT_VOICE,
     speechSpeed: row.speech_speed || DEFAULT_SPEED,
-    houseSystem: row.house_system === 'placidus' ? 'placidus' : 'whole_sign',
   }
 }
 
@@ -714,7 +708,7 @@ export class Store {
         `INSERT INTO config (id, ${CONFIG_COLUMNS}) VALUES (1,${CONFIG_PLACEHOLDERS})`,
       ),
       updateConfig: this.db.prepare(
-        `UPDATE config SET lm_studio_url=?, api_token=?, model=?, system_prompt=?, mcp_tools=?, context_length=?, reasoning=?, stall_seconds=?, history_chars=?, parallel=?, memory_default=?, background_model=?, max_output_tokens=?, auto_title=?, speech_voice=?, speech_speed=?, house_system=? WHERE id=1`,
+        `UPDATE config SET lm_studio_url=?, api_token=?, model=?, system_prompt=?, mcp_tools=?, context_length=?, reasoning=?, stall_seconds=?, history_chars=?, parallel=?, memory_default=?, background_model=?, max_output_tokens=?, auto_title=?, speech_voice=?, speech_speed=? WHERE id=1`,
       ),
       selectFolders: this.db.prepare('SELECT * FROM folders ORDER BY name COLLATE NOCASE'),
       selectFolderById: this.db.prepare('SELECT * FROM folders WHERE id = ?'),

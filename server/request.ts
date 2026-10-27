@@ -49,10 +49,6 @@ export const DATE_NOTE =
   "date and time -- treat it as 'now' for anything time-relative (today, tomorrow, this week, how long until) " +
   'and when filling date parameters for tools.'
 
-/** What the model is told about houses when the astrology tools are on. */
-export const houseNote = (system: 'whole_sign' | 'placidus'): string =>
-  `Astrology charts here use ${system === 'placidus' ? 'Placidus' : 'whole sign'} houses: pass house_system='${system}' to every astrology tool that takes one, unless the user asks for the other system in this chat.`
-
 export function stampInput(text: string, now: Date = new Date()): string {
   const when = now.toLocaleString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -129,10 +125,7 @@ export async function requestFor(
   // The date note goes first and never changes, so it costs the prompt
   // cache nothing; the stamp it refers to rides on each message (see
   // stampInput).
-  // With the astrology tools on, the model is told which houses to cast in: the schema's default is whole sign,
-  // and a model left to itself passes that even when Settings says Placidus.
-  const houses = integrations.some((i) => i.id.includes('astrology')) ? houseNote(config.houseSystem) : null
-  const systemPrompt = [DATE_NOTE, houses, config.systemPrompt.trim(), memory?.block].filter(Boolean).join('\n\n')
+  const systemPrompt = [DATE_NOTE, config.systemPrompt.trim(), memory?.block].filter(Boolean).join('\n\n')
   const prompt = buildHistoryPrompt(systemPrompt, history, limit, conv.summary)
   if (prompt) body.system_prompt = prompt
   return { body, cap, memory }
