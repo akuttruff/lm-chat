@@ -6,7 +6,7 @@ import { Bus } from './bus.ts'
 import {
   Engine, formatToolOutput, parseIntegrations, newEngineState, toolArgs,
 } from './engine.ts'
-import { DATE_NOTE } from './request.ts'
+import { DATE_NOTE, houseNote } from './request.ts'
 import { cleanTitle, wholeSentences } from './background.ts'
 import { buildHistoryPrompt, planCompaction, planFullCompaction, summarizerInput, summaryTokenCap } from './history.ts'
 import { Store } from './store.ts'
@@ -152,6 +152,21 @@ describe('request body', () => {
     // Nothing has been said yet, so there is no transcript to append -- just
     // the fixed note explaining the date stamp, then the Settings prompt.
     expect(bodyOf(first).system_prompt).toBe(`${DATE_NOTE}\n\nbe terse`)
+  })
+
+  it('tells the model which houses to cast in, only when the astrology tools are on', async () => {
+    configure({ systemPrompt: 'be terse', mcpTools: 'mcp/astrology-v2', houseSystem: 'placidus' })
+    const withTools = streams([evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', withTools)
+    await engine.runTurn(convId, 'my chart please')
+    expect(bodyOf(withTools).system_prompt).toBe(`${DATE_NOTE}\n\n${houseNote('placidus')}\n\nbe terse`)
+    expect(houseNote('placidus')).toContain("house_system='placidus'")
+
+    configure({ mcpTools: 'deep-research' })
+    const without = streams([evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', without)
+    await engine.runTurn(convId, 'anything')
+    expect(String(bodyOf(without).system_prompt)).not.toMatch(/house_system/)
   })
 
   it('fits a saved reasoning level to what the model accepts', async () => {

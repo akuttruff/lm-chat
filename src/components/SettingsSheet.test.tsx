@@ -21,6 +21,7 @@ const base: PublicConfig = {
   autoTitle: 'on',
   speechVoice: 'af_heart',
   speechSpeed: '1',
+  houseSystem: 'whole_sign',
   hasToken: false,
 }
 
