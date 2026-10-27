@@ -6,7 +6,7 @@ import { Bus } from './bus.ts'
 import {
   Engine, formatToolOutput, parseIntegrations, newEngineState, toolArgs,
 } from './engine.ts'
-import { DATE_NOTE } from './request.ts'
+import { DATE_NOTE, FILES_NOTE } from './request.ts'
 import { cleanTitle, wholeSentences } from './background.ts'
 import { buildHistoryPrompt, planCompaction, planFullCompaction, summarizerInput, summaryTokenCap } from './history.ts'
 import { Store } from './store.ts'
@@ -150,8 +150,8 @@ describe('request body', () => {
     vi.stubGlobal('fetch', first)
     await engine.runTurn(convId, 'hi')
     // Nothing has been said yet, so there is no transcript to append -- just
-    // the fixed note explaining the date stamp, then the Settings prompt.
-    expect(bodyOf(first).system_prompt).toBe(`${DATE_NOTE}\n\nbe terse`)
+    // the fixed notes on the date stamp and on files, then the Settings prompt.
+    expect(bodyOf(first).system_prompt).toBe(`${DATE_NOTE}\n\n${FILES_NOTE}\n\nbe terse`)
   })
 
   it('fits a saved reasoning level to what the model accepts', async () => {
@@ -946,8 +946,8 @@ describe('conversation context', () => {
     const f = streams([evt({ type: 'chat.end', result: {} })])
     vi.stubGlobal('fetch', f)
     await engine.runTurn(convId, 'next')
-    // The fixed date note sits outside the history budget.
-    expect(String(bodyOf(f).system_prompt).length).toBeLessThan(400 + DATE_NOTE.length + 2)
+    // The fixed notes sit outside the history budget.
+    expect(String(bodyOf(f).system_prompt).length).toBeLessThan(400 + DATE_NOTE.length + FILES_NOTE.length + 4)
   })
 
   describe('auto-compaction', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { chatMarkdown, exportFileName, fenceFile, replyFileName } from './export.ts'
+import { chatMarkdown, exportFileName, fenceFile, replyFile, replyFileName } from './export.ts'
 
 describe('chatMarkdown', () => {
   it('writes the chat out as Markdown: you and the replies in full, tools as notes, thinking left out', () => {
@@ -55,5 +55,43 @@ describe('fenceFile', () => {
 
   it('names a saved reply after the chat', () => {
     expect(replyFileName('Transit questions')).toBe('transit-questions-reply.md')
+  })
+})
+
+describe('files the server makes', () => {
+  it('converts a fence named in a format the model can\'t write', () => {
+    expect(fenceFile('markdown cover-letter.pdf', '# x')).toEqual({ name: 'cover-letter.pdf', type: 'application/pdf', convert: 'markdown' })
+    expect(fenceFile('html flyer.pdf', '<h1>x</h1>')).toMatchObject({ name: 'flyer.pdf', convert: 'html' })
+    expect(fenceFile('md notes.docx', 'x')).toMatchObject({ convert: 'markdown', type: expect.stringContaining('wordprocessingml') })
+    expect(fenceFile('csv budget.xlsx', 'a,b')).toMatchObject({ name: 'budget.xlsx', convert: 'csv' })
+    expect(fenceFile('svg logo.png', '<svg/>')).toMatchObject({ name: 'logo.png', type: 'image/png', convert: 'svg' })
+    expect(fenceFile('markdown page.html', '# x')).toMatchObject({ name: 'page.html', convert: 'markdown' })
+  })
+
+  it('takes a fence tagged with the format itself as Markdown (or CSV for a spreadsheet)', () => {
+    expect(fenceFile('pdf report.pdf', 'x')).toMatchObject({ convert: 'markdown' })
+    expect(fenceFile('pdf', '# Trip Plan')).toMatchObject({ name: 'trip-plan.pdf', convert: 'markdown' })
+    expect(fenceFile('xlsx', 'a,b')).toMatchObject({ name: 'spreadsheet.xlsx', convert: 'csv' })
+  })
+
+  it('saves text as it is when it already is the file, or can\'t be made into it', () => {
+    expect(fenceFile('html page.html', '<p>')).toEqual({ name: 'page.html', type: 'text/html' })
+    expect(fenceFile('rtf letter.rtf', '{\\rtf1}')).toEqual({ name: 'letter.rtf', type: 'application/rtf' })
+    // CSV can't become a PDF: saved under the name, unconverted.
+    expect(fenceFile('csv data.pdf', 'a,b')).toEqual({ name: 'data.pdf', type: 'text/csv' })
+  })
+
+  it('names an unnamed whole web page after its title; a snippet stays a snippet', () => {
+    expect(fenceFile('html', '<!DOCTYPE html>\n<html><head><title>Crumb Bakery</title></head></html>')).toEqual({ name: 'crumb-bakery.html', type: 'text/html' })
+    expect(fenceFile('html', '<html><body>x</body></html>')).toEqual({ name: 'page.html', type: 'text/html' })
+    expect(fenceFile('html', '<div>x</div>')).toEqual({ name: 'snippet.html', type: 'text/html' })
+  })
+
+  it('names a whole reply after its heading in each format', () => {
+    expect(replyFile('# Meal Plan\n\nx', 'md')).toEqual({ name: 'meal-plan.md', type: 'text/markdown' })
+    expect(replyFile('# Meal Plan\n\nx', 'pdf')).toEqual({ name: 'meal-plan.pdf', type: 'application/pdf', convert: 'markdown' })
+    expect(replyFile('', 'docx')).toMatchObject({ name: 'reply.docx', convert: 'markdown' })
+    expect(replyFile('```html\n<p>x</p>\n```', 'pdf').name).toBe('reply.pdf')
+    expect(replyFile('```csv\na\n```\n\nYour budget, above.', 'md').name).toBe('your-budget-above.md')
   })
 })

@@ -1570,3 +1570,24 @@ html, body, #root {
 }
 .unreachable strong { color: var(--rust); }
 .unreachable button { flex: none; background: none; border: 1px solid var(--rust); border-radius: 8px; padding: 6px 12px; color: var(--rust); }
+
+/* A file the model wrote: a card with the file's name and what it is, its text folded away. */
+.file-card { margin: 0 0 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); overflow: hidden; }
+.file-head { display: flex; align-items: center; gap: 10px; padding: 8px 6px 8px 12px; }
+.file-icon { flex: 0 0 auto; color: var(--moss); }
+.file-title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.file-name { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 13px; color: var(--paper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-meta { font-size: 12px; color: var(--paper-dim); }
+.file-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; }
+.file-actions .copy-btn { width: 30px; height: 30px; }
+.file-actions .code-save { opacity: 1; padding: 5px 10px; }
+.file-actions button:disabled { cursor: progress; }
+.file-fold svg { transition: transform 0.15s; }
+.file-fold.open svg { transform: rotate(180deg); }
+.file-card pre { margin: 0; border-radius: 0; border-top: 1px solid var(--line); max-height: 420px; overflow: auto; }
+/* The reply's save menu opens above the foot, like More above the composer. */
+.save-wrap { position: relative; display: inline-flex; }
+.save-menu { left: 0; right: auto; min-width: 230px; }
+.save-menu button { justify-content: space-between; }
+.save-ext { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 11px; color: var(--paper-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+.save-menu.below { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; }

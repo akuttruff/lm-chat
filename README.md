@@ -48,6 +48,11 @@ npm run screenshots                                # another; needs Google Chrom
 - **Memories.** What the model has learned about you, kept in a file you
   can read and edit, and offered to each chat or left out of it.
 - **Read aloud.** Each reply can be spoken by a local voice model.
+- **Files to download.** Ask for a document and it arrives as a file:
+  web pages, CSV, code and other text as they are, and PDFs, Word
+  documents, Excel sheets and PNG images made on your computer from what
+  the model wrote. Any reply can also be saved as Markdown, PDF, Word or a
+  web page. PDFs and images need Google Chrome installed.
 - **Per-chat reasoning effort**, offering only the levels the loaded model
   accepts.
 - **Automatic context compaction.** Long threads have their older turns

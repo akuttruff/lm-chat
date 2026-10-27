@@ -37,12 +37,53 @@ describe('MessageBubble', () => {
     click.mockRestore()
   })
 
-  it('takes a file name written on the fence; a bare fence can be copied but not saved', async () => {
+  it('shows a fence named as a file as that file; a bare fence can be copied but not saved', async () => {
     render(<MessageBubble role="assistant" text={'```csv totals.csv\na,b\n```\n\n```\nplain\n```'} model="m" elapsed="1" />)
-    expect(await screen.findByRole('button', { name: 'Save as totals.csv' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Copy totals.csv' })).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /^Save as / })).toHaveLength(1)
+    expect(await screen.findByRole('button', { name: 'Save totals.csv' })).toBeInTheDocument()
+    expect(screen.getByText('CSV · 1 line')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy the text of totals.csv' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Save as / })).not.toBeInTheDocument()
+  })
+
+  it('folds a file\'s text away until asked', async () => {
+    render(<MessageBubble role="assistant" text={'```html page.html\n<h1>Hi there</h1>\n```'} model="m" elapsed="1" />)
+    const fold = await screen.findByRole('button', { name: 'Show the text' })
+    expect(screen.queryByText('<h1>Hi there</h1>')).not.toBeInTheDocument()
+    fireEvent.click(fold)
+    expect(screen.getByText('<h1>Hi there</h1>')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide the text' })).toHaveAttribute('aria-expanded', 'true')
+    // A browser can show a web page, so it can be opened as well as saved.
+    expect(screen.getByRole('button', { name: 'Open page.html' })).toBeInTheDocument()
+  })
+
+  it('has the server make a PDF from a Markdown fence named .pdf, and saves what comes back', async () => {
+    const fetchMock = vi.fn(async () => new Response('%PDF-1.4', { status: 200, headers: { 'Content-Type': 'application/pdf' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const created: Blob[] = []
+    URL.createObjectURL = vi.fn((b: Blob) => { created.push(b); return 'blob:x' })
+    URL.revokeObjectURL = vi.fn()
+    render(<MessageBubble role="assistant" text={'```markdown cover-letter.pdf\n# Dear Jo\n```'} model="m" elapsed="1" />)
+    expect(await screen.findByText('PDF · made from Markdown')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save cover-letter.pdf' }))
+    const { waitFor } = await import('@testing-library/react')
+    await waitFor(() => expect(created).toHaveLength(1))
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('/api/files')
+    expect(JSON.parse(String(init.body))).toEqual({ name: 'cover-letter.pdf', source: 'markdown', text: '# Dear Jo\n' })
+    expect(created[0]!.type).toBe('application/pdf')
+    vi.unstubAllGlobals()
+  })
+
+  it('says why when the server can\'t make the file', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'Making PDFs and images needs Google Chrome on the Mac.' }), { status: 501 })))
+    const { toast } = await import('sonner')
+    const error = vi.spyOn(toast, 'error')
+    render(<MessageBubble role="assistant" text={'```markdown notes.pdf\nhi\n```'} model="m" elapsed="1" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Save notes.pdf' }))
+    const { waitFor } = await import('@testing-library/react')
+    await waitFor(() => expect(error).toHaveBeenCalledWith('Making PDFs and images needs Google Chrome on the Mac.'))
+    vi.unstubAllGlobals()
   })
 
   it('copies just the fenced text, not the words around it', async () => {
@@ -54,9 +95,15 @@ describe('MessageBubble', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('{"a":1}\n'))
   })
 
-  it('offers to save a whole reply as Markdown, named after its first heading', async () => {
+  it('offers to save a whole reply as Markdown, PDF, Word or a web page, named after its first heading', async () => {
     render(<MessageBubble role="assistant" text={'# Grocery List\n\n- eggs'} model="m" elapsed="1" />)
-    expect(await screen.findByRole('button', { name: 'Save reply as grocery-list.md' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Save reply as a file' }))
+    const menu = screen.getByRole('menu', { name: 'Save reply as' })
+    expect(within(menu).getAllByRole('menuitem').map((b) => b.textContent)).toEqual([
+      'Markdown grocery-list.md', 'PDF grocery-list.pdf', 'Word grocery-list.docx', 'Web page grocery-list.html',
+    ])
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
   it('opens a reply in a full-screen reading view, titled after the chat, and closes it again', async () => {
@@ -65,7 +112,7 @@ describe('MessageBubble', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Reading: Weekly planning' })
     expect(dialog).toBeInTheDocument()
     expect((await within(dialog).findByText('bold')).tagName).toBe('STRONG')
-    expect(within(dialog).getByRole('button', { name: 'Save reply as plan.md' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Save reply as a file' })).toBeInTheDocument()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Open in reading view' }))

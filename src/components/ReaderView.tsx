@@ -1,9 +1,10 @@
 import { Suspense, lazy, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Download, Share, X } from 'lucide-react'
+import { Share, X } from 'lucide-react'
 import { toast } from 'sonner'
 import CopyButton from './CopyButton'
-import { downloadText, fenceFile } from '../lib/export'
+import SaveButton from './SaveButton'
+import { fenceFile } from '../lib/export'
 
 const MarkdownText = lazy(() => import('./MarkdownText'))
 
@@ -56,9 +57,7 @@ export default function ReaderView({ text, title, onClose }: { text: string; tit
           <div className="reader-title">{title}</div>
           <div className="reader-tools">
             <CopyButton text={text} label="Copy reply" />
-            <button type="button" className="copy-btn" aria-label={`Save reply as ${file.name}`} title={`Save as ${file.name}`} onClick={() => downloadText(file.name, text, file.type)}>
-              <Download size={15} aria-hidden="true" />
-            </button>
+            <SaveButton text={text} below />
             {canShare && (
               <button type="button" className="copy-btn" aria-label="Share reply" title="Share" onClick={() => void share(text, title, file)}>
                 <Share size={15} aria-hidden="true" />

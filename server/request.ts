@@ -49,6 +49,23 @@ export const DATE_NOTE =
   "date and time -- treat it as 'now' for anything time-relative (today, tomorrow, this week, how long until) " +
   'and when filling date parameters for tools.'
 
+/**
+ * How to hand the user a file: the page shows a fence named as a file as
+ * one they can save, and the server makes the formats a model can't write
+ * (server/files.ts). Fixed text, so it costs the prompt cache nothing.
+ */
+export const FILES_NOTE =
+  'When the user asks for a file or a document to download, or you write a complete file of any kind (a whole web page, ' +
+  'script or data set), write its complete contents in one fenced code block whose ' +
+  'info string is the language and then a file name, such as ```html trip-plan.html or ```csv budget.csv. The app shows ' +
+  'it as a file the user can save. It also makes files you cannot write as text: for a PDF or Word document (.pdf, .docx, ' +
+  '.odt, .rtf) write the content as Markdown, or as HTML when the layout matters, under that name (```markdown ' +
+  'cover-letter.pdf); for an Excel spreadsheet write CSV named .xlsx (```csv budget.xlsx), with amounts like $1200.50 or ' +
+  '15% (no thousands commas), formulas like =SUM(B2:B9) where totals belong, and quotes around any cell that holds a ' +
+  'comma, formulas included; for a PNG image write SVG named ' +
+  '.png. HTML for a PDF or an image is drawn offline, so keep its styles and scripts inline. One block per file, the whole ' +
+  'file inside it; only make a file when one is asked for or clearly useful.'
+
 export function stampInput(text: string, now: Date = new Date()): string {
   const when = now.toLocaleString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -122,10 +139,10 @@ export async function requestFor(
   const limit = historyLimit(config.historyChars)
   // Which memories: the chat's own pick, else the folder's, else automatic.
   const memory = memoryOn ? sources.memories.context(4000, conv.memorySelection ?? folder?.memorySelection) : null
-  // The date note goes first and never changes, so it costs the prompt
-  // cache nothing; the stamp it refers to rides on each message (see
+  // The date and files notes go first and never change, so they cost the
+  // prompt cache nothing; the stamp it refers to rides on each message (see
   // stampInput).
-  const systemPrompt = [DATE_NOTE, config.systemPrompt.trim(), memory?.block].filter(Boolean).join('\n\n')
+  const systemPrompt = [DATE_NOTE, FILES_NOTE, config.systemPrompt.trim(), memory?.block].filter(Boolean).join('\n\n')
   const prompt = buildHistoryPrompt(systemPrompt, history, limit, conv.summary)
   if (prompt) body.system_prompt = prompt
   return { body, cap, memory }

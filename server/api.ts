@@ -15,6 +15,7 @@ import { lmStudioBase, lmStudioFetch } from './lm-studio.ts'
 import { readModelConfig } from './model-config.ts'
 import { clearCapabilityCache, reasoningCapability, toModelConfig, withOffOption } from './capabilities.ts'
 import { ModelLoader } from './model-load.ts'
+import { FileError, makeFile } from './files.ts'
 import { SpeechError, Tracks, readSpeakRequest, synthesize, trackType } from './speech.ts'
 import { isVoice, speedOf } from '../src/lib/speech.ts'
 import { metaOf } from '../src/types.ts'
@@ -390,6 +391,23 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         res.setHeader('Cache-Control', 'no-store')
         res.end(audio)
       }).catch((err: Error) => json(res, err instanceof SpeechError ? err.status : 400, { error: err.message }))
+      return undefined
+    }
+
+    // --- files ------------------------------------------------------------
+    // A PDF, Word document, spreadsheet or image made from a fence's text
+    // (see files.ts); the page saves what comes back.
+    if (url === '/api/files' && method === 'POST') {
+      void readBody(req).then(async (body) => {
+        const { name, source, text } = (body ?? {}) as { name?: unknown; source?: unknown; text?: unknown }
+        const file = await makeFile(name, source, text)
+        res.statusCode = 200
+        res.setHeader('Content-Type', file.type)
+        res.setHeader('Content-Length', String(file.data.length))
+        res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`)
+        res.setHeader('Cache-Control', 'no-store')
+        res.end(file.data)
+      }).catch((err: Error) => json(res, err instanceof FileError ? err.status : 400, { error: err.message }))
       return undefined
     }
 

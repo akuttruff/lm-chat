@@ -269,6 +269,25 @@ describe('speech', () => {
   })
 })
 
+describe('files', () => {
+  it('makes a spreadsheet from CSV and sends it as a download', async () => {
+    const res = await send('/api/files', 'POST', { name: 'budget.xlsx', source: 'csv', text: 'Item,Cost\nRent,1200\n' })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    expect(res.headers.get('content-disposition')).toBe('attachment; filename="budget.xlsx"')
+    const bytes = Buffer.from(await res.arrayBuffer())
+    expect(bytes.subarray(0, 2).toString()).toBe('PK')
+  })
+
+  it('refuses a format it can\'t make, or one made from the wrong kind of text', async () => {
+    const exe = await send('/api/files', 'POST', { name: 'x.exe', source: 'markdown', text: 'hi' })
+    expect(exe.status).toBe(400)
+    expect(await exe.json()).toEqual({ error: "LM Chat can't make .exe files." })
+    expect((await send('/api/files', 'POST', { name: 'x.xlsx', source: 'markdown', text: 'hi' })).status).toBe(400)
+    expect((await send('/api/files', 'POST', { name: 'x.pdf', source: 'markdown', text: '  ' })).status).toBe(400)
+  })
+})
+
 describe('branching and search', () => {
   it('starts a branch from an edited message, sending it with the original pictures, and leaves the source as it was', async () => {
     const src = api.store.getConversations().activeId!
