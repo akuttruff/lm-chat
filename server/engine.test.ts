@@ -6,7 +6,7 @@ import { Bus } from './bus.ts'
 import {
   Engine, formatToolOutput, parseIntegrations, newEngineState, toolArgs,
 } from './engine.ts'
-import { DATE_NOTE, FILES_NOTE } from './request.ts'
+import { DATE_NOTE, FILES_NOTE, READING_NOTE } from './request.ts'
 import { cleanTitle, wholeSentences } from './background.ts'
 import { buildHistoryPrompt, planCompaction, planFullCompaction, summarizerInput, summaryTokenCap } from './history.ts'
 import { Store } from './store.ts'
@@ -190,6 +190,21 @@ describe('request body', () => {
     vi.stubGlobal('fetch', f)
     await engine.runTurn(convId, 'hi')
     expect(bodyOf(f).integrations).toEqual([{ type: 'plugin', id: 'mcp/astrology' }])
+  })
+
+  it('asks for sectioned readings when the astrology or tarot tools are on, and only then', async () => {
+    configure({ mcpTools: 'mcp/astrology-v2', systemPrompt: 'be terse' })
+    const astro = streams([evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', astro)
+    await engine.runTurn(convId, 'hi')
+    expect(bodyOf(astro).system_prompt).toBe(`${DATE_NOTE}\n\n${FILES_NOTE}\n\n${READING_NOTE}\n\nbe terse`)
+    expect(READING_NOTE).toContain('a ### heading for each placement, transit, aspect or card')
+
+    configure({ mcpTools: 'mcp/deep-research' })
+    const other = streams([evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', other)
+    await engine.runTurn(convId, 'hi again')
+    expect(String(bodyOf(other).system_prompt)).not.toContain(READING_NOTE)
   })
 })
 

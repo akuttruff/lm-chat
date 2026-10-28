@@ -1020,7 +1020,17 @@ html, body, #root {
 .md p { margin: 0 0 10px; }
 .md ul, .md ol { margin: 0 0 10px; padding-left: 20px; }
 .md li { margin: 3px 0; }
-.md h1, .md h2, .md h3 { margin: 14px 0 8px; font-size: 15px; font-weight: 600; }
+.md li::marker { color: var(--moss); }
+/* Headings in clear steps, so a long reading reads as sections rather than paragraph after paragraph:
+   a section (##) is larger under a rule, a placement or card (###) is in moss at about body size, and a
+   labelled part inside it (####) is a small capitals label. In em, so they follow the reply size setting. */
+.md h1, .md h2, .md h3, .md h4 { font-weight: 600; line-height: 1.3; }
+.md h1 { font-size: 1.3em; margin: 18px 0 8px; }
+.md h2 { font-size: 1.15em; margin: 22px 0 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.md h3 { font-size: 1.03em; margin: 16px 0 4px; color: var(--moss); }
+.md h4 { font-size: 0.78em; margin: 12px 0 3px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--paper-dim); }
+.md > :is(h1, h2, h3, h4):first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
 .md code {
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
   font-size: 0.9em;
@@ -1056,7 +1066,8 @@ html, body, #root {
   color: var(--paper-dim);
 }
 .md table { border-collapse: collapse; width: 100%; margin-bottom: 10px; font-size: 13px; }
-.md th, .md td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; }
+.md th, .md td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
+.md th { background: var(--bg); font-weight: 600; white-space: nowrap; }
 
 /* --- swipeable conversation rows --- */
 .conv-row-wrap { position: relative; border-bottom: 1px solid var(--line); overflow: hidden; }

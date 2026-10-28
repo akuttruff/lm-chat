@@ -66,6 +66,24 @@ export const FILES_NOTE =
   '.png. HTML for a PDF or an image is drawn offline, so keep its styles and scripts inline. One block per file, the whole ' +
   'file inside it; only make a file when one is asked for or clearly useful.'
 
+/**
+ * How to lay out an astrology or tarot reading, for a chat with those tools
+ * on: sections and short blocks, not paragraph after paragraph. Fixed text,
+ * and a chat's tools rarely change, so it costs the prompt cache little.
+ */
+export const READING_NOTE =
+  'When you write an astrology or tarot reading (a birth chart, transits, a forecast, a card or a spread), segment it ' +
+  'in Markdown: a ## heading for each major section, a ### heading for each placement, transit, aspect or card, and ' +
+  'each labelled part inside one as a #### heading (#### In your life) with its text below. Keep every block short: no ' +
+  'paragraph runs past three sentences. Wherever you name several things (actions, themes, dates, signs to watch for), ' +
+  'make a bulleted list, a line each. Open with a table when an at-a-glance overview helps, bold the one thing to ' +
+  'remember in each section, and close with a line to carry. A short question about a reading gets a short answer: ' +
+  'the answer first, then ### sections only if it runs long.'
+
+/** Whether a chat's tools include astrology or tarot, which brings in READING_NOTE. */
+export const readsCharts = (integrations: { id?: string }[]): boolean =>
+  integrations.some((i) => /astro|tarot/i.test(i.id ?? ''))
+
 export function stampInput(text: string, now: Date = new Date()): string {
   const when = now.toLocaleString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -140,9 +158,9 @@ export async function requestFor(
   // Which memories: the chat's own pick, else the folder's, else automatic.
   const memory = memoryOn ? sources.memories.context(4000, conv.memorySelection ?? folder?.memorySelection) : null
   // The date and files notes go first and never change, so they cost the
-  // prompt cache nothing; the stamp it refers to rides on each message (see
+  // prompt cache nothing (the reading note follows them, fixed for a chat's tools); the stamp it refers to rides on each message (see
   // stampInput).
-  const systemPrompt = [DATE_NOTE, FILES_NOTE, config.systemPrompt.trim(), memory?.block].filter(Boolean).join('\n\n')
+  const systemPrompt = [DATE_NOTE, FILES_NOTE, readsCharts(integrations) ? READING_NOTE : null, config.systemPrompt.trim(), memory?.block].filter(Boolean).join('\n\n')
   const prompt = buildHistoryPrompt(systemPrompt, history, limit, conv.summary)
   if (prompt) body.system_prompt = prompt
   return { body, cap, memory }
