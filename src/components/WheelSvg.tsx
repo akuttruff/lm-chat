@@ -24,14 +24,14 @@ import { placeTip, type Placement, type Point, type Subject } from '../lib/tipPl
 const SIZE = 600
 const C = SIZE / 2
 /** The wheel's ground, for a PNG of it. */
-export const WHEEL_BACKGROUND = '#1B1D1A'
+export const WHEEL_BACKGROUND = '#2B2B2B'
 const PALETTE = {
-  bg: WHEEL_BACKGROUND, band: '#23261F', line: '#34372E', paper: '#EDE8DC', dim: '#B9B4A6', faint: '#6B7A64',
+  bg: WHEEL_BACKGROUND, band: '#3A3A3A', line: '#575757', paper: '#FFFFFF', dim: '#D4D4D4', faint: '#808080',
   fire: '#D08466', earth: '#8FA382', air: '#D9B86A', water: '#7FA6C9',
   // Aspect lines: brighter than the sign colours, so they read across the centre.
-  hard: '#E8906C', soft: '#8FBCE6', conjunction: '#EDE8DC', minor: '#9FB592',
+  hard: '#E8906C', soft: '#8FBCE6', conjunction: '#FFFFFF', minor: '#9FB592',
   // The natal ring is in paper; the transit ring a violet nothing else uses, so the two read apart.
-  natal: '#EDE8DC', transit: '#C9B4EC', natalDegree: '#B9B4A6', transitDegree: '#A99AC9',
+  natal: '#FFFFFF', transit: '#C9B4EC', natalDegree: '#D4D4D4', transitDegree: '#A99AC9',
 }
 const ELEMENT_COLOR: Record<ZodiacElement, string> = {
   fire: PALETTE.fire, earth: PALETTE.earth, air: PALETTE.air, water: PALETTE.water,
