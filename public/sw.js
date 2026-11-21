@@ -8,8 +8,15 @@
 // build's files are fetched into the cache before its page replaces the old
 // one, so the cached shell is always a whole build; the page then hears
 // `app-updated` and reloads if it has only just opened (see lib/appShell.ts).
+//
+// Two things keep a redeploy from being missed. `/index.html` is never
+// answered here, so the page's check for a newer build (lib/appShell.ts
+// serverIsNewer) always reaches the server. And a page that asks for a
+// refresh is always told once the shell holds the server's build, even when
+// the refresh behind its own navigation got there first and said so before
+// the page was listening.
 const APP = 'lm-chat'
-const SHELL = `${APP}-shell-v2`
+const SHELL = `${APP}-shell-v3`
 const BUILD = `${APP}-build-`
 const EXTRAS = ['/manifest.webmanifest', '/icon.svg', '/icon.png', '/icon-180.png']
 
@@ -34,37 +41,44 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && !k.startsWith(BUILD)).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-      .then(async () => {
-        if (!upgrading) return
-        for (const client of await self.clients.matchAll({ type: 'window' })) {
-          if ('navigate' in client) await client.navigate(client.url).catch(() => { /* a page that cannot be sent round stays */ })
-        }
-      }),
-  )
+  const activated = caches.keys()
+    .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && !k.startsWith(BUILD)).map((k) => caches.delete(k))))
+    .then(() => self.clients.claim())
+  event.waitUntil(activated)
+  // The pages on an old shell are sent round once this worker is active, not while it activates: a page's
+  // navigation waits for activation to finish, so waiting on it here would hold both up for good.
+  if (upgrading) {
+    void activated.then(async () => {
+      for (const client of await self.clients.matchAll({ type: 'window' })) {
+        if ('navigate' in client) client.navigate(client.url).catch(() => { /* a page that cannot be sent round stays */ })
+      }
+    })
+  }
 })
 
 // A page that finds the server on a newer build than itself asks for the shell to be refreshed now,
 // rather than waiting for the refresh a navigation starts, which can finish before the page is listening.
+// It only asks when it is behind, so once the shell holds the server's build it is told to reload, whether
+// this refresh changed the shell or the navigation's already had.
 self.addEventListener('message', (event) => {
   if (event.data?.type !== 'refresh') return
   event.waitUntil(caches.open(SHELL).then(async (shell) => {
-    const cached = await shell.match('/')
-    if (cached) await refreshShell(shell, cached)
-    else {
+    try {
       const res = await fetch('/', { cache: 'no-store' })
-      if (res.ok) await keepBuild(shell, res)
-    }
+      if (!res.ok) return
+      const cached = await shell.match('/')
+      const [before, after] = await Promise.all([cached ? cached.text() : Promise.resolve(''), res.clone().text()])
+      if (before !== after) await keepBuild(shell, res)
+      event.source?.postMessage({ type: 'app-updated' })
+    } catch { /* no network, or a file of the build would not come: the shell on hand stays, and the page with it */ }
   }))
 })
 
 self.addEventListener('fetch', (event) => {
   const req = event.request
   const url = new URL(req.url)
-  if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/')) return
+  // /index.html is how a page asks the server which build it is on: always the network's answer.
+  if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.startsWith('/api/') || url.pathname === '/index.html') return
   if (isAsset(url)) event.respondWith(assetFirst(event))
   else if (req.mode === 'navigate' || url.pathname === '/') event.respondWith(shellFirst(event))
   else event.respondWith(cachedThenRefreshed(req))
