@@ -2,7 +2,8 @@ import type { ReactNode } from 'react'
 import type React from 'react'
 import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { Drawer } from 'vaul'
-import { Trash2, Pencil, MessageSquare, Star, FolderInput, Ghost, Plus, CheckSquare, PanelLeftClose, Search, Settings, X } from 'lucide-react'
+import { Trash2, Pencil, MessageSquare, Star, FolderInput, FolderPlus, Ghost, CheckSquare, PanelLeftClose, Search, Settings, X } from 'lucide-react'
+import FolderHead from './FolderHead'
 import { toast } from 'sonner'
 import { swipeReveal } from '../lib/swipeReveal.ts'
 import type { Conversation, Folder, SearchHit } from '../types.ts'
@@ -46,6 +47,12 @@ interface ConversationListProps {
   onOpenFolderPicker?: (id: string) => void
   /** Start a chat filed into this folder, from the + on its header. */
   onNewChat?: (folderId: string) => void
+  /** Folders are managed from their headers here: make one, rename it, its reasoning, delete it. */
+  onCreateFolder?: (name: string) => Promise<Folder>
+  onRenameFolder?: (id: string, name: string) => Promise<void>
+  onFolderReasoning?: (folder: Folder) => void
+  /** Delete a folder; `count` is how many chats are in it, so the parent knows whether to ask about them. */
+  onDeleteFolder?: (folder: Folder, count: number) => void
   /** Settings lives at the foot of the list, out of the header's way. */
   onOpenSettings?: () => void
   /**
@@ -296,15 +303,15 @@ interface Section {
   /** Null for the flat, no-folders-in-use case: no header at all. */
   label: string | null
   /** The folder this section is, or null for the unfiled chats. */
-  folderId: string | null
+  folder: Folder | null
   chats: Conversation[]
 }
 
 /**
  * `conversations` arrives already sorted (starred first, then recency); this
  * only regroups it by folder, so each section keeps that same order inside
- * it. A folder with nothing in it isn't shown here -- it's still there to
- * file something into, from the picker, just not a section to scroll past.
+ * it. Every folder has a section, an empty one too, since its header is
+ * where it is renamed and deleted.
  */
 function sectionsOf(conversations: Conversation[], folders: Folder[]): Section[] {
   const byFolder = new Map<string, Conversation[]>()
@@ -320,12 +327,25 @@ function sectionsOf(conversations: Conversation[], folders: Folder[]): Section[]
     }
   }
   const sections: Section[] = []
-  for (const f of folders) {
-    const chats = byFolder.get(f.id)
-    if (chats?.length) sections.push({ key: f.id, label: f.name, folderId: f.id, chats })
-  }
-  if (unfiled.length) sections.push({ key: '__unfiled', label: sections.length ? 'Unfiled' : null, folderId: null, chats: unfiled })
+  for (const f of folders) sections.push({ key: f.id, label: f.name, folder: f, chats: byFolder.get(f.id) ?? [] })
+  if (unfiled.length) sections.push({ key: UNFILED, label: sections.length ? 'Unfiled' : null, folder: null, chats: unfiled })
   return sections
+}
+
+const UNFILED = '__unfiled'
+
+/** Which sections are folded, by key: kept per device, since it is about this screen. */
+const FOLDED_KEY = 'lm-chat.folded-sections'
+function readFolded(): Set<string> {
+  try {
+    const list: unknown = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '[]')
+    return new Set(Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+function writeFolded(folded: Set<string>): void {
+  try { localStorage.setItem(FOLDED_KEY, JSON.stringify([...folded])) } catch { /* private mode: folding just isn't remembered */ }
 }
 
 /** The query's occurrences in `text` marked, case-insensitively. */
@@ -339,7 +359,7 @@ function highlight(text: string, query: string): ReactNode {
 export default function ConversationList({
   open, conversations, activeId, folders, working = {}, onOpen, onDelete, onRestore = () => {}, onRename,
   onStar = () => {}, onOpenFolderPicker = () => {}, onNewChat, onDeleteMany, onRestoreMany, onClose, onSearch, onOpenAt,
-  onOpenSettings, variant = 'sheet', onCollapse,
+  onOpenSettings, variant = 'sheet', onCollapse, onCreateFolder, onRenameFolder, onFolderReasoning, onDeleteFolder,
 }: ConversationListProps) {
   const sidebar = variant === 'sidebar'
   // Grouped once per change to the chats or folders, not on every render.
@@ -351,6 +371,26 @@ export default function ConversationList({
     const t = setInterval(() => setToday((prev) => { const now = new Date().toDateString(); return now === prev ? prev : now }), 60_000)
     return () => clearInterval(t)
   }, [])
+  const [folded, setFolded] = useState<Set<string>>(readFolded)
+  const toggleFolded = (key: string): void => setFolded((prev) => {
+    const next = new Set(prev)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    writeFolded(next)
+    return next
+  })
+  // A new folder's name, typed at the top of the list; null when not making one.
+  const [newFolder, setNewFolder] = useState<string | null>(null)
+  const createFolder = async (): Promise<void> => {
+    const name = newFolder?.trim()
+    if (!name || !onCreateFolder) { setNewFolder(null); return }
+    try {
+      await onCreateFolder(name)
+      setNewFolder(null)
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
   // In the sidebar nothing closes: opening a chat just shows it beside the list.
   const close = sidebar ? () => {} : onClose
   // The search box: results replace the list while there's a query.
@@ -426,6 +466,17 @@ export default function ConversationList({
                 <PanelLeftClose size={17} aria-hidden="true" />
               </button>
             )}
+            {onCreateFolder && !selecting && (
+              <button
+                type="button"
+                className="icon-btn conv-new-folder-btn"
+                aria-label="New folder"
+                title="New folder"
+                onClick={() => setNewFolder((v) => (v === null ? '' : null))}
+              >
+                <FolderPlus size={17} aria-hidden="true" />
+              </button>
+            )}
             {onDeleteMany && conversations.length > 0 && (
               <button
                 type="button"
@@ -490,44 +541,61 @@ export default function ConversationList({
             </div>
           )}
           <div className="conv-list drawer-scroll" data-vaul-no-drag hidden={searching}>
-            {sections.map((section) => (
+            {newFolder !== null && (
+              <div className="conv-new-folder">
+                <input
+                  aria-label="New folder name"
+                  placeholder="Folder name"
+                  value={newFolder}
+                  maxLength={60}
+                  autoFocus
+                  onChange={(e) => setNewFolder(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); void createFolder() }
+                    if (e.key === 'Escape') setNewFolder(null)
+                  }}
+                />
+                <button type="button" onClick={() => setNewFolder(null)}>Cancel</button>
+                <button type="button" className="primary" disabled={!newFolder.trim()} onClick={() => void createFolder()}>Create</button>
+              </div>
+            )}
+            {sections.filter((section) => !selecting || section.chats.length).map((section) => (
               <div key={section.key}>
-                {section.label && (
+                {section.label && (selecting ? (
                   <div className="conv-section-head">
-                    {selecting ? (
-                      <label className="conv-section-select">
-                        <input
-                          type="checkbox"
-                          checked={section.chats.every((c) => selected!.has(c.id))}
-                          ref={(el) => {
-                            if (el) {
-                              const n = section.chats.filter((c) => selected!.has(c.id)).length
-                              el.indeterminate = n > 0 && n < section.chats.length
-                            }
-                          }}
-                          onChange={() => toggleGroup(section.chats.map((c) => c.id))}
-                          aria-label={`Select every chat in ${section.label}`}
-                        />
-                        <span>{section.label}</span>
-                      </label>
-                    ) : (
+                    <label className="conv-section-select">
+                      <input
+                        type="checkbox"
+                        checked={section.chats.every((c) => selected!.has(c.id))}
+                        ref={(el) => {
+                          if (el) {
+                            const n = section.chats.filter((c) => selected!.has(c.id)).length
+                            el.indeterminate = n > 0 && n < section.chats.length
+                          }
+                        }}
+                        onChange={() => toggleGroup(section.chats.map((c) => c.id))}
+                        aria-label={`Select every chat in ${section.label}`}
+                      />
                       <span>{section.label}</span>
-                    )}
-                    {/* Start a chat already filed here, so the folder's reasoning and tools apply from the first message. */}
-                    {section.folderId && onNewChat && !selecting && (
-                      <button
-                        type="button"
-                        className="conv-section-add"
-                        aria-label={`New chat in ${section.label}`}
-                        title={`New chat in ${section.label}`}
-                        onClick={() => { onNewChat(section.folderId!); close() }}
-                      >
-                        <Plus size={15} aria-hidden="true" />
-                      </button>
-                    )}
+                    </label>
                   </div>
+                ) : (
+                  <FolderHead
+                    label={section.label}
+                    folder={section.folder}
+                    count={section.chats.length}
+                    folded={folded.has(section.key)}
+                    onToggle={() => toggleFolded(section.key)}
+                    onNewChat={section.folder && onNewChat ? () => { onNewChat(section.folder!.id); close() } : undefined}
+                    onRename={section.folder && onRenameFolder ? (name) => onRenameFolder(section.folder!.id, name) : undefined}
+                    onReasoning={section.folder && onFolderReasoning ? () => onFolderReasoning(section.folder!) : undefined}
+                    onDelete={section.folder && onDeleteFolder ? () => onDeleteFolder(section.folder!, section.chats.length) : undefined}
+                  />
+                ))}
+                {!selecting && section.folder && !section.chats.length && !folded.has(section.key) && (
+                  <div className="conv-section-empty">No chats yet. Use + to start one here, or move a chat in.</div>
                 )}
-                {section.chats.map((c) => (selecting ? (
+                {!(folded.has(section.key) && !selecting) && section.chats.map((c) => (selecting ? (
                   <SelectRow key={c.id} conv={c} checked={selected!.has(c.id)} today={today} onToggle={toggle} />
                 ) : (
                   <Row

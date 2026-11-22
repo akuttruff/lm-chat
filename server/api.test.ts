@@ -446,6 +446,27 @@ describe('folders', () => {
     expect(await (await send(`/api/folders/${folder.id}`, 'PATCH', { name: 'Reading list' })).json()).toMatchObject({ name: 'Reading list', reasoning: 'off' })
   })
 
+  it('undoes a delete: the folder as it was, with its chats filed back in', async () => {
+    const id = api.store.getConversations().activeId!
+    api.store.setMessages(id, [{ id: 'u', role: 'user', text: 'keep me' }])
+    const folder = await (await send('/api/folders', 'POST', { name: 'Tarot' })).json() as { id: string; createdAt: number }
+    await send(`/api/folders/${folder.id}`, 'PATCH', { reasoning: 'off' })
+    await send(`/api/chats/${id}`, 'PATCH', { folderId: folder.id })
+
+    const removed = await (await send(`/api/folders/${folder.id}`, 'DELETE')).json() as { folder: Record<string, unknown>; chatIds: string[] }
+    expect(removed.folder).toMatchObject({ id: folder.id, name: 'Tarot', reasoning: 'off' })
+    expect(removed.chatIds).toEqual([id])
+    expect(api.store.get(id)!.folderId).toBeNull()
+
+    const restored = await send('/api/folders/restore', 'POST', { folder: removed.folder, chatIds: [...removed.chatIds, 'gone'] })
+    expect(await restored.json()).toMatchObject({ id: folder.id, name: 'Tarot', reasoning: 'off', createdAt: folder.createdAt })
+    expect(api.store.get(id)!.folderId).toBe(folder.id)
+    // Pressed twice: still one folder.
+    await send('/api/folders/restore', 'POST', { folder: removed.folder, chatIds: [] })
+    expect(await (await get('/api/folders')).json()).toHaveLength(1)
+    expect((await send('/api/folders/restore', 'POST', { folder: { name: 'no id' } })).status).toBe(400)
+  })
+
   it('files a chat into a folder through the same PATCH the rest of a chat is edited with', async () => {
     const id = api.store.getConversations().activeId!
     const folder = await (await send('/api/folders', 'POST', { name: 'Astrology' })).json() as { id: string }

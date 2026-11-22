@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type {
-  Conversation, ConversationMeta, ConversationStore, Folder, FolderUpdate, ImageUpload, Message, ModelLoadState, PublicConfig, Status,
+  Conversation, ConversationMeta, ConversationStore, DeletedFolder, Folder, FolderUpdate, ImageUpload, Message, ModelLoadState, PublicConfig, Status,
   SearchHit,
 } from '../types.ts'
 import { chime } from '../lib/chime.ts'
@@ -64,7 +64,8 @@ export interface ServerState {
   createFolder: (name: string) => Promise<Folder>
   /** Rename a folder or change its defaults; fields left out of the patch stay as they were. */
   updateFolder: (id: string, patch: FolderUpdate) => Promise<void>
-  deleteFolder: (id: string) => Promise<void>
+  deleteFolder: (id: string) => Promise<DeletedFolder>
+  restoreFolder: (deleted: DeletedFolder) => Promise<void>
   saveConfig: (patch: Partial<PublicConfig> & { apiToken?: string }) => Promise<void>
   /** How the chat model picked last is loading, as the server reports it; null before anything was picked. */
   modelLoad: ModelLoadState | null
@@ -221,10 +222,19 @@ export default function useServerState(): ServerState {
     setFolders((list) => byName(list.map((f) => (f.id === id ? body : f))))
   }, [])
 
-  const deleteFolder = useCallback(async (id: string): Promise<void> => {
+  const deleteFolder = useCallback(async (id: string): Promise<DeletedFolder> => {
     const r = await fetch(`/api/folders/${encodeURIComponent(id)}`, { method: 'DELETE' })
     if (!r.ok) throw new Error('Could not delete folder')
     setFolders((list) => list.filter((f) => f.id !== id))
+    return await r.json() as DeletedFolder
+  }, [])
+
+  /** Undo for deleteFolder: the folder back, and the chats that were in it filed back in. */
+  const restoreFolder = useCallback(async ({ folder, chatIds }: DeletedFolder): Promise<void> => {
+    const r = await post('/api/folders/restore', { folder, chatIds })
+    const body = await r.json() as Folder & { error?: string }
+    if (!r.ok) throw new Error(body.error ?? 'Could not restore the folder')
+    setFolders((list) => byName([...list.filter((f) => f.id !== body.id), body]))
   }, [])
 
   // The latest store, for applying events in order as they arrive -- each
@@ -516,6 +526,7 @@ export default function useServerState(): ServerState {
     createFolder,
     updateFolder,
     deleteFolder,
+    restoreFolder,
     saveConfig,
     modelLoad,
     loadModel,

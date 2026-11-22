@@ -18,7 +18,7 @@ import { FileError, makeFile } from './files.ts'
 import { SpeechError, Tracks, readSpeakRequest, synthesize, trackType } from './speech.ts'
 import { isVoice, speedOf } from '../src/lib/speech.ts'
 import { metaOf } from '../src/types.ts'
-import type { Conversation, ConversationStore, ImageUpload, ServerConfig } from '../src/types.ts'
+import type { Conversation, ConversationStore, Folder, ImageUpload, ServerConfig } from '../src/types.ts'
 
 /** How much a message may carry: enough for a few photos, not a gallery. */
 const MAX_IMAGES_PER_MESSAGE = 6
@@ -491,6 +491,20 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         .catch((err: Error) => json(res, 400, { error: err.message }))
       return undefined
     }
+    // Undo of a folder delete: the folder as it was, and its chats filed back into it.
+    if (url === '/api/folders/restore' && method === 'POST') {
+      void readBody(req).then((body) => {
+        const { folder, chatIds } = (body ?? {}) as { folder?: Partial<Folder>; chatIds?: unknown }
+        const restored = store.restoreFolder(folder ?? {})
+        const ids = Array.isArray(chatIds) ? chatIds.filter((x): x is string => typeof x === 'string') : []
+        for (const convId of ids) {
+          const conv = store.get(convId) && store.patch(convId, { folderId: restored.id })
+          if (conv) bus.send({ type: 'patch', payload: { conversationId: convId, meta: metaOf(conv) } })
+        }
+        return json(res, 200, restored)
+      }).catch((err: Error) => json(res, 400, { error: err.message }))
+      return undefined
+    }
     const folderMatch = /^\/api\/folders\/([^/]+)$/.exec(url)
     if (folderMatch) {
       const id = decodeURIComponent(folderMatch[1]!)
@@ -508,6 +522,8 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
         // broadcast -- other tabs and devices otherwise keep pointing at a
         // folder id that no longer resolves to anything.
         const affected = store.getConversations().items.filter((c) => c.folderId === id).map((c) => c.id)
+        // Returned whole, with the chats that were in it, so Undo can put it all back.
+        const removedFolder = store.getFolder(id)
         const removed = store.deleteFolder(id)
         if (removed) {
           for (const convId of affected) {
@@ -516,7 +532,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
           }
         }
         return removed
-          ? json(res, 200, { ok: true })
+          ? json(res, 200, { ok: true, folder: removedFolder, chatIds: affected })
           : json(res, 404, { error: 'no such folder' })
       }
     }

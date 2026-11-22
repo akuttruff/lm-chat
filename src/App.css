@@ -612,7 +612,7 @@ html, body, #root {
 .conv-section-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 4px;
   padding: 16px 6px 4px;
   font-size: 11px;
   font-weight: 600;
@@ -621,22 +621,61 @@ html, body, #root {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-/* "+" on a folder's header: a new chat filed there. Small, but a full-size tap target. */
-.conv-section-add {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  margin: -6px -4px -6px 0;
-  border: none;
-  border-radius: 8px;
-  background: none;
-  color: var(--paper-dim);
-  cursor: pointer;
+/* A folder's header: its name folds the section; ⋯ manages the folder; + starts a chat in it. */
+.conv-section-toggle {
+  flex: 1 1 auto; min-width: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: -6px 0 -6px -6px; padding: 6px;
+  border: none; border-radius: 8px; background: none; color: inherit;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: left; cursor: pointer;
 }
-.conv-section-add:hover, .conv-section-add:focus-visible { color: var(--moss); background: var(--bg); }
-.conv-section-add:active { background: var(--bg); }
+.conv-section-toggle:hover, .conv-section-toggle:focus-visible { color: var(--paper); }
+.conv-section-chev { flex: 0 0 auto; transform: rotate(90deg); transition: transform 0.15s; }
+.conv-section-toggle[aria-expanded="false"] .conv-section-chev { transform: none; }
+.conv-section-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-section-count { font-weight: 500; letter-spacing: 0; opacity: 0.8; }
+/* Small, but full-size tap targets. */
+.conv-section-btn {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; margin: -6px 0;
+  border: none; border-radius: 8px; background: none;
+  color: var(--paper-dim); cursor: pointer;
+}
+.conv-section-btn:hover, .conv-section-btn:focus-visible, .conv-section-btn[aria-expanded="true"] { color: var(--moss); background: var(--bg); }
+.conv-section-add { margin-right: -4px; }
+.conv-section-more { position: relative; display: inline-flex; }
+/* The folder menu opens downward from its header, not up like the composer's. */
+.folder-menu { top: calc(100% + 4px); bottom: auto; min-width: 210px; text-transform: none; letter-spacing: normal; font-weight: 400; }
+/* On a desktop the ⋯ waits for a hover, like the buttons on a chat's row; a phone always shows it. */
+@media (hover: hover) and (pointer: fine) {
+  .conv-section-more { opacity: 0; transition: opacity 0.12s; }
+  .conv-section-head:hover .conv-section-more,
+  .conv-section-head:focus-within .conv-section-more,
+  .conv-section-more.open { opacity: 1; }
+}
+.conv-section-head.renaming { padding-top: 10px; padding-bottom: 2px; }
+.conv-section-rename {
+  width: 100%; padding: 7px 9px;
+  border: 1px solid var(--moss); border-radius: 8px; background: var(--bg); color: var(--paper);
+  font: inherit; font-size: 14px; text-transform: none; letter-spacing: normal;
+}
+.conv-section-empty { padding: 4px 6px 10px; font-size: 13px; color: var(--paper-dim); }
+/* Naming a new folder, at the top of the list. */
+.conv-new-folder { display: flex; gap: 8px; align-items: center; padding: 8px 2px 4px; }
+.conv-new-folder input {
+  flex: 1 1 auto; min-width: 0; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--paper);
+  font: inherit; font-size: 15px;
+}
+.conv-new-folder button {
+  flex: 0 0 auto; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: none; color: var(--paper); font: inherit; font-size: 14px; cursor: pointer;
+}
+.conv-new-folder button.primary { background: var(--moss); border-color: var(--moss); color: var(--bg); }
+.conv-new-folder button:disabled { opacity: 0.5; cursor: default; }
+.conv-new-folder-btn { margin-left: auto; width: 32px; height: 32px; color: var(--paper-dim); }
+.conv-collapse + .conv-new-folder-btn { margin-left: 0; margin-right: 6px; }
 .conv-list > div:first-child .conv-section-head { padding-top: 4px; }
 
 .conv-row-wrap {
@@ -1185,7 +1224,6 @@ html, body, #root {
 
 /* --- folders --- */
 .folder-list { display: flex; flex-direction: column; }
-.folder-row-wrap { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
 .folder-row {
   flex: 1 1 auto;
   min-width: 0;
@@ -1201,63 +1239,12 @@ html, body, #root {
   text-align: left;
 }
 .folder-row svg { flex: 0 0 auto; color: var(--moss); }
+.folder-list > .folder-row + .folder-row { border-top: 1px solid var(--line); }
 .folder-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.folder-actions { flex: 0 0 auto; display: flex; gap: 2px; }
-.folder-actions button {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  background: none;
-  border: none;
-  border-radius: 8px;
-  color: var(--paper-dim);
-}
-.folder-actions button:active { background: var(--bg); }
-.folder-actions button.danger { color: var(--rust); }
-.folder-edit { flex: 1 1 auto; padding: 10px 2px; }
-.folder-edit input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  color: var(--paper);
-  border-radius: 8px;
-  padding: 9px 10px;
-  font: inherit;
-  font-size: 15px;
-}
-.folder-edit .row { margin-top: 8px; }
 /* Under a folder's name: what it changes for its chats, e.g. "Reasoning off". */
 .folder-name { display: flex; flex-direction: column; gap: 2px; }
 .folder-sub { color: var(--paper-dim); font-size: 12px; white-space: normal; }
 
-/* --- a folder's settings page, inside the same sheet --- */
-.folder-editor-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-.folder-editor-head .drawer-title { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.folder-back {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: -8px;
-  padding: 6px 8px 6px 4px;
-  background: none;
-  border: none;
-  color: var(--moss);
-  font-size: 14px;
-}
-.folder-danger { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line); }
-.danger-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  padding: 4px 0;
-  color: var(--rust);
-  font-size: 14px;
-}
 .folder-new { display: flex; gap: 8px; padding: 0 2px; }
 .folder-new input {
   flex: 1 1 auto;
@@ -1566,3 +1553,15 @@ html, body, #root {
 .save-menu button { justify-content: space-between; }
 .save-ext { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 11px; color: var(--paper-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
 .save-menu.below { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; }
+
+/* Deleting a folder with chats in it: keep them, or delete them too. */
+.folder-delete-choices { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; padding-bottom: 8px; }
+.folder-delete-choices button {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px; border-radius: var(--radius);
+  border: 1px solid var(--line); background: none; color: var(--paper);
+  font: inherit; font-size: 15px; font-weight: 500; cursor: pointer;
+}
+.folder-delete-choices button.primary { background: var(--moss); border-color: var(--moss); color: var(--bg); }
+.folder-delete-choices button.danger-btn { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+.folder-delete-choices button:active { opacity: 0.8; }

@@ -11,6 +11,8 @@ interface ReasoningPickerProps {
   config: ModelConfig | null
   onChange: (value: string | null) => void
   onClose: () => void
+  /** What it is set for, when not the chat: "Reasoning for Tarot". */
+  title?: string
 }
 
 // Used only when a model's manifest can't be read -- the generic vocabulary
@@ -34,7 +36,7 @@ export const labelFor = (
 ): string => value || fallback || 'auto'
 
 export default function ReasoningPicker({
-  open, value, defaultValue, config, onChange, onClose,
+  open, value, defaultValue, config, onChange, onClose, title = 'Reasoning effort',
 }: ReasoningPickerProps) {
   const levels = levelsFor(config)
   const modelDefault = config?.reasoning?.default
@@ -52,7 +54,7 @@ export default function ReasoningPicker({
         <Drawer.Overlay className="drawer-overlay" />
         <Drawer.Content className="drawer-content" aria-describedby={undefined}>
           <div className="drawer-handle" />
-          <Drawer.Title className="drawer-title">Reasoning effort</Drawer.Title>
+          <Drawer.Title className="drawer-title">{title}</Drawer.Title>
 
           {unsupported ? (
             <div className="hint test-result bad">

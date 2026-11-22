@@ -1224,6 +1224,20 @@ export class Store {
   }
 
   /**
+   * A deleted folder back as it was -- same id, name, date and reasoning --
+   * for Undo. Its chats are filed back by the caller. A folder that still
+   * exists (Undo pressed twice) is left alone.
+   */
+  restoreFolder(input: Partial<Folder>): Folder {
+    if (typeof input.id !== 'string' || !input.id) throw new Error('A folder to restore needs its id.')
+    const existing = this.getFolder(input.id)
+    if (existing) return existing
+    const createdAt = typeof input.createdAt === 'number' ? input.createdAt : stamp()
+    this.stmts.insertFolder.run(input.id, cleanFolderName(input.name), createdAt)
+    return this.updateFolder(input.id, { reasoning: input.reasoning ?? null })!
+  }
+
+  /**
    * The foreign key's ON DELETE SET NULL clears `folder_id` on disk for any
    * chat that was in it; the in-memory copies need the same update by hand,
    * since they were loaded before this delete and won't see it otherwise.

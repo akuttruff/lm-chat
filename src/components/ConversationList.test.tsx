@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Toaster } from 'sonner'
 import ConversationList, { fullDateTime, shortDateTime } from './ConversationList.tsx'
@@ -313,20 +313,69 @@ describe('ConversationList', () => {
   describe('grouped by folder', () => {
     const folders: Folder[] = [{ id: 'f1', name: 'Astrology', createdAt: 1 }, { id: 'f2', name: 'Empty', createdAt: 2 }]
 
-    it('is a flat list, no headers, when nothing is filed', async () => {
-      setup({ folders })
+    beforeEach(() => { localStorage.clear() })
+
+    it('is a flat list, no headers, when there are no folders', async () => {
+      setup()
       await screen.findByText('Astrology forecast')
-      expect(screen.queryByText('Astrology', { selector: '.conv-section-head span' })).not.toBeInTheDocument()
-      expect(screen.queryByText('Unfiled')).not.toBeInTheDocument()
+      expect(document.querySelectorAll('.conv-section-head')).toHaveLength(0)
     })
 
-    it('groups filed chats under their folder, and the rest under Unfiled', async () => {
+    it('groups filed chats under their folder, shows an empty folder too, and the rest under Unfiled', async () => {
       const filed = convs.map((c) => (c.id === 'a' ? { ...c, folderId: 'f1' } : c))
       setup({ folders, conversations: filed })
-      expect(await screen.findByText('Astrology', { selector: '.conv-section-head span' })).toBeInTheDocument()
-      expect(screen.getByText('Unfiled')).toBeInTheDocument()
-      // An empty folder (Empty, f2) gets no section -- nothing to scroll past for it.
-      expect(screen.queryByText('Empty')).not.toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: 'Astrology', expanded: true })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Unfiled', expanded: true })).toBeInTheDocument()
+      // An empty folder still has its header: that's where it is renamed and deleted.
+      expect(screen.getByRole('button', { name: 'Empty', expanded: true })).toBeInTheDocument()
+      expect(screen.getByText(/No chats yet/)).toBeInTheDocument()
+    })
+
+    it('folds a section to its count from the header, and remembers it', async () => {
+      const user = userEvent.setup()
+      const filed = convs.map((c) => (c.id === 'a' ? { ...c, folderId: 'f1' } : c))
+      setup({ folders, conversations: filed })
+      await user.click(await screen.findByRole('button', { name: 'Astrology', expanded: true }))
+      expect(screen.queryByText('Astrology forecast')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Astrology1', expanded: false })).toBeInTheDocument()
+      expect(JSON.parse(localStorage.getItem('lm-chat.folded-sections')!)).toEqual(['f1'])
+      cleanup()
+      setup({ folders, conversations: filed })
+      expect(await screen.findByRole('button', { name: 'Astrology1', expanded: false })).toBeInTheDocument()
+    })
+
+    it("renames a folder in place from its menu, and offers its reasoning and delete", async () => {
+      const user = userEvent.setup()
+      const filed = convs.map((c) => (c.id === 'a' ? { ...c, folderId: 'f1' } : c))
+      const onRenameFolder = vi.fn().mockResolvedValue(undefined)
+      const onFolderReasoning = vi.fn()
+      const onDeleteFolder = vi.fn()
+      setup({ folders, conversations: filed, onRenameFolder, onFolderReasoning, onDeleteFolder })
+      const menu = async (): Promise<void> => { await user.click(await screen.findByRole('button', { name: 'Astrology: folder actions' })) }
+      await menu()
+      await user.click(screen.getByRole('menuitem', { name: 'Rename' }))
+      const box = screen.getByLabelText('New name for Astrology')
+      await user.clear(box)
+      await user.type(box, 'Stars{Enter}')
+      expect(onRenameFolder).toHaveBeenCalledWith('f1', 'Stars')
+      await menu()
+      await user.click(screen.getByRole('menuitem', { name: /Reasoning/ }))
+      expect(onFolderReasoning).toHaveBeenCalledWith(folders[0])
+      await menu()
+      await user.click(screen.getByRole('menuitem', { name: /Delete folder/ }))
+      expect(onDeleteFolder).toHaveBeenCalledWith(folders[0], 1)
+      // Unfiled is a grouping, not a folder: nothing to manage.
+      expect(screen.queryByRole('button', { name: 'Unfiled: folder actions' })).not.toBeInTheDocument()
+    })
+
+    it('makes a new folder from the list, without a chat open', async () => {
+      const user = userEvent.setup()
+      const onCreateFolder = vi.fn().mockResolvedValue({ id: 'f3', name: 'Recipes', createdAt: 3 })
+      setup({ folders, onCreateFolder })
+      await user.click(await screen.findByRole('button', { name: 'New folder' }))
+      await user.type(screen.getByLabelText('New folder name'), 'Recipes{Enter}')
+      expect(onCreateFolder).toHaveBeenCalledWith('Recipes')
+      expect(screen.queryByLabelText('New folder name')).not.toBeInTheDocument()
     })
 
     it("starts a new chat in a folder from the + on its header, and closes", async () => {
@@ -343,7 +392,7 @@ describe('ConversationList', () => {
 
     it('treats a folder id that no longer exists as unfiled, rather than dropping the chat', async () => {
       const stale = convs.map((c) => (c.id === 'a' ? { ...c, folderId: 'gone' } : c))
-      setup({ folders, conversations: stale })
+      setup({ conversations: stale })
       expect(await screen.findByText('Astrology forecast')).toBeInTheDocument()
       // Unfiled, alongside "b" -- not its own stray section, and not dropped.
       expect(document.querySelectorAll('.conv-section-head')).toHaveLength(0)

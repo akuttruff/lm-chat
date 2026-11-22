@@ -258,6 +258,12 @@ export interface Folder {
 }
 
 /** What a client may change about a folder; a field left out stays as it is. */
+/** A folder as its delete left it: the folder and the chats that were in it, for Undo. */
+export interface DeletedFolder {
+  folder: Folder
+  chatIds: string[]
+}
+
 export interface FolderUpdate {
   name?: string
   reasoning?: string | null

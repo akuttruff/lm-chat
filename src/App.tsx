@@ -8,6 +8,7 @@ import SettingsSheet from './components/SettingsSheet';
 import MemoriesSheet from './components/MemoriesSheet';
 import ConversationList from './components/ConversationList';
 import FolderPicker from './components/FolderPicker';
+import FolderDeleteSheet from './components/FolderDeleteSheet';
 import ReasoningPicker, { labelFor } from './components/ReasoningPicker';
 import Unreachable from './components/Unreachable';
 import useServerState from './hooks/useServerState';
@@ -18,6 +19,7 @@ import useWakeLock from './hooks/useWakeLock';
 import useMediaQuery, { WIDE } from './hooks/useMediaQuery';
 import useChromeHeights from './hooks/useChromeHeights';
 import { edgeSwipe } from './lib/edgeSwipe';
+import type { Folder } from './types';
 import './App.css';
 
 export default function App() {
@@ -25,7 +27,7 @@ export default function App() {
   const {
     conversations, activeId, active, loadingActive, config, status, startedAt, busy, working,
     send, stop, retry, compact, branch, search, newChat, openChat, deleteChat, deleteChats, restoreChat, renameChat, setReasoning, setMemory,
-    setMemorySelection, setStarred, setFolder, setTemporary, folders, createFolder, updateFolder, deleteFolder,
+    setMemorySelection, setStarred, setFolder, setTemporary, folders, createFolder, updateFolder, deleteFolder, restoreFolder,
     saveConfig, modelLoad, loadModel,
   } = server;
 
@@ -81,6 +83,47 @@ export default function App() {
   const [memoriesOpen, setMemoriesOpen] = useState<false | 'browse' | 'select'>(false);
   // The chat a folder is being picked for; null when the picker is closed.
   const [folderPickerFor, setFolderPickerFor] = useState<string | null>(null);
+  // A folder whose reasoning is being picked, and one being deleted that has chats to ask about.
+  const [reasoningFolder, setReasoningFolder] = useState<Folder | null>(null);
+  const [folderToDelete, setFolderToDelete] = useState<{ folder: Folder; count: number } | null>(null);
+
+  /**
+   * Delete a folder, keeping its chats (they move to Unfiled) or deleting
+   * them too. Either way Undo puts it all back: the folder first, so the
+   * chats have it to be filed into again.
+   */
+  const removeFolder = async (folder: Folder, withChats: boolean): Promise<void> => {
+    setFolderToDelete(null);
+    // In list order, reversed, so Undo restores them oldest-first and the list rebuilds as it was.
+    const inside = conversations.filter((c) => c.folderId === folder.id);
+    const snapshots = withChats ? [...inside].reverse() : [];
+    try {
+      if (withChats && inside.length) await deleteChats(inside.map((c) => c.id));
+      const removed = await deleteFolder(folder.id);
+      const n = inside.length;
+      const chats = `${n} ${n === 1 ? 'chat' : 'chats'}`;
+      const what = withChats ? `Deleted “${folder.name}” and its ${chats}`
+        : n ? `Deleted “${folder.name}”; its ${chats} moved to Unfiled` : `Deleted “${folder.name}”`;
+      toast(what, {
+        duration: 10_000,
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            void (async () => {
+              try {
+                await restoreFolder(removed);
+                for (const c of snapshots) await restoreChat(c);
+              } catch (err) {
+                toast.error((err as Error).message);
+              }
+            })();
+          },
+        },
+      });
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
   // A search hit being opened: which chat, and the message to scroll to.
   const [jump, setJump] = useState<{ id: string; messageId: string } | null>(null);
   const activeFolder = active ? folders.find((f) => f.id === active.folderId) : undefined;
@@ -122,6 +165,10 @@ export default function App() {
       onStar={(id, starred) => void setStarred(id, starred)}
       onOpenFolderPicker={(id) => setFolderPickerFor(id)}
       onNewChat={(folderId) => void newChat(folderId)}
+      onCreateFolder={createFolder}
+      onRenameFolder={(id, name) => updateFolder(id, { name })}
+      onFolderReasoning={setReasoningFolder}
+      onDeleteFolder={(folder, count) => { if (count) setFolderToDelete({ folder, count }); else void removeFolder(folder, false); }}
       onOpenSettings={() => setSettingsOpen(true)}
       onCollapse={() => setSidebar(false)}
       onClose={() => setChatsOpen(false)}
@@ -240,10 +287,23 @@ export default function App() {
         currentFolderId={folderPickerConv?.folderId ?? null}
         onAssign={(folderId) => { if (folderPickerFor) void setFolder(folderPickerFor, folderId); }}
         onCreate={createFolder}
-        onUpdate={updateFolder}
-        onDelete={deleteFolder}
-        modelConfig={modelConfig}
-        config={config}
+      />
+      <ReasoningPicker
+        open={reasoningFolder !== null}
+        title={reasoningFolder ? `Reasoning for ${reasoningFolder.name}` : undefined}
+        value={reasoningFolder?.reasoning ?? null}
+        defaultValue={config?.reasoning}
+        config={modelConfig}
+        onChange={(v) => {
+          if (reasoningFolder) void updateFolder(reasoningFolder.id, { reasoning: v }).catch((err: Error) => toast.error(err.message));
+        }}
+        onClose={() => setReasoningFolder(null)}
+      />
+      <FolderDeleteSheet
+        target={folderToDelete}
+        onKeepChats={() => { if (folderToDelete) void removeFolder(folderToDelete.folder, false); }}
+        onDeleteChats={() => { if (folderToDelete) void removeFolder(folderToDelete.folder, true); }}
+        onClose={() => setFolderToDelete(null)}
       />
     </div>
   );
