@@ -1,4 +1,3 @@
-// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 import { useEffect, useRef, useState } from 'react'
 import { REACH, probe, reach } from '../lib/reach.ts'
 

@@ -1,4 +1,3 @@
-// Shared with Orrery: edit here in lm-chat, then run `npm run sync:shared` in Orrery.
 import { useSyncExternalStore } from 'react'
 
 /** Whether a CSS media query matches, kept current as the window changes. */
