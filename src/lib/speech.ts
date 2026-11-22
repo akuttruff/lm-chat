@@ -1,5 +1,3 @@
-import { astroSpeech, withPronunciations } from './speechAstro.ts'
-
 /**
  * Reading a reply aloud: what to say, and in what pieces.
  *
@@ -59,10 +57,9 @@ export function speechText(markdown: string): string {
   s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '') // images
   s = s.replace(/\[([^\]]+)\]\((?:[^)(]|\([^)]*\))*\)/g, '$1') // links: their text
   s = s.replace(/\bhttps?:\/\/\S+/g, 'a link')
-  // Emphasis goes before anything reads the words, so "**Jupiter ☐ Sun**" is just the words.
+  // Emphasis: just the words.
   s = s.replace(/(\*\*|__)(.+?)\1/g, '$2').replace(/(\*|_)(\S(?:.*?\S)?)\1/g, '$2') // bold, italic
   s = s.replace(/~~(.+?)~~/g, '$1')
-  s = astroSpeech(s) // symbols, degrees, houses and arrows, as words (see speechAstro.ts)
   // Tables: drop the |---| rule, read the cells of each row as a list.
   s = s.replace(/^(?=[^\n]*\|)(?=[^\n]*-)[ \t|:-]+(?:\n|$)/gm, '')
   s = s.replace(/^[ \t]*\|(.*)\|[ \t]*$/gm, (_, row: string) => {
@@ -78,7 +75,7 @@ export function speechText(markdown: string): string {
   s = s.replace(/([:;!?])\./g, '$1')
   s = s.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n')
   // Last: how to say the names the voice gets wrong (see PRONUNCIATIONS). Only the voice sees these.
-  return withPronunciations(s.trim())
+  return s.trim()
 }
 
 /** Split text at sentence ends, keeping the punctuation with its sentence. */

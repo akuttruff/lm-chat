@@ -77,11 +77,12 @@ describe('ToolCard', () => {
     expect(screen.getByText('timed out')).toBeInTheDocument()
   })
 
-  it('lays out a tarot draw as its spread', () => {
-    const reading = { spread: { id: 'three', name: 'Past, present, future', description: '' }, question: 'Q?', drawnAt: 'x', seed: 1, cards: [1, 2, 3].map((i) => ({ position: { index: i, name: `P${i}`, meaning: '' }, card: { id: `cups-0${i}`, name: `Card ${i}`, arcana: 'minor', suit: 'cups', number: i }, reversed: i === 2, keywords: [], meaning: '' })), summary: {} }
+  it('shows an old tarot draw as a plain card, its result as text', () => {
+    const reading = { spread: { id: 'three', name: 'Past, present, future' }, cards: [{ card: { name: 'The Star' } }] }
     render(<ToolCard name="draw_cards" plugin="mcp/tarot" output={JSON.stringify(reading)} />)
-    expect(screen.getByRole('figure', { name: 'Past, present, future: Q?' })).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'P2: Card 2, reversed' })).toHaveAttribute('src', '/tarot/cups-02.jpg')
+    expect(screen.queryByRole('figure')).not.toBeInTheDocument()
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(screen.getByText(/The Star/)).toBeInTheDocument()
   })
 
   it('renders without output', () => {

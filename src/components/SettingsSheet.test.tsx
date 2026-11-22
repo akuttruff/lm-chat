@@ -128,9 +128,8 @@ describe('settings', () => {
   })
 
   it('loads the server config into the form', async () => {
-    setup({ config: { systemPrompt: 'be terse', mcpTools: 'mcp/astrology', stallSeconds: '90' } })
+    setup({ config: { systemPrompt: 'be terse', stallSeconds: '90' } })
     await waitFor(() => expect(screen.getByLabelText(/system prompt/i)).toHaveValue('be terse'))
-    expect(screen.getByLabelText(/Plugin IDs/i)).toHaveValue('mcp/astrology')
     expect(screen.getByLabelText(/give up after/i)).toHaveValue('90')
   })
 
@@ -179,7 +178,6 @@ describe('typing into every field', () => {
     [/LM Studio address/i, 'http://10.0.0.5:1234'],
     [/API token/i, 'sk-lm-ABC'],
     [/system prompt/i, 'be terse'],
-    [/Plugin IDs/i, 'mcp/astrology-v2'],
     [/give up after/i, '90'],
     [/conversation replayed/i, '0'],
     [/context length/i, '8000'],
@@ -219,13 +217,13 @@ describe('layout', () => {
   })
 
   it('brings a focused field into view, clear of the footer', async () => {
-    // The MCP field is last, directly above the pinned actions, so focusing
-    // it used to leave it behind the footer and the software keyboard.
+    // The last fields sit directly above the pinned actions, so focusing
+    // one used to leave it behind the footer and the software keyboard.
     const user = userEvent.setup()
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView
     setup()
-    await user.click(await screen.findByLabelText(/Plugin IDs/i))
+    await user.click(await screen.findByLabelText(/context length/i))
     expect(scrollIntoView).toHaveBeenCalledWith(
       expect.objectContaining({ block: 'center' }),
     )
@@ -351,21 +349,14 @@ describe('reply text', () => {
 })
 
 describe('memory', () => {
-  it('saves the default for chats', async () => {
-    const user = userEvent.setup()
-    const props = setup()
-    await user.click(await screen.findByLabelText(/use memory in chats by default/i))
-    await user.click(screen.getByRole('button', { name: /^save$/i }))
-    await waitFor(() => expect(props.onSave).toHaveBeenCalled())
-    expect(props.onSave.mock.calls.at(-1)![0]).toMatchObject({ memoryDefault: 'on' })
-  })
-
-  it('shows the saved default, and opens the Memories screen', async () => {
+  it('says every chat gets research and memory, with no field to set, and opens the Memories screen', async () => {
     const user = userEvent.setup()
     const onOpenMemories = vi.fn()
-    render(<SettingsSheet open config={{ ...base, memoryDefault: 'on' }} modelConfig={null}
+    render(<SettingsSheet open config={base} modelConfig={null}
       onSave={vi.fn(() => Promise.resolve())} onClose={vi.fn()} onOpenMemories={onOpenMemories} />)
-    expect(await screen.findByLabelText(/use memory in chats by default/i)).toBeChecked()
+    expect(await screen.findByText(/Every chat can search the web/)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Plugin IDs/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/use memory in chats by default/i)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Memories…' }))
     expect(onOpenMemories).toHaveBeenCalled()
   })

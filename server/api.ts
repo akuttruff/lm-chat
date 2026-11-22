@@ -9,7 +9,6 @@ import type { EngineState } from './engine.ts'
 import { MIME_BY_EXT, Store } from './store.ts'
 import type { FolderPatch } from './store.ts'
 import { MemoryInputError, Memories } from './memory.ts'
-import { ToolCatalogCache } from './tools.ts'
 import { HealthCheck } from './health.ts'
 import { lmStudioBase, lmStudioFetch } from './lm-studio.ts'
 import { readModelConfig } from './model-config.ts'
@@ -54,12 +53,8 @@ export interface ApiOptions {
   dir?: string
   /** The shared memory file; defaults to MEMORY_DB or ~/.lm-memory/memory.sqlite. */
   memoryDb?: string
-  /** The MCP tool catalog; injectable so tests needn't start real servers. */
-  toolCatalog?: ToolCatalogCache
   /** How tracks are shrunk for the phone; null keeps WAV (tests), absent uses afconvert. */
   trackEncoder?: import('./speech.ts').TrackEncoder | null
-  /** Write the transit readings a restart cut off, at boot; false keeps a test's fetch quiet. */
-  resume?: boolean
 }
 
 /**
@@ -158,8 +153,6 @@ export function listView(s: ConversationStore): ConversationStore {
 
 /** How long, and how many, deleted chats the server keeps for Undo -- enough for a whole selection deleted at once. */
 const UNDO_MS = 30 * 60_000
-/** Readings cut off by a restart are resumed this long after boot, once the server answers. */
-const RESUME_DELAY_MS = 2000
 const UNDO_MAX = 300
 
 /** The largest body a request may carry: a full set of images as base64, plus room for the words. */
@@ -208,7 +201,6 @@ export interface ApiState {
   tracks: Tracks
   /** Recently deleted chats, whole, so Undo can restore one the client only held in outline. */
   deleted: Map<string, { conv: Conversation; at: number }>
-  toolCatalog: ToolCatalogCache
   /**
    * The chat model's load, started when it's picked. Kept here so a turn
    * sent after a dev-server reload still waits on a load begun before it.
@@ -229,12 +221,11 @@ export function createApiState(options: ApiOptions = {}): ApiState {
     store, bus, engine: newEngineState(), models: newModelLoader(bus),
     tracks: new Tracks(path.join(path.resolve(options.dir ?? '.data'), 'speech'), { encoder: options.trackEncoder }),
     deleted: new Map(),
-    toolCatalog: options.toolCatalog ?? new ToolCatalogCache(),
   }
 }
 
 export function createApi(options: ApiOptions = {}, state: ApiState = createApiState(options)) {
-  const { store, bus, tracks, deleted, toolCatalog } = state
+  const { store, bus, tracks, deleted } = state
   const memories = new Memories(options.memoryDb)
   const models = state.models ??= newModelLoader(bus)
   const engine = new Engine(store, bus, undefined, state.engine, memories, models)
@@ -254,9 +245,6 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       memory: async () => { memories.list() },
     },
   })
-  // A chart whose readings were being written when the server last stopped
-  // would say "on its way" for good: pick those up once the server is up.
-  if (options.resume !== false) setTimeout(() => engine.readingsAll(), RESUME_DELAY_MS).unref()
 
   /** A chat past Undo is forgotten, and so are the images a temporary one held in memory. */
   const forget = (id: string): void => { deleted.delete(id); store.releaseImages(id) }
@@ -289,7 +277,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     const method = req.method || 'GET'
 
     // What a restart would cut off: replies being written and the jobs
-    // that follow them (summary, title, readings). scripts/deploy.sh waits
+    // that follow them (summary, title, recap). scripts/deploy.sh waits
     // for both to be zero.
     if (url === '/api/busy' && method === 'GET') {
       return json(res, 200, { replies: engine.activeStatuses().length, background: engine.backgroundJobs() })
@@ -470,15 +458,6 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       return undefined
     }
 
-    // --- MCP tool catalog: what each server offers, for the per-chat picker ---
-    if (url === '/api/tools' && method === 'GET') {
-      const refresh = new URLSearchParams(query).get('refresh') === '1'
-      void toolCatalog.get(refresh)
-        .then((catalog) => json(res, 200, catalog))
-        .catch((err: Error) => json(res, 500, { error: err.message }))
-      return undefined
-    }
-
     // --- memories -----------------------------------------------------
     if (url === '/api/memories' && method === 'GET') {
       return json(res, 200, memories.list())
@@ -517,8 +496,9 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       const id = decodeURIComponent(folderMatch[1]!)
       if (method === 'PATCH') {
         void readBody(req).then((body) => {
-          const { name, reasoning, mcpTools, memory, memorySelection } = body as FolderPatch
-          const updated = store.updateFolder(id, { name, reasoning, mcpTools, memory, memorySelection })
+          // A folder holds only its name and reasoning; tools and memory are the same everywhere.
+          const { name, reasoning } = body as FolderPatch
+          const updated = store.updateFolder(id, { name, reasoning })
           return updated ? json(res, 200, updated) : json(res, 404, { error: 'no such folder' })
         }).catch((err: Error) => json(res, 400, { error: err.message }))
         return undefined
@@ -584,12 +564,6 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
     // `?all=1` rewrites the recaps that exist too.
     if (url === '/api/chats/recap' && method === 'POST') {
       return json(res, 202, engine.recapAll({ all: /(^|&)all=1(&|$)/.test(query) }))
-    }
-    // And for transit readings: every chart drawn before readings existed
-    // gets its popups' sentences. `curl -X POST localhost:8010/api/chats/readings`.
-    // `?all=1` rewrites the readings that exist too.
-    if (url === '/api/chats/readings' && method === 'POST') {
-      return json(res, 202, engine.readingsAll({ all: /(^|&)all=1(&|$)/.test(query) }))
     }
     // Several chats at once, from the drawer's select mode. Each is kept for
     // Undo exactly as a single delete keeps it; ids that no longer exist are
@@ -658,7 +632,7 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
             allowed.name = input.name
           }
           if ('reasoning' in input) allowed.reasoning = typeof input.reasoning === 'string' ? input.reasoning : null
-          for (const key of ['memory', 'memorySelection', 'starred', 'folderId', 'temporary', 'tools', 'folded', 'recap'] as const) {
+          for (const key of ['memory', 'memorySelection', 'starred', 'folderId', 'temporary', 'folded', 'recap'] as const) {
             if (key in input) (allowed as Record<string, unknown>)[key] = input[key]
           }
           const conv = store.patch(id, allowed)

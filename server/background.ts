@@ -6,8 +6,6 @@ import { cheapestReasoning, manifestCapability, type ReasoningCapability } from 
 import { describeHttpError, lmStudioFetch } from './lm-studio.ts'
 import { historyLimit, planCompaction, planFullCompaction, summarizerInput, summarizerPrompt, summaryTokenCap } from './history.ts'
 import { metaOf } from '../src/types.ts'
-import { looksLikeChart, parseWheel } from '../src/lib/chartWheel.ts'
-import { READINGS_PROMPT, aspectKey, parseReadings, readingsInput, readingsTokenCap } from '../src/lib/readings.ts'
 import type { ChatEvent, Message, ServerConfig } from '../src/types.ts'
 
 /**
@@ -94,14 +92,6 @@ export function cleanTitle(raw: string): string {
   return title.length > 60 ? `${title.slice(0, 60).trimEnd()}...` : title
 }
 
-/** The whole wheel's readings in one answer: a slow model with a dozen aspects needs a while. */
-const READINGS_TIMEOUT_MS = 3 * 60 * 1000
-
-/** A tool message holding a transit chart with no readings yet (or any such chart, when rewriting). */
-function wantsReadings(m: Message, force: boolean): boolean {
-  return m.role === 'tool' && !m.failed && !!m.output && m.output.includes('"natal"') && looksLikeChart(m.output) && (force || !m.readings)
-}
-
 /** What the background jobs need from the Engine that runs them. */
 export interface BackgroundHost {
   store: Store
@@ -150,8 +140,7 @@ async function backgroundCompletion(
 }
 
 /**
- * The work that follows a reply: summaries, titles, recaps and transit
- * readings, each a one-off request to the background model. The in-flight
+ * The work that follows a reply: summaries, titles and recaps, each a one-off request to the background model. The in-flight
  * sets belong to the EngineState, so they survive a dev-server restart.
  */
 export class BackgroundJobs {
@@ -159,79 +148,11 @@ export class BackgroundJobs {
     private host: BackgroundHost,
     private compacting: Set<string>,
     private titling: Set<string>,
-    private reading: Set<string>,
   ) {}
 
   /** How many are running right now. */
   count(): number {
-    return this.compacting.size + this.titling.size + this.reading.size
-  }
-
-  /**
-   * A one-off backfill: readings for every transit chart drawn before
-   * readings existed, chat by chat in the background. Returns at once with
-   * how many charts it will try; each chart's readings arrive as a `tail`.
-   */
-  readingsAll({ all = false }: { all?: boolean } = {}): { candidates: number } {
-    const candidates = this.host.store.getConversations().items
-      .filter((c) => !c.temporary)
-      .flatMap((c) => c.messages.filter((m) => wantsReadings(m, all)).map((m) => [c.id, m.id] as const))
-    if (candidates.length) {
-      void (async () => {
-        for (const [conversationId, messageId] of candidates) await this.readings(conversationId, messageId, { force: all })
-      })()
-    }
-    return { candidates: candidates.length }
-  }
-
-  /** Readings for every transit chart in a chat that has none yet, one after another. */
-  async readingsFor(conversationId: string): Promise<void> {
-    const conv = this.host.store.get(conversationId)
-    if (!conv || conv.temporary) return
-    for (const m of conv.messages.filter((x) => wantsReadings(x, false))) await this.readings(conversationId, m.id)
-  }
-
-  /**
-   * After a transit chart lands: one short reading per aspect on its wheel,
-   * written by the model and kept on the tool message, for the popup over
-   * each aspect. One request covers the whole wheel. Best effort, like a
-   * title: a failure leaves the popup with its positions alone.
-   */
-  async readings(conversationId: string, messageId: string | number, { force = false }: { force?: boolean } = {}): Promise<Record<string, string> | null> {
-    const { store } = this.host
-    const key = `${conversationId}/${messageId}`
-    if (this.reading.has(key)) return null
-    const conv = store.get(conversationId)
-    const config = store.getConfig()
-    const message = conv?.messages.find((m) => m.id === messageId)
-    if (!conv || conv.temporary || !message || !wantsReadings(message, force) || !config.model) return null
-    const wheel = parseWheel(message.output ?? '')
-    const input = wheel && readingsInput(wheel)
-    if (!wheel || !input) return null
-
-    this.reading.add(key)
-    try {
-      const answer = await backgroundCompletion(this.host, config, {
-        systemPrompt: READINGS_PROMPT, input, maxOutputTokens: readingsTokenCap(wheel.aspects.length), timeoutMs: READINGS_TIMEOUT_MS,
-      })
-      const readings = parseReadings(answer, wheel.aspects.map(aspectKey))
-      if (!readings) throw new Error('no readings in the answer')
-
-      // The chat may have moved on while we waited: find the message again.
-      const current = store.get(conversationId)
-      const index = current?.messages.findIndex((m) => m.id === messageId) ?? -1
-      if (!current || index < 0) return null
-      const messages = current.messages.map((m, i) => (i === index ? { ...m, readings } : m))
-      store.setMessages(conversationId, messages, { touch: false, from: index })
-      this.host.publishTail(conversationId, index)
-      console.log(`[engine] readings written for ${Object.keys(readings).length} of ${wheel.aspects.length} aspects`)
-      return readings
-    } catch (err) {
-      console.log(`[engine] readings skipped: ${(err as Error).message}`)
-      return null
-    } finally {
-      this.reading.delete(key)
-    }
+    return this.compacting.size + this.titling.size
   }
 
   /**

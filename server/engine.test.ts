@@ -4,9 +4,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { Bus } from './bus.ts'
 import {
-  Engine, formatToolOutput, parseIntegrations, newEngineState, toolArgs,
+  Engine, formatToolOutput, newEngineState, toolArgs,
 } from './engine.ts'
-import { DATE_NOTE, FILES_NOTE, READING_NOTE } from './request.ts'
+import { DATE_NOTE, FILES_NOTE } from './request.ts'
 import { cleanTitle, wholeSentences } from './background.ts'
 import { buildHistoryPrompt, planCompaction, planFullCompaction, summarizerInput, summaryTokenCap } from './history.ts'
 import { Store } from './store.ts'
@@ -85,19 +85,6 @@ describe('formatToolOutput', () => {
   })
 })
 
-describe('parseIntegrations', () => {
-  it('qualifies bare labels and drops blanks', () => {
-    expect(parseIntegrations('astrology, mcp/deep-research, , ')).toEqual([
-      { type: 'plugin', id: 'mcp/astrology' },
-      { type: 'plugin', id: 'mcp/deep-research' },
-    ])
-  })
-  it('returns nothing for an empty field', () => {
-    expect(parseIntegrations('')).toEqual([])
-  })
-
-})
-
 describe('request body', () => {
   it('refuses to call LM Studio with no model chosen', async () => {
     configure({ model: '' })
@@ -146,6 +133,7 @@ describe('request body', () => {
 
   it('sends the system prompt alone on a fresh thread', async () => {
     configure({ systemPrompt: 'be terse' })
+    store.patch(convId, { memory: false }) // the memory notes are tested on their own
     const first = streams([evt({ type: 'chat.end', result: { response_id: 'resp_1' } })])
     vi.stubGlobal('fetch', first)
     await engine.runTurn(convId, 'hi')
@@ -184,27 +172,28 @@ describe('request body', () => {
     expect(bodyOf(f).reasoning).toBe('xhigh')
   })
 
-  it('includes MCP integrations when configured', async () => {
-    configure({ mcpTools: 'mcp/astrology' })
+  it('offers every chat deep-research and memory, whatever Settings or a folder once listed', async () => {
+    configure({ mcpTools: 'mcp/astrology-v2', memoryDefault: 'off' })
+    const folder = store.createFolder('Astrology')
+    store.updateFolder(folder.id, { mcpTools: 'mcp/tarot', memory: false })
+    store.patch(convId, { folderId: folder.id, tools: 'mcp/astrology-v2(verify_claim)' })
     const f = streams([evt({ type: 'chat.end', result: {} })])
     vi.stubGlobal('fetch', f)
     await engine.runTurn(convId, 'hi')
-    expect(bodyOf(f).integrations).toEqual([{ type: 'plugin', id: 'mcp/astrology' }])
+    expect(bodyOf(f).integrations).toEqual([
+      { type: 'plugin', id: 'mcp/deep-research' },
+      { type: 'plugin', id: 'mcp/lm-chat-memory' },
+    ])
   })
 
-  it('asks for sectioned readings when the astrology or tarot tools are on, and only then', async () => {
+  it('sends no reading-layout note, even to a chat that once had the astrology tools', async () => {
     configure({ mcpTools: 'mcp/astrology-v2', systemPrompt: 'be terse' })
-    const astro = streams([evt({ type: 'chat.end', result: {} })])
-    vi.stubGlobal('fetch', astro)
+    store.patch(convId, { memory: false })
+    const f = streams([evt({ type: 'chat.end', result: {} })])
+    vi.stubGlobal('fetch', f)
     await engine.runTurn(convId, 'hi')
-    expect(bodyOf(astro).system_prompt).toBe(`${DATE_NOTE}\n\n${FILES_NOTE}\n\n${READING_NOTE}\n\nbe terse`)
-    expect(READING_NOTE).toContain('a ### heading for each placement, transit, aspect or card')
-
-    configure({ mcpTools: 'mcp/deep-research' })
-    const other = streams([evt({ type: 'chat.end', result: {} })])
-    vi.stubGlobal('fetch', other)
-    await engine.runTurn(convId, 'hi again')
-    expect(String(bodyOf(other).system_prompt)).not.toContain(READING_NOTE)
+    expect(String(bodyOf(f).system_prompt)).toBe(`${DATE_NOTE}\n\n${FILES_NOTE}\n\nbe terse`)
+    expect(String(bodyOf(f).system_prompt)).not.toMatch(/a ### heading for each placement/)
   })
 })
 
@@ -500,59 +489,45 @@ describe('memory', () => {
   const plugins = (body: Record<string, unknown>): string[] =>
     ((body.integrations ?? []) as { id: string }[]).map((i) => i.id)
 
-  it('is off by default: no memory tools, nothing remembered in the prompt', async () => {
+  it('is on by default, whatever the old Settings default said', async () => {
+    configure({ memoryDefault: 'off' })
     const body = await turn()
-    expect(plugins(body)).not.toContain('mcp/lm-chat-memory')
-    expect(String(body.system_prompt ?? '')).not.toMatch(/green/)
+    expect(plugins(body)).toEqual(['mcp/deep-research', 'mcp/lm-chat-memory'])
+    expect(String(body.system_prompt)).toMatch(/Favorite color is green/)
   })
 
   it('when on, gives the model the memory tools and what it has saved', async () => {
-    configure({ memoryDefault: 'on', systemPrompt: 'Be kind.' })
+    configure({ systemPrompt: 'Be kind.' })
     const body = await turn()
     expect(plugins(body)).toContain('mcp/lm-chat-memory')
     expect(String(body.system_prompt).startsWith(DATE_NOTE)).toBe(true)
     expect(String(body.system_prompt)).toMatch(/\n\nBe kind\.[\s\S]*\[a1\] Favorite color is green/)
   })
 
-  it('lets a chat turn it off even when the default is on, and on when it is off', async () => {
-    configure({ memoryDefault: 'on' })
+  it('lets a chat turn it off with the brain button, and back on', async () => {
     store.patch(convId, { memory: false })
-    expect(plugins(await turn())).not.toContain('mcp/lm-chat-memory')
-    configure({ memoryDefault: 'off' })
+    let body = await turn()
+    expect(plugins(body)).toEqual(['mcp/deep-research'])
+    expect(String(body.system_prompt ?? '')).not.toMatch(/green/)
     store.patch(convId, { memory: true })
     expect(plugins(await turn())).toContain('mcp/lm-chat-memory')
-  })
-
-  it("a chat in a folder takes the folder's memory switch over Settings', and its own over the folder's", async () => {
-    configure({ memoryDefault: 'off' })
-    const folder = store.createFolder('Personal')
-    store.updateFolder(folder.id, { memory: true })
-    store.patch(convId, { folderId: folder.id })
-    expect(plugins(await turn())).toContain('mcp/lm-chat-memory')
-    store.patch(convId, { memory: false })
-    expect(plugins(await turn())).not.toContain('mcp/lm-chat-memory')
     store.patch(convId, { memory: null })
-    store.updateFolder(folder.id, { memory: null }) // back to Settings
-    expect(plugins(await turn())).not.toContain('mcp/lm-chat-memory')
+    body = await turn()
+    expect(plugins(body)).toContain('mcp/lm-chat-memory')
   })
 
-  it("a folder's memory pick limits its chats' prompt, until a chat picks for itself", async () => {
+  it("ignores a folder's old memory switch and pick", async () => {
     remember('b2', 'Lives in Seattle', 2)
-    configure({ memoryDefault: 'on' })
     const folder = store.createFolder('Travel')
-    store.updateFolder(folder.id, { memorySelection: ['b2'] })
+    store.updateFolder(folder.id, { memory: false, memorySelection: ['b2'] })
     store.patch(convId, { folderId: folder.id })
-    let body = await turn()
-    expect(String(body.system_prompt)).toMatch(/\[b2\] Lives in Seattle/)
-    expect(String(body.system_prompt)).not.toMatch(/Favorite color is green/)
-    store.patch(convId, { memorySelection: ['a1'] }) // the chat's own pick wins
-    body = await turn()
+    const body = await turn()
+    expect(plugins(body)).toContain('mcp/lm-chat-memory')
     expect(String(body.system_prompt)).toMatch(/Favorite color is green/)
-    expect(String(body.system_prompt)).not.toMatch(/Lives in Seattle/)
+    expect(String(body.system_prompt)).toMatch(/Lives in Seattle/)
   })
 
   it('shows which memories were loaded as a card before the reply, without a tool call', async () => {
-    configure({ memoryDefault: 'on' })
     await turn()
     const card = messages().find((m) => m.role === 'tool')!
     expect(card).toMatchObject({ name: 'memory', plugin: 'auto-loaded', failed: false })
@@ -562,7 +537,6 @@ describe('memory', () => {
 
   it('limits the prompt and the card to a chat\'s hand-picked memories, ignoring the rest', async () => {
     remember('b2', 'Lives in Seattle', 2)
-    configure({ memoryDefault: 'on' })
     store.patch(convId, { memorySelection: ['b2'] })
     const body = await turn()
     expect(String(body.system_prompt)).toMatch(/\[b2\] Lives in Seattle/)
@@ -573,7 +547,6 @@ describe('memory', () => {
 
   it('an empty selection loads nothing, distinct from automatic', async () => {
     remember('b2', 'Lives in Seattle', 2)
-    configure({ memoryDefault: 'on' })
     store.patch(convId, { memorySelection: [] })
     const body = await turn()
     expect(String(body.system_prompt)).toMatch(/chose not to use any saved memories/)
@@ -581,9 +554,9 @@ describe('memory', () => {
   })
 
   it('shows no card with memory off, or when nothing has been saved yet', async () => {
+    store.patch(convId, { memory: false })
     await turn()
     expect(messages().some((m) => m.role === 'tool')).toBe(false)
-    configure({ memoryDefault: 'on' })
     memoryEngine = new Engine(store, bus, () => Promise.resolve(null), newEngineState(), new Memories(path.join(memDir, 'none.sqlite')))
     store.patch(convId, { memory: true })
     await turn()
@@ -591,27 +564,12 @@ describe('memory', () => {
   })
 
   it('does not send the card back to the model on the next turn', async () => {
-    configure({ memoryDefault: 'on' })
     await turn()
     const body = await turn()
     expect(String(body.system_prompt)).not.toMatch(/loaded into this reply/)
     expect(String(body.system_prompt)).not.toMatch(/Tool memory returned/)
   })
 
-  it('does not list the memory server twice when Settings already names it', async () => {
-    configure({ memoryDefault: 'on', mcpTools: 'mcp/lm-chat-memory, deep-research' })
-    expect(plugins(await turn())).toEqual(['mcp/deep-research', 'mcp/lm-chat-memory'])
-  })
-
-  it('turns memory off for a chat even when Settings still lists it as a general tool', async () => {
-    // Regression: memory was left in mcpTools from before the per-chat
-    // toggle existed. The old code only ever added mcp/memory, never
-    // removed it, so it was in every chat's integrations no matter what
-    // the toggle said -- this is what that looked like.
-    configure({ memoryDefault: 'on', mcpTools: 'mcp/lm-chat-memory, deep-research' })
-    store.patch(convId, { memory: false })
-    expect(plugins(await turn())).toEqual(['mcp/deep-research'])
-  })
 })
 
 describe('retrying the last message', () => {
@@ -954,6 +912,7 @@ describe('conversation context', () => {
 
   it('honours the configured history budget', async () => {
     configure({ historyChars: '200' })
+    store.patch(convId, { memory: false })
     store.setMessages(convId, [
       user('old question'.padEnd(500, '!')),
       assistant('old answer'.padEnd(500, '?')),
@@ -1578,8 +1537,6 @@ describe('images on a turn', () => {
 })
 
 describe('folder defaults', () => {
-  const plugins = (body: Record<string, unknown>): string[] =>
-    ((body.integrations as { id: string }[] | undefined) ?? []).map((i) => i.id)
   const turn = async (text: string): Promise<Record<string, unknown>> => {
     const f = streams([evt({ type: 'chat.end', result: {} })])
     vi.stubGlobal('fetch', f)
@@ -1589,16 +1546,16 @@ describe('folder defaults', () => {
 
   beforeEach(() => {
     engine = new Engine(store, bus, () => Promise.resolve({ allowed: ['off', 'low', 'high'], default: 'low' }))
-    configure({ reasoning: 'high', mcpTools: 'mcp/deep-research' })
+    configure({ reasoning: 'high' })
   })
 
-  it("a chat in a folder takes the folder's reasoning and tools over Settings'", async () => {
-    const folder = store.createFolder('Astrology')
-    store.updateFolder(folder.id, { reasoning: 'off', mcpTools: 'mcp/astrology-v2' })
+  it("a chat in a folder takes the folder's reasoning over Settings'", async () => {
+    const folder = store.createFolder('Quiet')
+    store.updateFolder(folder.id, { reasoning: 'off' })
     store.patch(convId, { folderId: folder.id })
-    const body = await turn('hi')
-    expect(body.reasoning).toBe('off')
-    expect(plugins(body)).toEqual(['mcp/astrology-v2'])
+    expect((await turn('hi')).reasoning).toBe('off')
+    store.updateFolder(folder.id, { reasoning: null })
+    expect((await turn('again')).reasoning).toBe('high')
   })
 
   it("the chat's own level still wins over the folder's", async () => {
@@ -1608,28 +1565,6 @@ describe('folder defaults', () => {
     expect((await turn('hi')).reasoning).toBe('low')
   })
 
-  it("a chat's own tool list wins over the folder's and Settings', tools named and all", async () => {
-    const folder = store.createFolder('Astrology')
-    store.updateFolder(folder.id, { mcpTools: 'mcp/astrology-v2' })
-    store.patch(convId, { folderId: folder.id, tools: 'mcp/astrology-v2(verify_claim, create_transit_chart)' })
-    const body = await turn('hi')
-    expect(body.integrations).toEqual([
-      { type: 'plugin', id: 'mcp/astrology-v2', allowed_tools: ['verify_claim', 'create_transit_chart'] },
-    ])
-    store.patch(convId, { tools: '' }) // a real choice of none
-    expect(plugins(await turn('again'))).toEqual([])
-    store.patch(convId, { tools: null }) // back to the folder's
-    expect(plugins(await turn('and again'))).toEqual(['mcp/astrology-v2'])
-  })
-
-  it("a folder's empty tool list means no tools at all; an unset one means Settings'", async () => {
-    const folder = store.createFolder('Banter')
-    store.patch(convId, { folderId: folder.id })
-    expect(plugins(await turn('hi'))).toEqual(['mcp/deep-research']) // unset: inherit
-    store.updateFolder(folder.id, { mcpTools: '' })
-    expect(plugins(await turn('again'))).toEqual([]) // set to nothing: none
-    expect((await turn('and again')).reasoning).toBe('high') // reasoning unset: Settings' level
-  })
 })
 
 describe('reply cap and stats', () => {

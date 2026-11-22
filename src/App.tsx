@@ -8,7 +8,6 @@ import SettingsSheet from './components/SettingsSheet';
 import MemoriesSheet from './components/MemoriesSheet';
 import ConversationList from './components/ConversationList';
 import FolderPicker from './components/FolderPicker';
-import ToolPicker from './components/ToolPicker';
 import ReasoningPicker, { labelFor } from './components/ReasoningPicker';
 import Unreachable from './components/Unreachable';
 import useServerState from './hooks/useServerState';
@@ -26,7 +25,7 @@ export default function App() {
   const {
     conversations, activeId, active, loadingActive, config, status, startedAt, busy, working,
     send, stop, retry, compact, branch, search, newChat, openChat, deleteChat, deleteChats, restoreChat, renameChat, setReasoning, setMemory,
-    setMemorySelection, setStarred, setFolder, setTemporary, setTools, folders, createFolder, updateFolder, deleteFolder,
+    setMemorySelection, setStarred, setFolder, setTemporary, folders, createFolder, updateFolder, deleteFolder,
     saveConfig, modelLoad, loadModel,
   } = server;
 
@@ -82,12 +81,11 @@ export default function App() {
   const [memoriesOpen, setMemoriesOpen] = useState<false | 'browse' | 'select'>(false);
   // The chat a folder is being picked for; null when the picker is closed.
   const [folderPickerFor, setFolderPickerFor] = useState<string | null>(null);
-  const [toolsOpen, setToolsOpen] = useState(false);
   // A search hit being opened: which chat, and the message to scroll to.
   const [jump, setJump] = useState<{ id: string; messageId: string } | null>(null);
   const activeFolder = active ? folders.find((f) => f.id === active.folderId) : undefined;
-  // This chat's own setting, else the folder's, else the Settings default.
-  const memoryOn = active?.memory ?? activeFolder?.memory ?? config?.memoryDefault === 'on';
+  // Memory is on unless this chat turned it off with the brain button.
+  const memoryOn = active?.memory ?? true;
   const temporaryOn = active?.temporary === true;
 
   // Nothing to talk to yet: get the server configured first.
@@ -187,8 +185,6 @@ export default function App() {
         onToggleTemporary={active ? () => void setTemporary(active.id, !temporaryOn) : undefined}
         folderLabel={folderLabel}
         onOpenFolderPicker={active ? () => setFolderPickerFor(active.id) : undefined}
-        onOpenTools={active ? () => setToolsOpen(true) : undefined}
-        toolsCustomized={active?.tools != null}
         memoryOn={memoryOn}
         onToggleMemory={active ? () => void setMemory(!memoryOn) : undefined}
         onPickMemories={active ? () => setMemoriesOpen('select') : undefined}
@@ -233,22 +229,10 @@ export default function App() {
         open={memoriesOpen !== false}
         onClose={() => setMemoriesOpen(false)}
         selectFor={memoriesOpen === 'select' && active ? {
-          // The chat's own pick, else the folder's; a change gives the chat its own.
-          selection: active.memorySelection ?? activeFolder?.memorySelection ?? null,
-          fromFolder: active.memorySelection == null && activeFolder?.memorySelection != null,
+          selection: active.memorySelection ?? null,
           onChange: (value) => void setMemorySelection(active.id, value),
         } : undefined}
       />
-      {active && (
-        <ToolPicker
-          open={toolsOpen}
-          onClose={() => setToolsOpen(false)}
-          value={active.tools ?? null}
-          inherited={activeFolder?.mcpTools ?? config?.mcpTools ?? ''}
-          inheritedFrom={activeFolder?.mcpTools != null ? 'folder' : 'Settings'}
-          onChange={(tools) => void setTools(active.id, tools)}
-        />
-      )}
       <FolderPicker
         open={folderPickerFor !== null}
         onClose={() => setFolderPickerFor(null)}

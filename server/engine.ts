@@ -12,7 +12,6 @@ import { TailPublisher, replyStats, sseEvents } from './stream.ts'
 import { Transcript, formatToolOutput, toolArgs, type ReplyMeta } from './transcript.ts'
 import { metaOf } from '../src/types.ts'
 export { formatToolOutput, toolArgs }
-import { parseIntegrations } from '../src/lib/integrations.ts'
 import type { ImageUpload, Message, MessageImage, ModelLoadState, ServerConfig } from '../src/types.ts'
 
 /**
@@ -35,7 +34,6 @@ export function decodeUpload(u: ImageUpload): { name: string; mime: string; byte
   return { name: u.name, mime: u.mime, bytes: Buffer.from(m[2]!, 'base64') }
 }
 
-export { parseIntegrations }
 
 interface TurnState {
   controller: AbortController
@@ -73,8 +71,6 @@ export interface EngineState {
   compacting: Set<string>
   /** Chats a title is being written for right now. */
   titling?: Set<string>
-  /** Tool messages (by id) whose transit readings are being written right now. */
-  reading?: Set<string>
   /** The latest in-progress status per chat, for clients that connect mid-reply. */
   statuses: Map<string, StatusPayload>
   /** Created by the first Engine, which knows where the limit is configured. */
@@ -114,7 +110,6 @@ export class Engine {
     this.running = state.running
     // ??= : state kept from before a code change may predate a field.
     const titling = state.titling ??= new Set()
-    const reading = state.reading ??= new Set()
     this.statuses = state.statuses ??= new Map()
     this.slots = state.slots ??= new Slots(() => parallelLimit(this.store.getConfig().parallel))
     this.background = new BackgroundJobs(
@@ -127,24 +122,19 @@ export class Engine {
       },
       state.compacting,
       titling,
-      reading,
     )
   }
 
   /**
-   * Work going on after replies are released: summaries, titles and transit
-   * readings. A restart cuts these off silently (a chart would keep saying
-   * its reading is on its way), so the deploy script waits for zero.
+   * Work going on after replies are released: summaries, titles and
+   * recaps. A restart cuts these off silently, so the deploy script waits
+   * for zero.
    */
   backgroundJobs(): number {
     return this.background.count()
   }
 
   // The background jobs themselves live in background.ts; see each there.
-  readingsAll(opts?: { all?: boolean }): { candidates: number } { return this.background.readingsAll(opts) }
-  readings(conversationId: string, messageId: string | number, opts?: { force?: boolean }): Promise<Record<string, string> | null> {
-    return this.background.readings(conversationId, messageId, opts)
-  }
   recapAll(opts?: { all?: boolean }): { candidates: number } { return this.background.recapAll(opts) }
   retitleAll(): { candidates: number } { return this.background.retitleAll() }
   title(conversationId: string, opts?: { manual?: boolean }): Promise<boolean> { return this.background.title(conversationId, opts) }
@@ -500,7 +490,5 @@ export class Engine {
       await this.compact(conversationId)
       await this.title(conversationId)
     }
-    // Even after a stopped or failed turn: the chart it drew is there to read.
-    await this.background.readingsFor(conversationId)
   }
 }

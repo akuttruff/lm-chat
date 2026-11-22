@@ -45,9 +45,8 @@ export interface Message {
   output?: string
   failed?: boolean
   /**
-   * Tool messages holding a transit chart: a short reading per aspect on
-   * the wheel, by its key (see lib/readings.ts), written by the model after
-   * the turn. Absent until then, or when none could be written.
+   * Readings once written for an old transit chart, one per aspect. Still
+   * stored for old chats, but no longer shown or written.
    */
   readings?: Record<string, string>
   /**
@@ -88,7 +87,7 @@ export interface Conversation {
   reasoning?: string | null
   /** Older turns folded into a summary, so they aren't replayed verbatim. */
   summary?: ContextSummary | null
-  /** Per-chat memory switch; null inherits the Settings default (memoryDefault). */
+  /** Per-chat memory switch (the brain button); null means on. */
   memory?: boolean | null
   /**
    * Which saved memories this chat injects, by id; null/undefined means
@@ -101,9 +100,8 @@ export interface Conversation {
   /** Which folder this chat is filed under; null/undefined means none. */
   folderId?: string | null
   /**
-   * This chat's own tool list, in the stored form parseIntegrations reads
-   * (see lib/integrations.ts), chosen in the tool picker. null/undefined
-   * means the folder's list, else Settings'; '' means no tools at all.
+   * A tool list this chat once picked for itself. Still stored, but no
+   * longer read: every chat gets deep-research and memory (server/request.ts).
    */
   tools?: string | null
   /**
@@ -159,6 +157,7 @@ export interface Settings {
   model: string
   apiToken: string
   systemPrompt: string
+  /** No longer read: every chat gets the same tools. Kept so old configs still load. */
   mcpTools: string
   contextLength: string
   reasoning: string
@@ -182,6 +181,7 @@ export interface ServerConfig {
   apiToken: string
   model: string
   systemPrompt: string
+  /** No longer read: every chat gets the same tools. Kept so old configs still load. */
   mcpTools: string
   contextLength: string
   reasoning: string
@@ -196,7 +196,7 @@ export interface ServerConfig {
    * the app. Match the model's "parallel" load setting. 0 means no cap.
    */
   parallel: string
-  /** Whether a chat with no memory setting of its own uses memory. */
+  /** No longer read: memory is on unless a chat turns it off. Kept so old configs still load. */
   memoryDefault: 'on' | 'off'
   /**
    * The model for work no one is waiting on -- summarizing long threads --
@@ -247,13 +247,9 @@ export interface Folder {
   name: string
   createdAt: number
   /**
-   * Defaults for chats filed here, each overriding the Settings default and
-   * overridden by a chat's own setting. Reasoning: a level, or null/'' to
-   * inherit. Tools: a plugin-id list like Settings' -- '' is "none" and
-   * null is inherit, which differ: a folder for plain conversation can turn
-   * the tools off outright. Memory: on/off, or null to inherit; its
-   * selection is which saved memories chats here get (null: automatic),
-   * the same shape as a chat's own memorySelection.
+   * The reasoning level chats filed here start with, overriding Settings'
+   * and overridden by a chat's own; null/'' inherits. The tool and memory
+   * fields are what older folders set: still stored, no longer read.
    */
   reasoning?: string | null
   mcpTools?: string | null
@@ -289,19 +285,6 @@ export interface ModelLoadState {
 export interface Status {
   state: '' | 'pending' | 'live'
   text: string
-}
-
-export interface Integration {
-  type: 'plugin'
-  id: string
-  /**
-   * Only these of the server's tools are offered to the model. Absent means
-   * all of them. Each tool's schema costs the model ~500 prompt tokens a
-   * turn, so a folder that needs two of a server's fourteen tools saves
-   * thousands by naming them. Written in the tools field as
-   * `mcp/astrology-v2(verify_claim, create_transit_chart)`.
-   */
-  allowed_tools?: string[]
 }
 
 /** Result of probing /v1/models. */

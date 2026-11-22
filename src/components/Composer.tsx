@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { ArrowUp, Brain, Copy, Download, Ellipsis, Folder, Gauge, Ghost, ImagePlus, ListChecks, PanelBottomClose, Square, Trash2, Wrench, X } from 'lucide-react'
+import { ArrowUp, Brain, Copy, Download, Ellipsis, Folder, Gauge, Ghost, ImagePlus, ListChecks, PanelBottomClose, Square, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { ACCEPTED, hasImage, imageFiles, prepareImage } from '../lib/images'
 import type { ImageUpload } from '../types.ts'
@@ -22,9 +22,6 @@ interface ComposerProps {
   /** This chat's folder, or "Folder" when it isn't in one. */
   folderLabel?: string
   onOpenFolderPicker?: () => void
-  /** Pick which tools this chat offers the model; `toolsCustomized` when it has a list of its own. */
-  onOpenTools?: () => void
-  toolsCustomized?: boolean
   /** Delete the chat that's open, without going to the drawer. Absent when there's no chat to delete. */
   onDeleteChat?: () => void
   /** The whole chat as Markdown: to the clipboard, or saved as a file. */
@@ -39,10 +36,10 @@ const MAX_ATTACHMENTS = 6
 
 export default function Composer({
   onSend, disabled, busy, onStop, reasoningLabel, onOpenReasoning, temporaryOn = false, onToggleTemporary,
-  memoryOn = false, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onOpenTools, toolsCustomized = false, onDeleteChat, onCopyChat, onDownloadChat, onCollapse,
+  memoryOn = true, onToggleMemory, onPickMemories, folderLabel, onOpenFolderPicker, onDeleteChat, onCopyChat, onDownloadChat, onCollapse,
 }: ComposerProps) {
   // The overflow menu at the end of the chip row: the actions you reach for
-  // now and then (tools, memories, temporary, export) live there, so the row stays
+  // now and then (memories, temporary, export) live there, so the row stays
   // one line on a phone. Delete sits beside memory, well away from it.
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLSpanElement>(null)
@@ -216,7 +213,7 @@ export default function Composer({
           <PanelBottomClose size={15} aria-hidden="true" />
         </button>
       )}
-      {(onOpenTools || onPickMemories || onToggleTemporary || onCopyChat || onDownloadChat) && (
+      {(onPickMemories || onToggleTemporary || onCopyChat || onDownloadChat) && (
         <span className="more-wrap" ref={moreRef}>
           <button
             type="button"
@@ -225,21 +222,12 @@ export default function Composer({
             aria-expanded={moreOpen}
             aria-haspopup="menu"
             aria-label="More actions"
-            title="Tools, memories, temporary, export"
+            title="Memories, temporary, export"
           >
             <Ellipsis size={15} aria-hidden="true" />
           </button>
           {moreOpen && (
             <div className="more-menu" role="menu" aria-label="More actions">
-              {onOpenTools && (
-                <button
-                  type="button" role="menuitem"
-                  onClick={() => { setMoreOpen(false); onOpenTools() }}
-                  title={toolsCustomized ? 'This chat has its own tool list' : 'Choose which tools this chat offers the model'}
-                >
-                  <Wrench size={14} aria-hidden="true" /> Tools for this chat{toolsCustomized ? ' (its own list)' : ''}
-                </button>
-              )}
               {memoryOn && onPickMemories && (
                 <button type="button" role="menuitem" onClick={() => { setMoreOpen(false); onPickMemories() }}>
                   <ListChecks size={14} aria-hidden="true" /> Choose memories for this chat

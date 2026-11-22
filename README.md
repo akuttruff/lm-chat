@@ -1,8 +1,9 @@
 # <img src="public/icon-180.png" width="32" alt=""> LM Chat
 
 A mobile web client for [LM Studio](https://lmstudio.ai). Run a model on
-your computer and chat with it from your phone over Tailscale, including
-the MCP tools you already have set up in LM Studio.
+your computer and chat with it from your phone over Tailscale. Every chat
+can research the web and remember what it learns about you, through two
+MCP servers run by LM Studio.
 
 Everything stays on your network: no cloud service, no account, no
 third-party API.
@@ -20,7 +21,7 @@ third-party API.
 <table>
   <tr>
     <td align="center" valign="top" width="33%"><img src="docs/screenshots/thread-phone.png" width="200" alt="A chat with the model's thinking as a row and its tool calls as cards" /><br /><b>Tools and reasoning</b><br /><sub>The model's thinking as a row, each MCP tool it called as a card, then the reply</sub></td>
-    <td align="center" valign="top" width="33%"><img src="docs/screenshots/chart-phone.png" width="200" alt="A birth chart from an astrology MCP tool drawn as a wheel" /><br /><b>Rich tool results</b><br /><sub>Some tools draw: a birth chart from an astrology MCP server comes back as a wheel</sub></td>
+    <td align="center" valign="top" width="33%"><img src="docs/screenshots/memory-phone.png" width="200" alt="A reply that used saved memories, shown as a card above it" /><br /><b>Memory</b><br /><sub>What the model saved about you, loaded into a reply and shown as a card</sub></td>
     <td align="center" valign="top" width="33%"><img src="docs/screenshots/chats-phone.png" width="200" alt="The chat list with folders, stars and search" /><br /><b>Chats</b><br /><sub>Folders, stars and search; each chat keeps its own reasoning and memory settings</sub></td>
   </tr>
 </table>
@@ -39,7 +40,10 @@ npm run screenshots                                # another; needs Google Chrom
   reasoning, writing, or calling a tool.
 - **Reasoning shown, not discarded**, as a collapsible "Thought for 4.2s"
   block.
-- **MCP tool calls** rendered as cards with their arguments and output.
+- **Web research and memory in every chat**: the deep-research and
+  lm-memory MCP servers, with no tool picking. The brain button turns
+  memory off for one chat. Tool calls show as cards with their arguments
+  and output.
 - **Conversations saved on your computer**, so they survive a closed tab or
   a locked phone and are shared across your devices. Folders, stars and
   search keep them in order.
@@ -86,8 +90,8 @@ among them.
 | For | You need |
 |---|---|
 | Chatting | Node 24 or newer, and a model server with a chat model (below) |
-| Calling tools from a chat | MCP servers registered with the model server, and its authentication on |
-| Memories | The [lm-memory-mcp](https://github.com/akuttruff/lm-memory-mcp) server registered the same way; the model uses it to remember and forget |
+| Web research | A `deep-research` MCP server registered with the model server, and its authentication on |
+| Memories | The [lm-memory-mcp](https://github.com/akuttruff/lm-memory-mcp) server registered the same way, as `lm-chat-memory`; the model uses it to remember and forget |
 | Reading replies aloud | A local speech server (below) |
 | Opening it on your phone | [Tailscale](https://tailscale.com) on both devices, with Tailscale Serve in front of LM Chat (see *Development*) |
 
@@ -114,10 +118,11 @@ as LM Chat or on one it can reach.
    Authentication**, then **Manage Tokens**. LM Studio requires this for MCP
    tools. The token is kept on the LM Chat server and never sent to the
    browser.
-4. For tools, register the MCP servers you want with the model server. In
-   LM Studio that is `~/.lmstudio/mcp.json` plus **Allow calling servers
-   from mcp.json** in the Developer settings. LM Chat reads that same file
-   to show each server's tools in its tool picker.
+4. Register the two MCP servers every chat uses, `deep-research` and
+   `lm-chat-memory`, with the model server. In LM Studio that is
+   `~/.lmstudio/mcp.json` plus **Allow calling servers from mcp.json** in
+   the Developer settings. Other servers in that file are not offered to
+   LM Chat's chats.
 5. Set how many requests the model serves at once (in LM Studio, the
    model's **Parallel** setting) and match it in LM Chat's Settings.
 
@@ -202,7 +207,6 @@ notice if the server cannot be reached.
 | Parallel replies | How many chats can be answered at once (default 4). Match the model's **Parallel** setting in LM Studio. `0` means no limit. |
 | Conversation replayed | Characters of history sent with each message (default 24000). Older turns are summarized. `0` sends everything. |
 | Context length | Leave blank. Setting it here makes LM Studio load a new model instance for every message. |
-| Plugin IDs | MCP plugins to enable, comma-separated, for example `mcp/filesystem, mcp/web-search`. |
 
 ## Development
 

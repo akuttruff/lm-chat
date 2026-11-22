@@ -1,37 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FolderPicker, { describeDefaults } from './FolderPicker.tsx'
 import type { Folder, FolderUpdate, PublicConfig } from '../types.ts'
 
 const astrology: Folder = { id: 'f1', name: 'Astrology', createdAt: 1 }
 const banter: Folder = { id: 'f2', name: 'Banter', createdAt: 2 }
-
-// What the servers report when the editor asks for their tools.
-const catalog = {
-  fetchedAt: 1,
-  servers: [
-    { id: 'mcp/astrology-v2', name: 'astrology-v2', tools: [
-      { name: 'create_natal_chart', description: 'Generate a natal chart.' },
-      { name: 'verify_claim', description: 'Check one transit claim.' },
-      { name: 'forecast_month', description: 'A month ahead.' },
-    ] },
-    { id: 'mcp/deep-research', name: 'deep-research', tools: [
-      { name: 'web_search', description: 'Search the web.' },
-    ] },
-  ],
-}
-
-const memories = [
-  { id: 'a1', text: 'Favorite color is green', createdAt: 1, updatedAt: 1 },
-  { id: 'b2', text: 'Born June 15, 1990', createdAt: 2, updatedAt: 2 },
-]
-
-beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve({
-    ok: true, json: () => Promise.resolve(String(url).startsWith('/api/memories') ? memories : catalog),
-  })))
-})
 
 const config: PublicConfig = {
   lmStudioUrl: '', model: 'qwen', systemPrompt: '', mcpTools: 'mcp/astrology-v2, mcp/deep-research', contextLength: '',
@@ -86,13 +60,9 @@ describe('FolderPicker', () => {
 
   it('says under each folder what it changes for its chats, in words', () => {
     expect(describeDefaults(astrology)).toBe('')
-    expect(describeDefaults({ ...astrology, reasoning: 'off', mcpTools: 'mcp/astrology-v2' })).toBe('Reasoning off · Tools: astrology-v2')
-    expect(describeDefaults({ ...astrology, mcpTools: '' })).toBe('No tools')
-    expect(describeDefaults({ ...astrology, mcpTools: 'mcp/astrology-v2(verify_claim, forecast_month), mcp/deep-research' }))
-      .toBe('Tools: astrology-v2 (2), deep-research')
-    expect(describeDefaults({ ...astrology, memory: false })).toBe('Memory off')
-    expect(describeDefaults({ ...astrology, memory: true, memorySelection: ['a1', 'b2'] })).toBe('Memory on (2 picked)')
-    expect(describeDefaults({ ...astrology, memorySelection: ['a1'] })).toBe('1 memory picked')
+    expect(describeDefaults({ ...astrology, reasoning: 'off' })).toBe('Reasoning off')
+    // Old tool and memory defaults no longer change anything, so they aren't mentioned.
+    expect(describeDefaults({ ...astrology, mcpTools: 'mcp/astrology-v2', memory: false })).toBe('')
   })
 
   it("opens a folder's own settings page, titled with its name, and comes back", async () => {
@@ -114,103 +84,19 @@ describe('FolderPicker', () => {
     await user.clear(box)
     await user.type(box, 'Astro')
     await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(props.onUpdate).toHaveBeenCalledWith('f1', { name: 'Astro', reasoning: null, mcpTools: null, memory: null, memorySelection: null })
+    expect(props.onUpdate).toHaveBeenCalledWith('f1', { name: 'Astro', reasoning: null })
   })
 
-  it("shows what Same as Settings means, sets a folder's reasoning level and turns its tools off", async () => {
+  it("shows what Same as Settings means and sets a folder's reasoning level, with no tool or memory fields", async () => {
     const user = userEvent.setup()
     const props = setup()
     await openEditor(user)
     expect(screen.getByRole('option', { name: 'Same as Settings (low)' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Same as Settings (astrology-v2, deep-research)' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Tools')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Memory')).not.toBeInTheDocument()
     await user.selectOptions(screen.getByLabelText('Reasoning'), 'off')
-    await user.selectOptions(screen.getByLabelText('Tools'), 'none')
     await user.click(screen.getByRole('button', { name: 'Save' }))
-    // '' for tools is "none" -- distinct from null, which would mean "same as Settings".
-    expect(props.onUpdate).toHaveBeenCalledWith('f1', {
-      name: 'Astrology', reasoning: 'off', mcpTools: '', memory: null, memorySelection: null,
-    })
-  })
-
-  it("turns a folder's memory on and picks which memories its chats start with", async () => {
-    const user = userEvent.setup()
-    const props = setup()
-    await openEditor(user)
-    expect(screen.getByRole('option', { name: 'Same as Settings (off)' })).toBeInTheDocument()
-    // Memory is off (Settings' default), so there is nothing to pick from yet.
-    expect(screen.queryByLabelText('Memories')).not.toBeInTheDocument()
-    await user.selectOptions(screen.getByLabelText('Memory'), 'on')
-    await user.selectOptions(screen.getByLabelText('Memories'), 'custom')
-    // "Only these" starts from every memory; untick one.
-    expect(await screen.findByLabelText('Favorite color is green')).toBeChecked()
-    await user.click(screen.getByLabelText('Favorite color is green'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(props.onUpdate).toHaveBeenCalledWith('f1', {
-      name: 'Astrology', reasoning: null, mcpTools: null, memory: true, memorySelection: ['b2'],
-    })
-  })
-
-  it("starts from a folder's own memory pick, and 'automatic' clears it", async () => {
-    const user = userEvent.setup()
-    const props = setup({ folders: [{ ...astrology, memory: true, memorySelection: ['b2'] }, banter] })
-    expect(await screen.findByText('Memory on (1 picked)')).toBeInTheDocument()
-    await openEditor(user)
-    expect(screen.getByLabelText('Memory')).toHaveValue('on')
-    expect(screen.getByLabelText('Memories')).toHaveValue('custom')
-    expect(await screen.findByLabelText('Born June 15, 1990')).toBeChecked()
-    expect(screen.getByLabelText('Favorite color is green')).not.toBeChecked()
-    await user.click(screen.getByRole('button', { name: 'Deselect all' }))
-    expect(screen.getByLabelText('Born June 15, 1990')).not.toBeChecked()
-    await user.selectOptions(screen.getByLabelText('Memories'), 'auto')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(props.onUpdate).toHaveBeenCalledWith('f1', {
-      name: 'Astrology', reasoning: null, mcpTools: null, memory: true, memorySelection: null,
-    })
-  })
-
-  it("picks a folder's tools one by one from the servers' own lists, starting from what Settings gives", async () => {
-    const user = userEvent.setup()
-    const props = setup()
-    await openEditor(user)
-    await user.selectOptions(screen.getByLabelText('Tools'), 'custom')
-    // Settings offers both servers whole, so everything starts ticked; keep two astrology tools and drop deep-research.
-    const astro = await screen.findByRole('region', { name: 'astrology-v2' })
-    expect(within(astro).getByText('3 of 3')).toBeInTheDocument()
-    await user.click(within(astro).getByRole('checkbox', { name: /create_natal_chart/ }))
-    const research = screen.getByRole('region', { name: 'deep-research' })
-    await user.click(within(research).getByRole('checkbox', { name: /web_search/ }))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(props.onUpdate).toHaveBeenCalledWith('f1', {
-      name: 'Astrology', reasoning: null, mcpTools: 'mcp/astrology-v2(forecast_month, verify_claim)', memory: null, memorySelection: null,
-    })
-  })
-
-  it("starts from a folder's own tool subset, with just those ticked", async () => {
-    const user = userEvent.setup()
-    setup({ folders: [{ ...astrology, reasoning: 'low', mcpTools: 'mcp/astrology-v2(verify_claim)' }, banter] })
-    expect(await screen.findByText('Reasoning low · Tools: astrology-v2 (1)')).toBeInTheDocument()
-    await openEditor(user)
-    expect(screen.getByLabelText('Tools')).toHaveValue('custom')
-    const astro = await screen.findByRole('region', { name: 'astrology-v2' })
-    expect(within(astro).getByText('1 of 3')).toBeInTheDocument()
-    expect(within(astro).getByRole('checkbox', { name: /verify_claim/ })).toBeChecked()
-    expect(within(astro).getByRole('checkbox', { name: /create_natal_chart/ })).not.toBeChecked()
-    expect(within(screen.getByRole('region', { name: 'deep-research' })).getByRole('checkbox', { name: /web_search/ })).not.toBeChecked()
-  })
-
-  it('ticking a whole server stores it plain, and deselect all empties the list', async () => {
-    const user = userEvent.setup()
-    const props = setup({ folders: [{ ...astrology, mcpTools: 'mcp/astrology-v2(verify_claim)' }, banter] })
-    await openEditor(user)
-    const astro = await screen.findByRole('region', { name: 'astrology-v2' })
-    await user.click(within(astro).getByRole('checkbox', { name: /^astrology-v2/ }))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(props.onUpdate).toHaveBeenLastCalledWith('f1', expect.objectContaining({ mcpTools: 'mcp/astrology-v2' }))
-    // Saving goes back to the list; open the editor again for the second change.
-    await openEditor(user)
-    await user.click(await screen.findByRole('button', { name: 'Deselect all' }))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(props.onUpdate).toHaveBeenLastCalledWith('f1', expect.objectContaining({ mcpTools: '' }))
+    expect(props.onUpdate).toHaveBeenCalledWith('f1', { name: 'Astrology', reasoning: 'off' })
   })
 
   it('deletes a folder from its settings page, after confirming', async () => {

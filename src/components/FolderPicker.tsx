@@ -3,8 +3,6 @@ import { Drawer } from 'vaul'
 import { Check, ChevronLeft, Plus, Settings2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { labelFor, levelsFor } from './ReasoningPicker'
-import ToolCatalog, { describeTools, formatSelection, selectionOf, useToolCatalog, type Selection } from './ToolCatalog'
-import MemoryChecklist, { useMemories } from './MemoryChecklist'
 import type { Folder, FolderUpdate, ModelConfig, PublicConfig } from '../types.ts'
 
 interface FolderPickerProps {
@@ -19,35 +17,22 @@ interface FolderPickerProps {
   onDelete: (id: string) => Promise<void>
   /** The chat model's manifest, for the reasoning levels a folder may default to. */
   modelConfig?: ModelConfig | null
-  /** Settings, for what "same as Settings" currently means and which tools are known. */
+  /** Settings, for what "same as Settings" currently means. */
   config?: PublicConfig | null
 }
 
-/** How a folder's tool list relates to Settings' -- the three states of Folder.mcpTools. */
-type ToolsMode = 'inherit' | 'none' | 'custom'
-const toolsModeOf = (mcpTools: string | null | undefined): ToolsMode =>
-  (mcpTools == null ? 'inherit' : mcpTools === '' ? 'none' : 'custom')
-
 /** What a folder changes for its chats, for the row under its name; '' when nothing. */
 export function describeDefaults(f: Folder): string {
-  const parts: string[] = []
-  if (f.reasoning) parts.push(`Reasoning ${f.reasoning}`)
-  if (f.mcpTools === '') parts.push('No tools')
-  else if (f.mcpTools) parts.push(`Tools: ${describeTools(f.mcpTools)}`)
-  if (f.memory === false) parts.push('Memory off')
-  else if (f.memory === true) parts.push(f.memorySelection ? `Memory on (${f.memorySelection.length} picked)` : 'Memory on')
-  else if (f.memorySelection) parts.push(`${f.memorySelection.length} ${f.memorySelection.length === 1 ? 'memory' : 'memories'} picked`)
-  return parts.join(' · ')
+  return f.reasoning ? `Reasoning ${f.reasoning}` : ''
 }
 
 /**
  * Which folder a chat is filed under. Two screens in one sheet, because they
  * are two jobs: the list files the chat (one tap), and a folder's gear opens
- * its own settings page -- name, the reasoning level and tools its chats
- * start with, and delete -- with the list out of the way. An "Astrology"
- * folder can turn thinking off and carry only the astrology tools, without
- * every chat in it being set up by hand. Deleting a folder only unfiles its
- * chats; nothing is lost.
+ * its own settings page -- name, the reasoning level its chats start with,
+ * and delete -- with the list out of the way. Tools and memory are the same
+ * in every chat, so a folder doesn't set them. Deleting a folder only
+ * unfiles its chats; nothing is lost.
  */
 export default function FolderPicker({
   open, onClose, folders, currentFolderId, onAssign, onCreate, onUpdate, onDelete, modelConfig, config,
@@ -171,37 +156,16 @@ interface FolderEditorProps {
   onDelete: () => Promise<void>
 }
 
-/**
- * One folder's settings. Tools are picked server by server, tool by tool,
- * from the same catalog as a chat's own Tools button -- so an "Astrology"
- * folder can start its chats with two of the server's sixteen tools, not
- * all of them. Starts from Settings' list when the folder has none of its
- * own, so "only these" begins from what chats here get today.
- */
+/** One folder's settings: its name and the reasoning level its chats start with. */
 function FolderEditor({ folder, modelConfig, config, onBack, onSave, onDelete }: FolderEditorProps) {
   const [name, setName] = useState(folder.name)
   const [reasoning, setReasoning] = useState(folder.reasoning ?? '')
-  const [toolsMode, setToolsMode] = useState<ToolsMode>(toolsModeOf(folder.mcpTools))
-  const [selection, setSelection] = useState<Selection>(() => selectionOf(folder.mcpTools || config?.mcpTools || ''))
-  // Memory: '' inherits Settings, else on/off. Its pick is an explicit id
-  // list, or null for automatic; the checklist only shows while memory is on.
-  const [memory, setMemory] = useState<'' | 'on' | 'off'>(folder.memory == null ? '' : folder.memory ? 'on' : 'off')
-  const [memoryPick, setMemoryPick] = useState<string[] | null>(folder.memorySelection ?? null)
   const [saving, setSaving] = useState(false)
-  const { catalog, loading, refresh } = useToolCatalog(toolsMode === 'custom')
-  const memoryOn = memory ? memory === 'on' : config?.memoryDefault === 'on'
-  const memories = useMemories(memoryOn)
 
   const save = async (): Promise<void> => {
     setSaving(true)
     try {
-      await onSave({
-        name,
-        reasoning: reasoning || null,
-        mcpTools: toolsMode === 'inherit' ? null : toolsMode === 'none' ? '' : formatSelection(selection),
-        memory: memory ? memory === 'on' : null,
-        memorySelection: memoryPick,
-      })
+      await onSave({ name, reasoning: reasoning || null })
     } catch (err) {
       toast.error((err as Error).message)
     } finally {
@@ -220,7 +184,6 @@ function FolderEditor({ folder, modelConfig, config, onBack, onSave, onDelete }:
   }
 
   const settingsReasoning = labelFor(null, config?.reasoning)
-  const settingsTools = describeTools(config?.mcpTools ?? '', catalog)
 
   return (
     <>
@@ -252,48 +215,6 @@ function FolderEditor({ folder, modelConfig, config, onBack, onSave, onDelete }:
             ))}
           </select>
           <div className="hint">A chat can still pick its own level from the gauge by the message box.</div>
-        </div>
-
-        <div className="field">
-          <label htmlFor="folder-tools">Tools</label>
-          <select id="folder-tools" value={toolsMode} onChange={(e) => setToolsMode(e.target.value as ToolsMode)}>
-            <option value="inherit">Same as Settings ({settingsTools})</option>
-            <option value="none">None</option>
-            <option value="custom">Only these…</option>
-          </select>
-          {toolsMode === 'custom' && (
-            <ToolCatalog catalog={catalog} loading={loading} onRefresh={refresh} selection={selection} onChange={setSelection} />
-          )}
-          <div className="hint">
-            What chats here start with; any chat can pick its own tools from the Tools button by the message box.
-            Each tool the model is shown costs about 500 prompt tokens every turn, so fewer is faster.
-          </div>
-        </div>
-
-        <div className="field">
-          <label htmlFor="folder-memory">Memory</label>
-          <select id="folder-memory" value={memory} onChange={(e) => setMemory(e.target.value as '' | 'on' | 'off')}>
-            <option value="">Same as Settings ({config?.memoryDefault === 'on' ? 'on' : 'off'})</option>
-            <option value="on">On</option>
-            <option value="off">Off</option>
-          </select>
-          {memoryOn && (
-            <>
-              <label htmlFor="folder-memories" className="field-sub">Memories</label>
-              <select
-                id="folder-memories"
-                value={memoryPick ? 'custom' : 'auto'}
-                onChange={(e) => setMemoryPick(e.target.value === 'auto' ? null : (folder.memorySelection ?? memories.items?.map((m) => m.id) ?? []))}
-              >
-                <option value="auto">Automatic (every memory that fits)</option>
-                <option value="custom">Only these…</option>
-              </select>
-              {memoryPick && <MemoryChecklist {...memories} selection={memoryPick} onChange={setMemoryPick} />}
-            </>
-          )}
-          <div className="hint">
-            Whether chats here remember you, and which saved memories they start with; the brain button on a chat still overrides it.
-          </div>
         </div>
 
         <div className="folder-danger">

@@ -18,6 +18,8 @@ import type { Memory } from '../src/types.ts'
  * two files: what the model saves in one never shows up in the other.
  */
 export const MEMORY_PLUGIN = 'mcp/lm-chat-memory'
+/** Web research, the other tool every chat gets: deep-research in LM Studio's mcp.json. */
+export const RESEARCH_PLUGIN = 'mcp/deep-research'
 /**
  * The `plugin` of the card lm-chat itself adds to a reply to show which notes
  * were loaded into it. Not a real tool call, so it is never replayed to the
@@ -116,7 +118,7 @@ export class Memories {
         'a detail of their life, how they like answers -- save it with remember, one fact per call. Don\'t save small ' +
         'talk or anything that only matters in this conversation. If a saved fact has changed, use update_memory on it ' +
         'rather than saving a second, conflicting one. Also save how the user likes a kind of request handled ' +
-        '(for example "wants transit readings from their natal chart, not generic sun-sign horoscopes"), and save a ' +
+        '(for example "wants sources linked for anything factual, not a summary from memory"), and save a ' +
         'preference the first time they correct you.',
       'Use what you know without being asked: read the notes below before answering or choosing a tool, apply every ' +
         'relevant detail (all of it, not just part of it) and pass it to tools as input. Never ask for, or search the web ' +

@@ -94,13 +94,11 @@ export default function SettingsSheet({
   const [model, setModel] = useState('');
   const [apiToken, setApiToken] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [mcpTools, setMcpTools] = useState('');
   const [contextLength, setContextLength] = useState('');
   const [reasoning, setReasoning] = useState('');
   const [stallSeconds, setStallSeconds] = useState('180');
   const [historyChars, setHistoryChars] = useState('24000');
   const [parallel, setParallel] = useState('4');
-  const [memoryDefault, setMemoryDefault] = useState<'on' | 'off'>('off');
   const [backgroundModel, setBackgroundModel] = useState('');
   const [maxOutputTokens, setMaxOutputTokens] = useState('');
   const [autoTitle, setAutoTitle] = useState<'on' | 'off'>('on');
@@ -122,13 +120,11 @@ export default function SettingsSheet({
     setLmStudioUrl(config.lmStudioUrl);
     setModel(config.model);
     setSystemPrompt(config.systemPrompt);
-    setMcpTools(config.mcpTools);
     setContextLength(config.contextLength);
     setReasoning(config.reasoning);
     setStallSeconds(config.stallSeconds);
     setHistoryChars(config.historyChars);
     setParallel(config.parallel ?? '4');
-    setMemoryDefault(config.memoryDefault === 'on' ? 'on' : 'off');
     setBackgroundModel(config.backgroundModel ?? '');
     setMaxOutputTokens(config.maxOutputTokens ?? '');
     setAutoTitle(config.autoTitle === 'off' ? 'off' : 'on');
@@ -216,13 +212,11 @@ export default function SettingsSheet({
       lmStudioUrl: lmStudioUrl.trim(),
       model,
       systemPrompt,
-      mcpTools: mcpTools.trim(),
       contextLength: contextLength.trim(),
       reasoning,
       stallSeconds: stallSeconds.trim(),
       historyChars: historyChars.trim(),
       parallel: parallel.trim(),
-      memoryDefault,
       backgroundModel: backgroundModel.trim(),
       maxOutputTokens: maxOutputTokens.trim(),
       autoTitle,
@@ -564,40 +558,11 @@ export default function SettingsSheet({
             </div>
           </div>
 
-          <h3 className="sheet-h">MCP tools</h3>
-          <div className="field">
-            <label htmlFor="cfg-mcp">Plugin IDs</label>
-            <input
-              id="cfg-mcp"
-              type="text"
-              placeholder="mcp/astrology, mcp/deep-research"
-              autoCapitalize="off"
-              autoCorrect="off"
-              value={mcpTools}
-              onChange={(e) => setMcpTools(e.target.value)}
-            />
-            <div className="hint">
-              Comma-separated plugin IDs from LM Studio&apos;s <code>mcp.json</code>.
-              Requires <b>&quot;Allow calling servers from mcp.json&quot;</b> in Server Settings.
-              This is the default; a folder can set its own list, and any chat can pick its own tools from the{' '}
-              <b>Tools</b> button by the message box. Every tool the model is shown costs ~500 prompt tokens a turn.
-            </div>
-          </div>
-
-          <h3 className="sheet-h">Memory</h3>
-          <label className="toggle-row">
-            <input
-              type="checkbox"
-              checked={memoryDefault === 'on'}
-              onChange={(e) => setMemoryDefault(e.target.checked ? 'on' : 'off')}
-            />
-            Use memory in chats by default
-          </label>
+          <h3 className="sheet-h">Tools and memory</h3>
           <div className="hint">
-            With memory on, the model can save what it learns about you and sees what it saved before, in every
-            chat that has it on. Each chat can switch it with the brain button by the message box. Needs the{' '}
-            <code>lm-chat-memory</code> server in LM Studio&apos;s <code>mcp.json</code> -- this app&apos;s own pool,
-            separate from what LM Studio&apos;s chat window remembers.
+            Every chat can search the web (<code>deep-research</code>) and remember things about you
+            (<code>lm-chat-memory</code>). Turn memory off for one chat with the brain button by the message box.
+            Both need <b>&quot;Allow calling servers from mcp.json&quot;</b> in LM Studio&apos;s Server Settings.
           </div>
           {onOpenMemories && (
             <div className="row">

@@ -1,23 +1,15 @@
 import { useMemo, useState, memo } from 'react'
 import { Wrench, ChevronRight, TriangleAlert } from 'lucide-react'
 import { argValue, argsSummary, prettyOutput, sizeLabel, toolLabel } from '../lib/toolFormat.ts'
-import { looksLikeChart, parseWheel } from '../lib/chartWheel.ts'
-import ChartWheel from './ChartWheel'
-import { ActiveTransits, ForecastTransits } from './TransitTable'
-import { looksLikeForecast, parseForecast } from '../lib/forecastTable.ts'
-import { looksLikeReading, parseReading } from '../lib/tarotSpread.ts'
-import TarotSpread from './TarotSpread'
 
 interface ToolCardProps {
   name?: string
-  /** The MCP server that provided the tool, e.g. "mcp/astrology-v2". */
+  /** The MCP server that provided the tool, e.g. "mcp/deep-research". */
   plugin?: string
   /** The parameters it was called with. */
   args?: Record<string, unknown>
   output?: string
   failed?: boolean
-  /** A transit chart's readings, one per aspect, once the server has written them. */
-  readings?: Record<string, string>
 }
 
 /** Output this short is shown whole; anything longer collapses to one line. */
@@ -27,12 +19,9 @@ const SHORT = 120
  * One tool call. Collapsed, it's a single row -- what ran, from where, how
  * much it returned -- with its parameters on one line and one line of the
  * result; expanded, each parameter in full, then the whole result in its
- * own scrolling panel, JSON indented. A chart from the astrology server is
- * also drawn as a wheel (see ChartWheel) with its transits as a table
- * under it, a forecast's key transits as a table (TransitTable), and a
- * tarot draw as its spread (TarotSpread), shown either way.
+ * own scrolling panel, JSON indented.
  */
-function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProps) {
+function ToolCard({ name, plugin, args, output, failed }: ToolCardProps) {
   const [open, setOpen] = useState(false)
   const text = output ?? ''
   const short = text.length > 0 && text.length <= SHORT
@@ -40,12 +29,6 @@ function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProp
   const expandable = text.length > SHORT || params.length > 0
   // Only format what's being shown: results run to tens of kilobytes.
   const full = useMemo(() => (open ? prettyOutput(text) : ''), [open, text])
-  // A chart result is drawn as a wheel above its text, whether or not the card is open.
-  const wheel = useMemo(() => (!failed && looksLikeChart(text) ? parseWheel(text) : null), [failed, text])
-  // A forecast's key transits as a table: that result has no wheel.
-  const forecast = useMemo(() => (!failed && looksLikeForecast(text) ? parseForecast(text) : null), [failed, text])
-  // A tarot draw is laid out as its spread, the cards as they fell.
-  const reading = useMemo(() => (!failed && looksLikeReading(text) ? parseReading(text) : null), [failed, text])
   const source = plugin?.replace(/^mcp\//, '')
   const meta = [source, text.length > SHORT ? sizeLabel(text.length) : null, failed ? 'failed' : null]
     .filter(Boolean).join(' · ')
@@ -85,10 +68,6 @@ function ToolCard({ name, plugin, args, output, failed, readings }: ToolCardProp
             ))}
           </dl>
         )}
-        {wheel && <ChartWheel wheel={wheel} readings={readings} />}
-        {wheel?.kind === 'transit' && <ActiveTransits wheel={wheel} />}
-        {forecast && <ForecastTransits table={forecast} />}
-        {reading && <TarotSpread reading={reading} />}
         {short && <div className="tc-short">{text}</div>}
         {text.length > SHORT && !open && <div className="tc-preview">{text.replace(/\s+/g, ' ').slice(0, 300)}</div>}
         {text.length > SHORT && open && <pre className="tc-output">{full}</pre>}

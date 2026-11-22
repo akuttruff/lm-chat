@@ -152,7 +152,6 @@ const ThreadRow = memo(function ThreadRow({ message, onRetry, edit, title, arriv
           args={message.args}
           output={message.output}
           failed={message.failed}
-          readings={message.readings}
         />
       ) : message.role === 'reasoning' ? (
         <ReasoningBlock

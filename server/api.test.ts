@@ -9,10 +9,8 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { createApi, createApiState, readBody } from './api.ts'
 import { HealthCheck } from './health.ts'
-import { ToolCatalogCache } from './tools.ts'
 import { wavOf } from './speech.ts'
 import type { Conversation, ConversationStore, PublicConfig } from '../src/types.ts'
-import transitChart from '../src/test/fixtures/transit-chart.json?raw'
 
 let server: Server
 let base: string
@@ -31,7 +29,7 @@ beforeEach(async () => {
   // never reach the LM Studio on this machine. Tests that want an answer stub their own.
   vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('no LM Studio in tests'))))
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lm-chat-api-'))
-  api = createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null, resume: false })
+  api = createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null })
   server = http.createServer((req, res) => {
     api.middleware(req, res, () => { res.statusCode = 404; res.end('not api') })
   })
@@ -103,9 +101,8 @@ describe('what a config reload keeps', () => {
     }
   }
 
-  it('the chats kept for Undo, and the tool catalog already fetched', async () => {
-    const load = vi.fn(async () => ({ fetchedAt: Date.now(), servers: [] }))
-    const options = { dir: path.join(dir, 'reload'), memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null, resume: false, toolCatalog: new ToolCatalogCache(load) }
+  it('the chats kept for Undo', async () => {
+    const options = { dir: path.join(dir, 'reload'), memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null }
     const state = createApiState(options)
     const first = await serve(createApi(options, state))
     const second = await serve(createApi(options, state))
@@ -120,9 +117,6 @@ describe('what a config reload keeps', () => {
       })
       expect(restored.status).toBe(200)
       expect(state.store.get(id)!.messages[0]!.text).toBe('keep me')
-      await realFetch(`${first.url}/api/tools`)
-      await realFetch(`${second.url}/api/tools`)
-      expect(load).toHaveBeenCalledTimes(1)
     } finally {
       await first.close()
       await second.close()
@@ -416,28 +410,6 @@ describe('a new chat in a folder', () => {
   })
 })
 
-describe('tool catalog', () => {
-  it('serves what the servers reported, and re-asks them on refresh', async () => {
-    const load = vi.fn(async () => ({ fetchedAt: Date.now(), servers: [
-      { id: 'mcp/astrology-v2', name: 'astrology-v2', tools: [{ name: 'verify_claim', description: 'Check one claim.' }] },
-    ] }))
-    const own = createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite'), toolCatalog: new ToolCatalogCache(load) })
-    const srv = http.createServer((req, res) => own.middleware(req, res, () => { res.statusCode = 404; res.end() }))
-    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()))
-    const port = (srv.address() as { port: number }).port
-    try {
-      const first = await (await realFetch(`http://127.0.0.1:${port}/api/tools`)).json() as { servers: { id: string }[] }
-      expect(first.servers.map((s) => s.id)).toEqual(['mcp/astrology-v2'])
-      await realFetch(`http://127.0.0.1:${port}/api/tools`)
-      expect(load).toHaveBeenCalledTimes(1)
-      await realFetch(`http://127.0.0.1:${port}/api/tools?refresh=1`)
-      expect(load).toHaveBeenCalledTimes(2)
-    } finally {
-      await new Promise<void>((r) => srv.close(() => r()))
-    }
-  })
-})
-
 describe('retitling', () => {
   it('answers at once with how many chats it will name', async () => {
     const res = await send('/api/chats/retitle', 'POST')
@@ -466,14 +438,12 @@ describe('folders', () => {
     expect((await send('/api/folders/nope', 'DELETE')).status).toBe(404)
   })
 
-  it("sets a folder's reasoning and tool defaults, keeping what a patch leaves out", async () => {
-    const folder = await (await send('/api/folders', 'POST', { name: 'Astrology' })).json() as { id: string }
-    const patched = await send(`/api/folders/${folder.id}`, 'PATCH', { reasoning: 'off', mcpTools: '' })
-    expect(await patched.json()).toMatchObject({ name: 'Astrology', reasoning: 'off', mcpTools: '' })
-    expect(await (await get('/api/folders')).json()).toMatchObject([{ reasoning: 'off', mcpTools: '' }])
+  it("sets a folder's reasoning, and ignores the tool and memory fields folders no longer have", async () => {
+    const folder = await (await send('/api/folders', 'POST', { name: 'Research' })).json() as { id: string }
+    const patched = await send(`/api/folders/${folder.id}`, 'PATCH', { reasoning: 'off', mcpTools: 'mcp/tarot', memory: false })
+    expect(await patched.json()).toMatchObject({ name: 'Research', reasoning: 'off', mcpTools: null, memory: null })
     expect((await send(`/api/folders/${folder.id}`, 'PATCH', { reasoning: 5 })).status).toBe(400)
-    const withMemory = await send(`/api/folders/${folder.id}`, 'PATCH', { memory: true, memorySelection: ['m1'] })
-    expect(await withMemory.json()).toMatchObject({ reasoning: 'off', mcpTools: '', memory: true, memorySelection: ['m1'] })
+    expect(await (await send(`/api/folders/${folder.id}`, 'PATCH', { name: 'Reading list' })).json()).toMatchObject({ name: 'Reading list', reasoning: 'off' })
   })
 
   it('files a chat into a folder through the same PATCH the rest of a chat is edited with', async () => {
@@ -657,58 +627,19 @@ describe('turns', () => {
     expect(api.store.get(id)!.messages).toHaveLength(0)
   })
 
-  it('writes a reading for each aspect of a transit chart, keeps them on the tool message, and can backfill', async () => {
+  it('reports what a restart would cut off', async () => {
     api.store.setConfig({ model: 'qwen' })
     const id = api.store.getConversations().activeId!
     api.store.setMessages(id, [
-      { id: 'u1', role: 'user', text: 'transits today?' },
-      { id: 't1', role: 'tool', name: 'create_transit_chart', plugin: 'mcp/astrology-v2', output: transitChart },
-      { id: 'a1', role: 'assistant', text: 'Here they are.' },
-    ])
-    const answer = '```json\n{"Mercury|Trine|MC": "Say the quiet thing out loud today.", "Nothing|Square|Nobody": "dropped"}\n```'
-    const stream = (text: string) => new ReadableStream({ start(c) { for (const f of [`data: {"type":"message.delta","content":${JSON.stringify(text)}}\n\n`, 'data: {"type":"chat.end","result":{}}\n\n']) c.enqueue(new TextEncoder().encode(f)); c.close() } })
-    const calls: string[] = []
-    vi.stubGlobal('fetch', vi.fn((url: string, init?: { body?: string }) => {
-      if (!String(url).endsWith('/api/v1/chat')) return Promise.resolve(new Response('{}', { status: 404 }))
-      calls.push(init?.body ?? '')
-      return Promise.resolve(new Response(stream(answer), { status: 200 }))
-    }))
-    const readings = await api.engine.readings(id, 't1')
-    expect(readings).toEqual({ 'Mercury|Trine|MC': 'Say the quiet thing out loud today.' })
-    expect(api.store.get(id)!.messages[1]!.readings).toEqual({ 'Mercury|Trine|MC': 'Say the quiet thing out loud today.' })
-    expect(api.store.get(id)!.messages).toHaveLength(3)
-    const body = JSON.parse(calls[0]!) as { input: string; system_prompt: string }
-    expect(body.input).toContain('- key: Mercury|Trine|MC')
-    expect(body.system_prompt).toMatch(/JSON object/)
-    // Written already: not asked again, unless rewriting everything.
-    expect(await api.engine.readings(id, 't1')).toBeNull()
-    expect(calls).toHaveLength(1)
-    const res = await send('/api/chats/readings', 'POST')
-    expect(res.status).toBe(202)
-    expect(await res.json()).toEqual({ candidates: 0 })
-    expect(await (await send('/api/chats/readings?all=1', 'POST')).json()).toEqual({ candidates: 1 })
-    await vi.waitFor(() => expect(calls).toHaveLength(2))
-  })
-
-  it('reports what a restart would cut off, and resumes readings a restart did cut off', async () => {
-    api.store.setConfig({ model: 'qwen' })
-    const id = api.store.getConversations().activeId!
-    api.store.setMessages(id, [
-      { id: 'u1', role: 'user', text: 'transits today?' },
-      { id: 't1', role: 'tool', name: 'create_transit_chart', plugin: 'mcp/astrology-v2', output: transitChart },
+      { id: 'u1', role: 'user', text: 'what is the tallest mountain?' },
+      { id: 'a1', role: 'assistant', text: 'Everest.' },
     ])
     expect(await (await send('/api/busy', 'GET')).json()).toEqual({ replies: 0, background: 0 })
     let calls = 0
     vi.stubGlobal('fetch', vi.fn(() => { calls++; return new Promise(() => { /* the model is slow */ }) }))
-    void api.engine.readings(id, 't1')
+    void api.engine.title(id)
     await vi.waitFor(() => expect(calls).toBe(1))
     expect(await (await send('/api/busy', 'GET')).json()).toEqual({ replies: 0, background: 1 })
-    // The server restarts with the reading unwritten: the new one picks it up.
-    vi.useFakeTimers()
-    createApi({ dir, memoryDb: path.join(dir, 'memory.sqlite'), trackEncoder: null, resume: true })
-    await vi.advanceTimersByTimeAsync(2500)
-    vi.useRealTimers()
-    await vi.waitFor(() => expect(calls).toBe(2))
   })
 
   it('refuses a second turn while one is in flight', async () => {
