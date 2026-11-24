@@ -265,8 +265,8 @@ describe('App', () => {
     render(<App />)
     await ready()
     emit([conv()])
-    act(() => { FakeEventSource.latest().onerror?.() })
-    expect(screen.getByText('reconnecting...')).toBeInTheDocument()
+    act(() => { FakeEventSource.latest().fail() })
+    expect(await screen.findByText('reconnecting...')).toBeInTheDocument()
   })
 
   describe('filing a chat into a folder from the composer', () => {

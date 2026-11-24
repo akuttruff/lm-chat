@@ -6,6 +6,8 @@ import type {
 import { chime } from '../lib/chime.ts'
 import type { ChimeTone } from '../lib/chime.ts'
 import { reachFetch } from '../lib/reach.ts'
+import { openLive } from '../lib/live.ts'
+import type { LinkState } from '../lib/live.ts'
 
 /**
  * The whole client state, streamed from the app server.
@@ -172,7 +174,7 @@ export default function useServerState(): ServerState {
   // lock the next chat's composer nor lose the first one's progress.
   const [statuses, setStatuses] = useState<Record<string, ChatStatus>>({})
   const [modelLoad, setModelLoad] = useState<ModelLoadState | null>(null)
-  const [link, setLink] = useState<'connecting' | 'live' | 'reconnecting'>('connecting')
+  const [link, setLink] = useState<LinkState>('connecting')
   const [connected, setConnected] = useState(false)
   const activeIdRef = useRef<string | null>(null)
   activeIdRef.current = store.activeId
@@ -287,72 +289,67 @@ export default function useServerState(): ServerState {
       .finally(() => loading.current.delete(id))
   }, [store, commitStore])
 
-  // Subscribe to server state. EventSource reconnects on its own, so a phone
-  // that slept simply picks the stream back up.
+  // Subscribe to server state. The stream is kept open by lib/live.ts, which
+  // reopens one the browser gave up on or that died quietly while the phone
+  // slept; every new connection starts with the server's full state.
   useEffect(() => {
-    const source = new EventSource('/api/events')
-
-    source.onopen = () => {
-      setConnected(true)
-      setLink('live')
-    }
-
-    source.onmessage = (e: MessageEvent<string>) => {
-      // Anything arriving proves the stream is up, whatever onopen said.
-      setLink('live')
-      const event = JSON.parse(e.data) as ServerEvent
-      if (event.type === 'model') {
-        setModelLoad(event.payload)
-        return
-      }
-      if (event.type !== 'status' && event.type !== 'statuses') {
-        // Decided here, not in a state updater, which React may run later.
-        const next = applyEvent(storeRef.current, event)
-        if (next) commitStore(next)
-        else void resync()
-        return
-      }
-      if (event.type === 'statuses') {
-        // Replies that finished while we were away are not news to chime about.
-        pendingRef.current = new Set(event.payload.filter((e) => e.state === 'pending').map((e) => e.conversationId))
-        // A (re)connect snapshot of every chat mid-reply. Anything we thought
-        // was in flight but isn't listed finished while we were away; keep
-        // only the settled outcomes ("stopped", "auth failed") we already had.
-        setStatuses((prev) => {
-          const next: Record<string, ChatStatus> = {}
-          for (const [id, st] of Object.entries(prev)) if (st.state !== 'pending') next[id] = st
-          for (const e of event.payload) next[e.conversationId] = toChatStatus(e)
-          return next
-        })
-        return
-      }
-      const update = event.payload
-      // Every device that's open chimes, and for any chat, not only the one
-      // on screen: a reply you're waiting on elsewhere is still worth hearing.
-      const tone = finishTone(pendingRef.current.has(update.conversationId), update.state, update.text)
-      if (update.state === 'pending') pendingRef.current.add(update.conversationId)
-      else pendingRef.current.delete(update.conversationId)
-      if (tone) chime(tone)
-      setStatuses((prev) => ({ ...prev, [update.conversationId]: toChatStatus(update) }))
-    }
-
-    source.onerror = () => {
-      setConnected(false)
-      setLink('reconnecting')
-    }
-
-    return () => source.close()
+    const live = openLive({
+      url: '/api/events',
+      onState: (next) => {
+        setLink(next)
+        setConnected(next === 'live')
+      },
+      onMessage: (data) => {
+        const event = JSON.parse(data) as ServerEvent
+        if (event.type === 'model') {
+          setModelLoad(event.payload)
+          return
+        }
+        if (event.type !== 'status' && event.type !== 'statuses') {
+          // Decided here, not in a state updater, which React may run later.
+          const next = applyEvent(storeRef.current, event)
+          if (next) commitStore(next)
+          else void resync()
+          return
+        }
+        if (event.type === 'statuses') {
+          // Replies that finished while we were away are not news to chime about.
+          pendingRef.current = new Set(event.payload.filter((e) => e.state === 'pending').map((e) => e.conversationId))
+          // A (re)connect snapshot of every chat mid-reply. Anything we thought
+          // was in flight but isn't listed finished while we were away; keep
+          // only the settled outcomes ("stopped", "auth failed") we already had.
+          setStatuses((prev) => {
+            const next: Record<string, ChatStatus> = {}
+            for (const [id, st] of Object.entries(prev)) if (st.state !== 'pending') next[id] = st
+            for (const e of event.payload) next[e.conversationId] = toChatStatus(e)
+            return next
+          })
+          return
+        }
+        const update = event.payload
+        // Every device that's open chimes, and for any chat, not only the one
+        // on screen: a reply you're waiting on elsewhere is still worth hearing.
+        const tone = finishTone(pendingRef.current.has(update.conversationId), update.state, update.text)
+        if (update.state === 'pending') pendingRef.current.add(update.conversationId)
+        else pendingRef.current.delete(update.conversationId)
+        if (tone) chime(tone)
+        setStatuses((prev) => ({ ...prev, [update.conversationId]: toChatStatus(update) }))
+      },
+    })
+    return () => live.close()
   }, [resync, commitStore])
 
   const active = store.items.find((c) => c.id === store.activeId) ?? null
   const mine = store.activeId ? statuses[store.activeId] : undefined
-  // A lost connection outranks any chat's last word; otherwise show the
-  // active chat's own status. A chat with nothing in flight shows the model
+  // A connection lost for more than a moment (lib/live.ts waits before saying
+  // so) outranks any chat's last word, but a reply that was being written is
+  // still shown as working: it carries on on the server meanwhile, and the
+  // reconnect brings it back. Otherwise show the active chat's own status. A chat with nothing in flight shows the model
   // loading, if it is, since that is what its next message would wait on;
   // else plain "connected".
   const loadingModel = modelLoad?.state === 'loading' && mine?.state !== 'pending' ? modelLoad : null
   const status: Status = link !== 'live'
-    ? { state: '', text: link === 'connecting' ? 'connecting...' : 'reconnecting...' }
+    ? { state: mine?.state === 'pending' ? 'pending' : '', text: link === 'connecting' ? 'connecting...' : 'reconnecting...' }
     : loadingModel ? { state: 'pending', text: `loading ${loadingModel.model}...` }
     : mine ? { state: mine.state, text: mine.text } : { state: 'live', text: 'connected' }
   const working = Object.fromEntries(

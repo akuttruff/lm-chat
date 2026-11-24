@@ -1,3 +1,4 @@
+import { LIVE, PING_FRAME } from '../src/lib/live.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -302,8 +303,9 @@ export function createApi(options: ApiOptions = {}, state: ApiState = createApiS
       const load = models.state()
       if (load) res.write(`data: ${JSON.stringify({ type: 'model', payload: load })}\n\n`)
       const remove = bus.add(res)
-      // Comment frames keep intermediaries from closing an idle stream.
-      const ping = setInterval(() => { try { res.write(': ping\n\n') } catch { /* gone */ } }, 25_000)
+      // A ping the page can see (src/lib/live.ts): it keeps proxies from
+      // closing an idle stream, and its absence tells the page the stream died.
+      const ping = setInterval(() => { try { res.write(PING_FRAME) } catch { /* gone */ } }, LIVE.heartbeatMs)
       req.on('close', () => { clearInterval(ping); remove() })
       return undefined
     }

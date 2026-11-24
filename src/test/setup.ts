@@ -1,12 +1,16 @@
 import os from 'node:os'
 import path from 'node:path'
 import '@testing-library/jest-dom/vitest'
+import { LIVE } from '../lib/live.ts'
 import { REACH } from '../lib/reach.ts'
 
 // The waits around a server that gives no reply, cut to a few ticks: a test
 // that sits through eight seconds of silence learns nothing from the wait.
 REACH.readTimeoutMs = 200
 REACH.retryWaitsMs = [10, 20, 30]
+// The live stream's grace before "reconnecting" shows, and its retries: short, so tests needn't wait.
+LIVE.downAfterMs = 10
+LIVE.retryMs = [10, 20, 30]
 REACH.unreachableAfterMs = 40
 REACH.probeMs = 40
 

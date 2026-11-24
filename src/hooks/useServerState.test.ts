@@ -324,9 +324,37 @@ describe('useServerState', () => {
     await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
     act(() => { FakeEventSource.latest().onopen?.() })
     expect(result.current.connected).toBe(true)
-    act(() => { FakeEventSource.latest().onerror?.() })
+    act(() => { FakeEventSource.latest().fail() })
+    // A blip isn't news: only a drop that lasts is reported.
+    expect(result.current.status.text).not.toBe('reconnecting...')
+    await waitFor(() => expect(result.current.status.text).toBe('reconnecting...'))
     expect(result.current.connected).toBe(false)
-    expect(result.current.status.text).toBe('reconnecting...')
+    act(() => { FakeEventSource.latest().open() })
+    expect(result.current.connected).toBe(true)
+    expect(result.current.status.text).toBe('connected')
+  })
+
+  it('keeps showing a reply as working while the connection is down', async () => {
+    stubApi()
+    const { result } = renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => {
+      FakeEventSource.latest().open()
+      FakeEventSource.latest().emit({ type: 'conversations', payload: store([conv()], 'c1') })
+      FakeEventSource.latest().emit({ type: 'status', payload: { conversationId: 'c1', state: 'pending', text: 'reading the prompt...', startedAt: 1 } })
+    })
+    act(() => { FakeEventSource.latest().fail() })
+    await waitFor(() => expect(result.current.status.text).toBe('reconnecting...'))
+    expect(result.current.status.state).toBe('pending')
+  })
+
+  it('opens a new stream when the browser gives up on the old one', async () => {
+    stubApi()
+    renderHook(() => useServerState())
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+    act(() => { FakeEventSource.latest().open() })
+    act(() => { FakeEventSource.latest().fail(true) })
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2))
   })
 
   it('posts a turn rather than streaming it itself', async () => {
