@@ -55,6 +55,8 @@ export interface LiveOptions {
   onOpen?: () => void
   /** The link changed, debounced as above. */
   onState?: (state: LinkState) => void
+  /** A stream is being replaced: a page may look up what it missed meanwhile. */
+  onRetry?: () => void
 }
 
 export interface Live {
@@ -119,6 +121,7 @@ export function openLive(options: LiveOptions): Live {
     drop()
     clearTimers()
     report('down')
+    options.onRetry?.()
     const wait = now ? 0 : LIVE.retryMs[Math.min(tries, LIVE.retryMs.length - 1)]!
     tries++
     retryTimer = setTimeout(open, wait)
